@@ -67,15 +67,17 @@ pub fn squish_file(
 
 fn dispatch_compress(
     format: Format,
-    _input: &[u8],
-    _opts: &SquishOptions,
+    input: &[u8],
+    opts: &SquishOptions,
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
-    // Stub: every format returns unsupported until its task lands.
-    Err(SquishError::UnsupportedFormat {
-        path: path.to_path_buf(),
-        reason: format!("{:?} compression not implemented yet", format),
-    })
+    match format {
+        Format::Png => formats::png::compress(input, opts, path),
+        other => Err(SquishError::UnsupportedFormat {
+            path: path.to_path_buf(),
+            reason: format!("{:?} compression not implemented yet", other),
+        }),
+    }
 }
 
 #[cfg(test)]
