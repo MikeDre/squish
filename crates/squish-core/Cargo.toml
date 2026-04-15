@@ -9,3 +9,6 @@ description = "Core image compression library for squish"
 
 [dependencies]
 thiserror.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
