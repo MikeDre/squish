@@ -1,3 +1,9 @@
-fn main() {
-    println!("{} scaffold", squish_core::placeholder());
+mod cli;
+
+use clap::Parser;
+
+fn main() -> std::process::ExitCode {
+    let args = cli::Args::parse();
+    eprintln!("parsed: {args:?}");
+    std::process::ExitCode::SUCCESS
 }
