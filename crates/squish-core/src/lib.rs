@@ -35,12 +35,18 @@ pub fn squish_file(
         }
     })?;
 
-    let format_out = opts.output_format.unwrap_or(format_in);
+    // TIFF default-output rule: when input is TIFF and user didn't specify a
+    // target format, convert to JPEG.
+    let format_out = match (format_in, opts.output_format) {
+        (Format::Tiff, None) => Format::Jpeg,
+        (_, Some(f)) => f,
+        (f, None) => f,
+    };
 
-    let output_bytes = dispatch_compress(format_out, &input_bytes_vec, opts, input)?;
+    let output_bytes = dispatch_compress_with_conversion(
+        format_in, format_out, &input_bytes_vec, opts, input,
+    )?;
 
-    // Preserve extension spelling from input when output format matches input format
-    // and the original extension was explicitly "jpeg" rather than canonical "jpg".
     let target_ext = if format_in == format_out {
         input
             .extension()
@@ -65,13 +71,18 @@ pub fn squish_file(
     })
 }
 
-fn dispatch_compress(
-    format: Format,
+fn dispatch_compress_with_conversion(
+    format_in: Format,
+    format_out: Format,
     input: &[u8],
     opts: &SquishOptions,
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
-    match format {
+    // Special-case: TIFF → JPEG (the auto-conversion path).
+    if format_in == Format::Tiff && format_out == Format::Jpeg {
+        return formats::tiff::compress_as_jpeg(input, opts, path);
+    }
+    match format_out {
         Format::Png => formats::png::compress(input, opts, path),
         Format::Jpeg => formats::jpeg::compress(input, opts, path),
         Format::Webp => formats::webp::compress(input, opts, path),
@@ -79,10 +90,7 @@ fn dispatch_compress(
         Format::Svg => formats::svg::compress(input, opts, path),
         Format::Gif => formats::gif::compress(input, opts, path),
         Format::Heic => formats::heic::compress(input, opts, path),
-        other => Err(SquishError::UnsupportedFormat {
-            path: path.to_path_buf(),
-            reason: format!("{:?} compression not implemented yet", other),
-        }),
+        Format::Tiff => formats::tiff::compress(input, opts, path),
     }
 }
 

@@ -62,6 +62,28 @@ fn avif_compresses() {
 }
 
 #[test]
+fn tiff_converts_to_jpeg_by_default() {
+    let (_tmp, input) = copy_fixture("sample.tiff");
+    let r = squish_file(&input, &SquishOptions::default()).unwrap();
+    assert_eq!(r.format_in, squish_core::Format::Tiff);
+    assert_eq!(r.format_out, squish_core::Format::Jpeg);
+    assert_eq!(r.output_path.extension().and_then(|s| s.to_str()), Some("jpg"));
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+}
+
+#[test]
+fn tiff_respects_explicit_format_override() {
+    let (_tmp, input) = copy_fixture("sample.tiff");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Webp),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Webp);
+}
+
+#[test]
 fn heic_compresses() {
     let (_tmp, input) = copy_fixture("sample.heic");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
