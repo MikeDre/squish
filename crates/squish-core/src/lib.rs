@@ -75,6 +75,7 @@ fn dispatch_compress(
         Format::Png => formats::png::compress(input, opts, path),
         Format::Jpeg => formats::jpeg::compress(input, opts, path),
         Format::Webp => formats::webp::compress(input, opts, path),
+        Format::Avif => formats::avif::compress(input, opts, path),
         other => Err(SquishError::UnsupportedFormat {
             path: path.to_path_buf(),
             reason: format!("{:?} compression not implemented yet", other),

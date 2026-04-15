@@ -13,7 +13,8 @@ oxipng = { version = "9", default-features = false, features = ["parallel"] }
 imagequant = "4"
 mozjpeg = "0.10"
 webp = "0.3"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp"] }
+ravif = "0.11"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "avif", "avif-native"] }
 
 [dev-dependencies]
 tempfile = "3"
