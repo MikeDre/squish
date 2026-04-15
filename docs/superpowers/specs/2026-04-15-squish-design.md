@@ -249,7 +249,7 @@ EXIF / XMP / ICC color profiles: stripped by default in v1. No flag. (Can be mad
 ### `squish-core`
 
 - **Unit tests** for pure functions: format detection, path derivation, options validation. Fast, no I/O.
-- **Per-format round-trip integration tests**: one small fixture per format in `tests/fixtures/`. For each, compress → read back → assert decode succeeds + output is smaller than input (or equal, never larger). This avoids byte-exact golden tests that rot across encoder versions.
+- **Per-format round-trip integration tests**: one small fixture per format in `tests/fixtures/`. For each, compress → read back → assert the output decodes successfully + output bytes are strictly smaller than input. Fixtures are chosen to be compressible (normal photos/graphics, not already-optimal tiny assets), so this assertion is safe even though the library itself does **not** enforce size reduction at runtime (see "Squishing made it bigger" guard). This avoids byte-exact golden tests that rot across encoder versions.
 - **Error-path tests**: corrupted bytes, unsupported format, missing sidecar (mocked via `PATH` manipulation).
 
 ### `squish-cli`
