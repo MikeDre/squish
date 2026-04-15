@@ -32,3 +32,12 @@ fn png_compresses() {
     let bytes = fs::read(&r.output_path).unwrap();
     assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Png));
 }
+
+#[test]
+fn jpeg_compresses() {
+    let (_tmp, input) = copy_fixture("sample.jpg");
+    let r = squish_file(&input, &SquishOptions::default()).unwrap();
+    assert!(r.output_bytes < r.input_bytes, "JPEG output not smaller: {r:?}");
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+}

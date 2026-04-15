@@ -73,6 +73,7 @@ fn dispatch_compress(
 ) -> Result<Vec<u8>, SquishError> {
     match format {
         Format::Png => formats::png::compress(input, opts, path),
+        Format::Jpeg => formats::jpeg::compress(input, opts, path),
         other => Err(SquishError::UnsupportedFormat {
             path: path.to_path_buf(),
             reason: format!("{:?} compression not implemented yet", other),

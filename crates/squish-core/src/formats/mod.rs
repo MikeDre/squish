@@ -1,4 +1,4 @@
 //! Per-format compression implementations.
 
+pub mod jpeg;
 pub mod png;
-// Other modules added task-by-task.
