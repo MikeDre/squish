@@ -6,4 +6,5 @@ pub mod heic;
 pub mod jpeg;
 pub mod png;
 pub mod svg;
+pub mod tiff;
 pub mod webp;
