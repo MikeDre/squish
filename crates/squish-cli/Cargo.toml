@@ -1,0 +1,15 @@
+[package]
+name = "squish-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Image compression CLI"
+
+[[bin]]
+name = "squish"
+path = "src/main.rs"
+
+[dependencies]
+squish-core = { path = "../squish-core" }
