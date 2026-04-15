@@ -52,6 +52,16 @@ fn webp_compresses() {
 }
 
 #[test]
+fn avif_compresses() {
+    let (_tmp, input) = copy_fixture("sample.avif");
+    let r = squish_file(&input, &SquishOptions::default()).unwrap();
+    // AVIF can grow slightly on already-optimal inputs; allow up to 10% growth.
+    assert!(r.output_bytes <= r.input_bytes * 11 / 10, "AVIF output grew >10%: {r:?}");
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Avif));
+}
+
+#[test]
 fn png_to_webp_conversion() {
     let (_tmp, input) = copy_fixture("sample.png");
     let opts = SquishOptions {
