@@ -1,6 +1,6 @@
 # squish
 
-Local image & media compression on your machine. Takes files or directories, writes `*_squished.*` siblings alongside the originals. Non-destructive — originals are never touched.
+Super fast local image & media compression on your machine. Takes files or directories, writes `*_squished.*` siblings alongside the originals. Non-destructive — originals are never touched.
 
 ## Install
 
