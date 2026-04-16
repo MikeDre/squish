@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
 description = "Image compression CLI"
 
 [[bin]]
@@ -12,7 +16,7 @@ name = "squish"
 path = "src/main.rs"
 
 [dependencies]
-squish-core = { path = "../squish-core" }
+squish-core.workspace = true
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 walkdir = "2"
