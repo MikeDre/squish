@@ -14,7 +14,7 @@ description = "Local media compression & conversion tool"
 homepage = "https://github.com/MikeDre/squish"
 repository = "https://github.com/MikeDre/squish"
 readme = "README.md"
-keywords = ["image", "compression", "cli", "media", "optimise", "jpg", "reduce", "webp"]
+keywords = ["image", "compression", "cli", "optimise", "jpg"]
 categories = ["command-line-utilities", "multimedia::images"]
 
 [workspace.dependencies]
