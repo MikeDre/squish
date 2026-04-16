@@ -10,8 +10,13 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.75"
 license = "MIT"
-description = "Local image compression tool"
+description = "Local media compression & conversion tool"
+homepage = "https://github.com/MikeDre/squish"
 repository = "https://github.com/MikeDre/squish"
+readme = "README.md"
+keywords = ["image", "compression", "converter", "cli", "avif", "webp"]
+categories = ["command-line-utilities", "multimedia::images"]
 
 [workspace.dependencies]
 thiserror = "1.0"
+squish-core = { version = "0.1.0", path = "crates/squish-core" }
