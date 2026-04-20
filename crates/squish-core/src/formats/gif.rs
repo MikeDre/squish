@@ -1,5 +1,6 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
+use image::{DynamicImage, GenericImageView};
 use std::io::Write;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -17,7 +18,51 @@ pub fn compress(
             install_hint: "brew install gifsicle (macOS) / apt install gifsicle (Linux)".into(),
         });
     }
+    optimize_via_gifsicle(input, opts, path)
+}
 
+/// Encode an already-decoded raster as a single-frame GIF. Used for cross-format
+/// conversion (e.g. PNG → GIF). Note: animation is only preserved on GIF → GIF.
+pub fn encode_raster(
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    let (w, h) = img.dimensions();
+    let rgba = img.to_rgba8().into_raw();
+
+    let mut gif_bytes: Vec<u8> = Vec::new();
+    {
+        let mut encoder = image::codecs::gif::GifEncoder::new(&mut gif_bytes);
+        let frame = image::Frame::new(
+            image::ImageBuffer::from_raw(w, h, rgba).ok_or_else(|| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: "failed to allocate GIF frame buffer".into(),
+            })?,
+        );
+        encoder
+            .encode_frame(frame)
+            .map_err(|e| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            })?;
+    }
+
+    // Run it through gifsicle for the same optimization pass as native GIF input.
+    // If gifsicle is missing, return the unoptimized GIF rather than failing —
+    // the caller explicitly asked for GIF, so we shouldn't block on a missing tool.
+    if which_binary("gifsicle").is_some() {
+        optimize_via_gifsicle(&gif_bytes, opts, path)
+    } else {
+        Ok(gif_bytes)
+    }
+}
+
+fn optimize_via_gifsicle(
+    input: &[u8],
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
     let mut cmd = Command::new("gifsicle");
     cmd.arg("-O3")
         .arg("--no-comments")

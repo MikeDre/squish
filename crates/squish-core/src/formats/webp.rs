@@ -1,6 +1,6 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView};
 use std::path::Path;
 
 /// Static WebP compression. NOTE: does not preserve animated WebP animation
@@ -18,6 +18,15 @@ pub fn compress(
         source: Box::new(e),
     })?;
 
+    encode_raster(&img, opts, path)
+}
+
+/// Encode an already-decoded raster as WebP.
+pub fn encode_raster(
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    _path: &Path,
+) -> Result<Vec<u8>, SquishError> {
     let (w, h) = img.dimensions();
     let rgba = img.to_rgba8().into_raw();
 

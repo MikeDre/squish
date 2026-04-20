@@ -1,4 +1,5 @@
 use anyhow::Result;
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use std::path::{Path, PathBuf};
@@ -66,6 +67,11 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let processed = AtomicU64::new(0);
     let total = known.len() as u64;
 
+    // Progress bar: only in default mode (not --quiet, not --verbose) and when
+    // stderr is a TTY. --verbose prints per-file lines that would clash with
+    // the bar; --quiet means errors-only.
+    let progress = build_progress_bar(total, cfg);
+
     let pairs: Vec<(PathBuf, Result<SquishResult, SquishError>)> = known
         .par_iter()
         .map(|path| {
@@ -86,9 +92,17 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                     }
                 }
             }
+            if let Some(pb) = &progress {
+                pb.set_message(display_filename(path));
+                pb.inc(1);
+            }
             (path.clone(), res)
         })
         .collect();
+
+    if let Some(pb) = progress {
+        pb.finish_and_clear();
+    }
 
     let mut results = Vec::new();
     let mut errors = Vec::new();
@@ -111,6 +125,30 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     }
 
     Ok(report)
+}
+
+fn build_progress_bar(total: u64, cfg: &RunConfig) -> Option<ProgressBar> {
+    if cfg.quiet || cfg.verbose || total == 0 {
+        return None;
+    }
+    let pb = ProgressBar::with_draw_target(Some(total), ProgressDrawTarget::stderr());
+    // `with_draw_target` uses stderr; when it's not a TTY indicatif defaults to
+    // a hidden draw target, so no extra TTY check is needed here.
+    let style = ProgressStyle::with_template(
+        "{spinner} [{bar:30.cyan/blue}] {pos}/{len} {wide_msg:.dim}",
+    )
+    .unwrap()
+    .progress_chars("=> ");
+    pb.set_style(style);
+    pb.enable_steady_tick(Duration::from_millis(100));
+    Some(pb)
+}
+
+fn display_filename(path: &Path) -> String {
+    path.file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string()
 }
 
 fn peek_format(path: &Path) -> std::io::Result<Option<Format>> {

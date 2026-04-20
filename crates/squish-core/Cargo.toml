@@ -20,7 +20,7 @@ webp = "0.3"
 ravif = "0.11"
 usvg = "0.42"
 libheif-rs = "1.0"
-image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "avif", "avif-native", "tiff"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "avif", "avif-native", "tiff", "gif"] }
 
 [dev-dependencies]
 tempfile = "3"

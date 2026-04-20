@@ -1,6 +1,6 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
-use image::ImageEncoder;
+use image::{DynamicImage, GenericImageView, ImageEncoder};
 use std::path::Path;
 
 /// Compress a PNG. Strategy:
@@ -19,6 +19,45 @@ pub fn compress(
     let quality = opts.effective_quality(crate::format::Format::Png);
     let quantized = quantize_png(input, quality, path)?;
     oxipng_pass(&quantized, path)
+}
+
+/// Encode an already-decoded raster as PNG. Used for cross-format conversions
+/// where the source was decoded from another format.
+pub fn encode_raster(
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    let (w, h) = img.dimensions();
+    let rgba = img.to_rgba8().into_raw();
+
+    // First serialize to a PNG so we have bytes to hand to imagequant / oxipng.
+    let raw_png = encode_rgba_to_png(&rgba, w, h, path)?;
+
+    if opts.lossless {
+        return oxipng_pass(&raw_png, path);
+    }
+
+    let quality = opts.effective_quality(crate::format::Format::Png);
+    let quantized = quantize_png(&raw_png, quality, path)?;
+    oxipng_pass(&quantized, path)
+}
+
+fn encode_rgba_to_png(
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    let mut out = Vec::new();
+    let encoder = image::codecs::png::PngEncoder::new(&mut out);
+    encoder
+        .write_image(rgba, width, height, image::ExtendedColorType::Rgba8)
+        .map_err(|e| SquishError::EncodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
+    Ok(out)
 }
 
 fn oxipng_pass(input: &[u8], path: &Path) -> Result<Vec<u8>, SquishError> {
@@ -88,18 +127,5 @@ fn quantize_png(input: &[u8], quality: u8, path: &Path) -> Result<Vec<u8>, Squis
         rgba.extend_from_slice(&[c.r, c.g, c.b, c.a]);
     }
 
-    let mut out = Vec::new();
-    let encoder = image::codecs::png::PngEncoder::new(&mut out);
-    encoder
-        .write_image(
-            &rgba,
-            width as u32,
-            height as u32,
-            image::ExtendedColorType::Rgba8,
-        )
-        .map_err(|e| SquishError::EncodeFailed {
-            path: path.to_path_buf(),
-            source: Box::new(e),
-        })?;
-    Ok(out)
+    encode_rgba_to_png(&rgba, width as u32, height as u32, path)
 }

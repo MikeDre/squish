@@ -1,5 +1,6 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
+use image::{DynamicImage, GenericImageView};
 use std::path::Path;
 
 /// Compress a JPEG. Uses mozjpeg — its default settings are already a 15-25%
@@ -36,6 +37,18 @@ pub fn compress(
     })?;
 
     encode_rgb_pixels(&pixels, width, height, quality, path)
+}
+
+/// Encode an already-decoded raster as JPEG. Used for cross-format conversions.
+pub fn encode_raster(
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    let (w, h) = img.dimensions();
+    let rgb = img.to_rgb8().into_raw();
+    let quality = opts.effective_quality(crate::format::Format::Jpeg);
+    encode_rgb_pixels(&rgb, w as usize, h as usize, quality, path)
 }
 
 /// Encode raw interleaved RGB8 pixels as JPEG. Used by other format modules
