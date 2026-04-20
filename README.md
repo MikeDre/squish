@@ -6,12 +6,13 @@ Super fast local image & media compression on your machine. Takes files or direc
 
 ### Quick setup (recommended)
 
-**1. Install Rust** (skip if `cargo --version` already works):
+**1. Install Rust** (skip if `rustc --version` already works):
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://rustup.rs | sh
-source ~/.cargo/env   # or restart your terminal
 ```
+
+Once the installer finishes, open a **new terminal** (or run `source ~/.cargo/env`) so that `cargo` is available on your PATH.
 
 **2. Install system deps and build:**
 
@@ -20,7 +21,19 @@ source ~/.cargo/env   # or restart your terminal
 cargo install --path crates/squish-cli
 ```
 
-After `cargo install` completes, `squish` is placed in `~/.cargo/bin`. If your shell doesn't find it, add that directory to your `PATH` or restart your terminal.
+**3. Make sure `squish` is on your PATH:**
+
+`cargo install` places the binary in `~/.cargo/bin`. If `squish` isn't found after installation, add that directory to your shell profile and reload it:
+
+```bash
+# bash
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc && source ~/.bashrc
+
+# zsh
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
+```
+
+Then verify with `squish --version`.
 
 ### Manual setup
 
