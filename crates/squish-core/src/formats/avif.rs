@@ -1,6 +1,6 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
-use image::GenericImageView;
+use image::{DynamicImage, GenericImageView};
 use ravif::{Encoder, Img, RGBA8};
 use std::path::Path;
 
@@ -14,6 +14,15 @@ pub fn compress(
         source: Box::new(e),
     })?;
 
+    encode_raster(&img, opts, path)
+}
+
+/// Encode an already-decoded raster as AVIF.
+pub fn encode_raster(
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
     let (w, h) = img.dimensions();
     let rgba = img.to_rgba8();
 

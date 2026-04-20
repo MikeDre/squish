@@ -132,3 +132,87 @@ fn png_to_webp_conversion() {
     let bytes = fs::read(&r.output_path).unwrap();
     assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Webp));
 }
+
+#[test]
+fn png_to_jpeg_conversion() {
+    // Regression: previously aborted (exit 101) because raw PNG bytes were
+    // passed straight to mozjpeg's decoder.
+    let (_tmp, input) = copy_fixture("sample.png");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Jpeg),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Jpeg);
+    assert_eq!(r.output_path.extension().and_then(|s| s.to_str()), Some("jpg"));
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+}
+
+#[test]
+fn jpeg_to_png_conversion() {
+    let (_tmp, input) = copy_fixture("sample.jpg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Png);
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Png));
+}
+
+#[test]
+fn webp_to_gif_conversion() {
+    let (_tmp, input) = copy_fixture("sample.webp");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Gif),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Gif);
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Gif));
+}
+
+#[test]
+fn heic_to_jpeg_conversion() {
+    let (_tmp, input) = copy_fixture("sample.heic");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Jpeg),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Jpeg);
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+}
+
+#[test]
+fn png_to_heic_conversion() {
+    let (_tmp, input) = copy_fixture("sample.png");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Heic),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Heic);
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Heic));
+}
+
+#[test]
+fn svg_cross_format_is_rejected_cleanly() {
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        ..Default::default()
+    };
+    let err = squish_file(&input, &opts).unwrap_err();
+    match err {
+        squish_core::SquishError::UnsupportedFormat { reason, .. } => {
+            assert!(reason.to_lowercase().contains("svg"), "reason did not mention SVG: {reason}");
+        }
+        other => panic!("expected UnsupportedFormat, got: {other:?}"),
+    }
+}

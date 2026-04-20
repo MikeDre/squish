@@ -1,11 +1,12 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
+use image::DynamicImage;
 use std::path::Path;
 
 /// TIFF output. Rarely useful but supported for `--format tiff` override.
 pub fn compress(
     input: &[u8],
-    _opts: &SquishOptions,
+    opts: &SquishOptions,
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
     let img = image::load_from_memory_with_format(input, image::ImageFormat::Tiff)
@@ -13,6 +14,15 @@ pub fn compress(
             path: path.to_path_buf(),
             source: Box::new(e),
         })?;
+    encode_raster(&img, opts, path)
+}
+
+/// Encode an already-decoded raster as TIFF.
+pub fn encode_raster(
+    img: &DynamicImage,
+    _opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
     let mut out = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Tiff)
         .map_err(|e| SquishError::EncodeFailed {

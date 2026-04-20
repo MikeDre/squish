@@ -13,6 +13,7 @@ pub use naming::derive_output_path;
 pub use options::SquishOptions;
 pub use result::SquishResult;
 
+use image::DynamicImage;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
@@ -78,11 +79,46 @@ fn dispatch_compress_with_conversion(
     opts: &SquishOptions,
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
-    // Special-case: TIFF → JPEG (the auto-conversion path).
+    // Same-format fast path: route to the native single-format compressor, which
+    // can use format-specific decoders (e.g. mozjpeg) and preserve features like
+    // animated-GIF frames.
+    if format_in == format_out {
+        return dispatch_same_format(format_out, input, opts, path);
+    }
+
+    // TIFF → JPEG is the documented default when TIFF is input without override.
+    // Keep the existing direct path so we don't double-decode.
     if format_in == Format::Tiff && format_out == Format::Jpeg {
         return formats::tiff::compress_as_jpeg(input, opts, path);
     }
-    match format_out {
+
+    // SVG cannot be rasterized here (no renderer linked), and no raster source
+    // can be vectorized. Reject cross-format conversions involving SVG early
+    // with a clear message instead of letting the underlying decoder crash.
+    if format_in == Format::Svg || format_out == Format::Svg {
+        return Err(SquishError::UnsupportedFormat {
+            path: path.to_path_buf(),
+            reason: format!(
+                "cannot convert {} to {}: SVG cross-format conversion is not supported",
+                format_in.extension(),
+                format_out.extension()
+            ),
+        });
+    }
+
+    // Generic cross-format path: decode source to a DynamicImage, then hand
+    // off to the target encoder's raster entry point.
+    let img = decode_to_dynamic_image(format_in, input, path)?;
+    dispatch_encode_raster(format_out, &img, opts, path)
+}
+
+fn dispatch_same_format(
+    format: Format,
+    input: &[u8],
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    match format {
         Format::Png => formats::png::compress(input, opts, path),
         Format::Jpeg => formats::jpeg::compress(input, opts, path),
         Format::Webp => formats::webp::compress(input, opts, path),
@@ -92,6 +128,93 @@ fn dispatch_compress_with_conversion(
         Format::Heic => formats::heic::compress(input, opts, path),
         Format::Tiff => formats::tiff::compress(input, opts, path),
     }
+}
+
+fn dispatch_encode_raster(
+    format_out: Format,
+    img: &DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<Vec<u8>, SquishError> {
+    match format_out {
+        Format::Png => formats::png::encode_raster(img, opts, path),
+        Format::Jpeg => formats::jpeg::encode_raster(img, opts, path),
+        Format::Webp => formats::webp::encode_raster(img, opts, path),
+        Format::Avif => formats::avif::encode_raster(img, opts, path),
+        Format::Tiff => formats::tiff::encode_raster(img, opts, path),
+        Format::Gif => formats::gif::encode_raster(img, opts, path),
+        Format::Heic => formats::heic::encode_raster(img, opts, path),
+        Format::Svg => Err(SquishError::UnsupportedFormat {
+            path: path.to_path_buf(),
+            reason: "cannot convert raster input to SVG".into(),
+        }),
+    }
+}
+
+fn decode_to_dynamic_image(
+    format_in: Format,
+    input: &[u8],
+    path: &Path,
+) -> Result<DynamicImage, SquishError> {
+    match format_in {
+        // HEIC isn't handled by the `image` crate — use libheif and hand back
+        // an RGBA8 DynamicImage.
+        Format::Heic => decode_heic_to_dynamic_image(input, path),
+        // SVG never reaches here (rejected earlier), but guard in case.
+        Format::Svg => Err(SquishError::UnsupportedFormat {
+            path: path.to_path_buf(),
+            reason: "cannot rasterize SVG for cross-format conversion".into(),
+        }),
+        // Everything else is a raster format supported by `image`.
+        _ => image::load_from_memory(input).map_err(|e| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        }),
+    }
+}
+
+fn decode_heic_to_dynamic_image(
+    input: &[u8],
+    path: &Path,
+) -> Result<DynamicImage, SquishError> {
+    use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
+
+    let lib = LibHeif::new();
+    let ctx = HeifContext::read_from_bytes(input).map_err(|e| SquishError::DecodeFailed {
+        path: path.to_path_buf(),
+        source: Box::new(e),
+    })?;
+    let handle = ctx.primary_image_handle().map_err(|e| SquishError::DecodeFailed {
+        path: path.to_path_buf(),
+        source: Box::new(e),
+    })?;
+    let image = lib
+        .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None)
+        .map_err(|e| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
+
+    let w = image.width();
+    let h = image.height();
+    let planes = image.planes();
+    let plane = planes.interleaved.ok_or_else(|| SquishError::DecodeFailed {
+        path: path.to_path_buf(),
+        source: "HEIC decoder did not return an interleaved RGBA plane".into(),
+    })?;
+
+    let row_bytes = (w as usize) * 4;
+    let mut rgba = Vec::with_capacity(row_bytes * h as usize);
+    for y in 0..(h as usize) {
+        let start = y * plane.stride;
+        rgba.extend_from_slice(&plane.data[start..start + row_bytes]);
+    }
+
+    let buf = image::RgbaImage::from_raw(w, h, rgba).ok_or_else(|| SquishError::DecodeFailed {
+        path: path.to_path_buf(),
+        source: "failed to build RGBA buffer from HEIC planes".into(),
+    })?;
+    Ok(DynamicImage::ImageRgba8(buf))
 }
 
 #[cfg(test)]
