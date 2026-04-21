@@ -4,7 +4,17 @@ Super fast local image & media compression on your machine. Takes files or direc
 
 ## Install
 
-### Quick setup (recommended)
+### Pre-built binary (macOS)
+
+```bash
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MikeDre/squish/releases/latest/download/squish-cli-installer.sh | sh
+```
+
+This downloads the latest release for your architecture (Apple Silicon or Intel) and installs it to `~/.cargo/bin`.
+
+After installing, you still need the system dependencies for full format support (see below).
+
+### Build from source
 
 **1. Install Rust** (skip if `rustc --version` already works):
 
@@ -35,11 +45,9 @@ echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc
 
 Then verify with `squish --version`.
 
-### Manual setup
+### System dependencies
 
-Install Rust: https://rustup.rs
-
-Install system dependencies:
+GIF and HEIC support require external libraries. Install them for full format coverage:
 
 - **`gifsicle`** (required for GIF compression)
   - macOS: `brew install gifsicle`
@@ -50,12 +58,6 @@ Install system dependencies:
 - **`dav1d`** (required for AVIF decoding)
   - macOS: `brew install dav1d`
   - Linux: `apt install libdav1d-dev`
-
-Then:
-
-```bash
-cargo install --path crates/squish-cli
-```
 
 If `gifsicle` is missing when you compress a GIF, squish tells you exactly what to install.
 
