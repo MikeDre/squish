@@ -1,0 +1,23 @@
+# Triggers the cargo-dist Release workflow when a version tag is pushed.
+# The Release workflow itself is managed by cargo-dist (release.yml).
+
+name: Tag Release
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  trigger-release:
+    runs-on: ubuntu-22.04
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG_NAME: ${{ github.ref_name }}
+    steps:
+      - name: Dispatch release workflow
+        run: |
+          gh workflow run release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --field "tag=$TAG_NAME"
