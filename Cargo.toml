@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/squish-core",
     "crates/squish-cli",
+    "crates/squish-video",
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ categories = ["command-line-utilities", "multimedia::images"]
 [workspace.dependencies]
 thiserror = "1.0"
 squish-core = { version = "0.1.0", path = "crates/squish-core" }
+squish-video = { version = "0.1.0", path = "crates/squish-video" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
