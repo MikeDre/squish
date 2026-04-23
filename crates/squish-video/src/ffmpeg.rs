@@ -30,7 +30,13 @@ pub fn run_ffmpeg(
     // Input file
     cmd.arg("-i").arg(input);
 
-    let codec = opts.effective_codec();
+    // Derive codec using the output container extension so we always pick a
+    // compatible default (e.g. VP9 for WebM, H.265 for everything else).
+    let out_ext = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let codec = opts.effective_codec_for_ext(out_ext);
 
     if codec == VideoCodec::Copy {
         // Fast passthrough: copy all streams
@@ -40,17 +46,21 @@ pub fn run_ffmpeg(
         cmd.arg("-c:v").arg(codec.ffmpeg_encoder());
 
         // CRF quality
-        if let Some(crf) = opts.effective_crf() {
+        if let Some(crf) = opts.effective_crf_for_codec(codec) {
             cmd.arg("-crf").arg(crf.to_string());
         }
 
-        // Preset
+        // Codec-specific rate-control / preset arguments
         match codec {
             VideoCodec::H264 | VideoCodec::H265 => {
                 cmd.arg("-preset").arg("medium");
             }
             VideoCodec::AV1 => {
                 cmd.arg("-preset").arg("6");
+            }
+            VideoCodec::Vp9 => {
+                // VP9 CRF mode requires -b:v 0
+                cmd.arg("-b:v").arg("0");
             }
             VideoCodec::Copy => unreachable!(),
         }
