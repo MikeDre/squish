@@ -16,6 +16,22 @@ fn bin() -> Command {
     Command::cargo_bin("squish").unwrap()
 }
 
+fn video_fixture(name: &str) -> PathBuf {
+    let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    p.pop(); // crates/
+    p.push("squish-video/tests/fixtures");
+    p.push(name);
+    p
+}
+
+fn has_ffmpeg() -> bool {
+    std::process::Command::new("ffmpeg")
+        .arg("-version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 #[test]
 fn help_exits_zero_and_prints_usage() {
     bin().arg("--help")
@@ -158,4 +174,96 @@ fn format_conversion_png_to_webp() {
 
     assert!(tmp.path().join("a_squished.webp").exists());
     assert!(!tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn single_mp4_produces_squished_sibling() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin().arg(&input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("sample_squished.mp4").exists());
+}
+
+#[test]
+fn mixed_batch_images_and_videos() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::copy(video_fixture("sample.mp4"), tmp.path().join("b.mp4")).unwrap();
+
+    bin().arg(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("images"))
+        .stdout(predicate::str::contains("videos"));
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(tmp.path().join("b_squished.mp4").exists());
+}
+
+#[test]
+fn fast_flag_works_for_video() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin().arg(&input)
+        .arg("--fast")
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_squished.mp4").exists());
+}
+
+#[test]
+fn codec_flag_works() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin().arg(&input)
+        .arg("--codec").arg("h264")
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_squished.mp4").exists());
+}
+
+#[test]
+fn video_in_directory_walk() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    fs::copy(video_fixture("sample.mp4"), tmp.path().join("v.mp4")).unwrap();
+
+    bin().arg(tmp.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("v_squished.mp4").exists());
+}
+
+#[test]
+fn video_dry_run() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin().arg(&input)
+        .arg("--dry-run")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("would squish (video)"));
+
+    assert!(!tmp.path().join("sample_squished.mp4").exists());
 }
