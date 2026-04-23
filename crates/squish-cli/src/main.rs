@@ -5,6 +5,7 @@ mod walker;
 use anyhow::{Context, Result};
 use clap::Parser;
 use squish_core::{Format, SquishOptions};
+use squish_video::{VideoCodec, VideoOptions};
 
 fn main() -> std::process::ExitCode {
     match real_main() {
@@ -45,10 +46,24 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
     };
 
+    let video_codec = if let Some(c) = &args.codec {
+        Some(VideoCodec::parse(c).context(format!("unknown --codec value: {c}"))?)
+    } else {
+        None
+    };
+
+    let video_opts = VideoOptions {
+        quality: args.quality,
+        codec: video_codec,
+        fast: args.fast,
+        force_overwrite: args.force,
+    };
+
     let worklist = walker::collect_worklist(&args.paths, args.recursive);
 
     let cfg = runner::RunConfig {
         opts,
+        video_opts,
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,

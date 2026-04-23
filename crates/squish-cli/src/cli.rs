@@ -44,4 +44,12 @@ pub struct Args {
     /// Errors only (no short flag to avoid conflict with --quality).
     #[arg(long)]
     pub quiet: bool,
+
+    /// Video codec: h264, h265, av1 (default: h265).
+    #[arg(long)]
+    pub codec: Option<String>,
+
+    /// Video fast mode: optimize without re-encoding.
+    #[arg(long)]
+    pub fast: bool,
 }

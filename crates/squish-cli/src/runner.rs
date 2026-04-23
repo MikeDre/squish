@@ -2,12 +2,14 @@ use anyhow::Result;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
+use squish_video::{self, VideoOptions, VideoResult, VideoError};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
 pub struct RunConfig {
     pub opts: SquishOptions,
+    pub video_opts: VideoOptions,
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
@@ -15,81 +17,98 @@ pub struct RunConfig {
 
 pub struct RunReport {
     pub results: Vec<SquishResult>,
-    pub errors: Vec<(PathBuf, SquishError)>,
+    pub video_results: Vec<VideoResult>,
+    pub errors: Vec<(PathBuf, String)>,
     pub skipped_unknown: Vec<PathBuf>,
     pub total_wall: Duration,
 }
 
 impl RunReport {
     pub fn input_bytes(&self) -> u64 {
-        self.results.iter().map(|r| r.input_bytes).sum()
+        let img: u64 = self.results.iter().map(|r| r.input_bytes).sum();
+        let vid: u64 = self.video_results.iter().map(|r| r.input_bytes).sum();
+        img + vid
     }
     pub fn output_bytes(&self) -> u64 {
-        self.results.iter().map(|r| r.output_bytes).sum()
+        let img: u64 = self.results.iter().map(|r| r.output_bytes).sum();
+        let vid: u64 = self.video_results.iter().map(|r| r.output_bytes).sum();
+        img + vid
+    }
+    pub fn total_files(&self) -> usize {
+        self.results.len() + self.video_results.len()
     }
     pub fn exit_code(&self) -> u8 {
         if self.errors.is_empty() { 0 } else { 1 }
     }
 }
 
+enum FileKind {
+    Image,
+    Video,
+    Unknown,
+}
+
+fn classify_file(path: &Path) -> FileKind {
+    if peek_image_format(path).unwrap_or(None).is_some() {
+        FileKind::Image
+    } else if squish_video::detect_video_format(path).is_some() {
+        FileKind::Video
+    } else {
+        FileKind::Unknown
+    }
+}
+
 pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let start = Instant::now();
 
-    let mut known = Vec::new();
+    let mut image_files = Vec::new();
+    let mut video_files = Vec::new();
     let mut skipped_unknown = Vec::new();
 
     for path in paths {
-        match peek_format(path) {
-            Ok(Some(_)) => known.push(path.clone()),
-            Ok(None) => skipped_unknown.push(path.clone()),
-            Err(_) => {
-                // Let squish_file report the real I/O error.
-                known.push(path.clone());
-            }
+        match classify_file(path) {
+            FileKind::Image => image_files.push(path.clone()),
+            FileKind::Video => video_files.push(path.clone()),
+            FileKind::Unknown => skipped_unknown.push(path.clone()),
         }
     }
 
     if cfg.dry_run {
-        for p in &known {
-            println!("would squish: {}", p.display());
+        for p in &image_files {
+            println!("would squish (image): {}", p.display());
+        }
+        for p in &video_files {
+            println!("would squish (video): {}", p.display());
         }
         for p in &skipped_unknown {
             println!("would skip (unrecognized): {}", p.display());
         }
         return Ok(RunReport {
             results: Vec::new(),
+            video_results: Vec::new(),
             errors: Vec::new(),
             skipped_unknown,
             total_wall: start.elapsed(),
         });
     }
 
+    let total = (image_files.len() + video_files.len()) as u64;
     let processed = AtomicU64::new(0);
-    let total = known.len() as u64;
-
-    // Progress bar: only in default mode (not --quiet, not --verbose) and when
-    // stderr is a TTY. --verbose prints per-file lines that would clash with
-    // the bar; --quiet means errors-only.
     let progress = build_progress_bar(total, cfg);
 
-    let pairs: Vec<(PathBuf, Result<SquishResult, SquishError>)> = known
+    // Process images in parallel
+    let image_pairs: Vec<(PathBuf, Result<SquishResult, SquishError>)> = image_files
         .par_iter()
         .map(|path| {
             let res = squish_file(path, &cfg.opts);
             let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
             if !cfg.quiet && cfg.verbose {
                 match &res {
-                    Ok(r) => {
-                        eprintln!(
-                            "[{n}/{total}] {} → {} ({:.1}% saved)",
-                            path.display(),
-                            r.output_path.display(),
-                            r.reduction_percent()
-                        );
-                    }
-                    Err(e) => {
-                        eprintln!("[{n}/{total}] {}: ERROR {e}", path.display());
-                    }
+                    Ok(r) => eprintln!(
+                        "[{n}/{total}] {} → {} ({:.1}% saved)",
+                        path.display(), r.output_path.display(), r.reduction_percent()
+                    ),
+                    Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
                 }
             }
             if let Some(pb) = &progress {
@@ -100,21 +119,51 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         })
         .collect();
 
+    // Process videos sequentially (ffmpeg uses multiple cores internally)
+    let mut video_pairs: Vec<(PathBuf, Result<VideoResult, VideoError>)> = Vec::new();
+    for path in &video_files {
+        let res = squish_video::squish_video(path, &cfg.video_opts);
+        let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
+        if !cfg.quiet && cfg.verbose {
+            match &res {
+                Ok(r) => eprintln!(
+                    "[{n}/{total}] {} → {} ({:.1}% saved)",
+                    path.display(), r.output_path.display(), r.reduction_percent()
+                ),
+                Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
+            }
+        }
+        if let Some(pb) = &progress {
+            pb.set_message(display_filename(path));
+            pb.inc(1);
+        }
+        video_pairs.push((path.clone(), res));
+    }
+
     if let Some(pb) = progress {
         pb.finish_and_clear();
     }
 
     let mut results = Vec::new();
-    let mut errors = Vec::new();
-    for (p, r) in pairs {
+    let mut video_results = Vec::new();
+    let mut errors: Vec<(PathBuf, String)> = Vec::new();
+
+    for (p, r) in image_pairs {
         match r {
             Ok(r) => results.push(r),
-            Err(e) => errors.push((p, e)),
+            Err(e) => errors.push((p, format!("{e}"))),
+        }
+    }
+    for (p, r) in video_pairs {
+        match r {
+            Ok(r) => video_results.push(r),
+            Err(e) => errors.push((p, format!("{e}"))),
         }
     }
 
     let report = RunReport {
         results,
+        video_results,
         errors,
         skipped_unknown,
         total_wall: start.elapsed(),
@@ -151,7 +200,7 @@ fn display_filename(path: &Path) -> String {
         .to_string()
 }
 
-fn peek_format(path: &Path) -> std::io::Result<Option<Format>> {
+fn peek_image_format(path: &Path) -> std::io::Result<Option<Format>> {
     use std::io::Read;
     let mut f = std::fs::File::open(path)?;
     let mut head = [0u8; 32];
@@ -167,9 +216,15 @@ fn print_summary(r: &RunReport) {
     } else {
         0.0
     };
+
+    let count_detail = match (r.results.len(), r.video_results.len()) {
+        (img, 0) => format!("{img} files"),
+        (0, vid) => format!("{vid} files"),
+        (img, vid) => format!("{} files ({img} images, {vid} videos)", img + vid),
+    };
+
     println!(
-        "Squished {} files · {:.1} MB → {:.1} MB ({:+.1}%) · {}",
-        r.results.len(),
+        "Squished {count_detail} · {:.1} MB → {:.1} MB ({:+.1}%) · {}",
         in_mb,
         out_mb,
         -saved,
