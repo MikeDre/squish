@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 squish-core.workspace = true
+squish-video = { workspace = true }
 clap = { version = "4", features = ["derive"] }
 anyhow = "1"
 walkdir = "2"
