@@ -3,6 +3,7 @@ pub enum VideoCodec {
     H264,
     H265,
     AV1,
+    Vp9,
     Copy,
 }
 
@@ -12,6 +13,7 @@ impl VideoCodec {
             VideoCodec::H264 => "libx264",
             VideoCodec::H265 => "libx265",
             VideoCodec::AV1 => "libsvtav1",
+            VideoCodec::Vp9 => "libvpx-vp9",
             VideoCodec::Copy => "copy",
         }
     }
@@ -21,6 +23,7 @@ impl VideoCodec {
             "h264" | "x264" | "avc" => Some(VideoCodec::H264),
             "h265" | "x265" | "hevc" => Some(VideoCodec::H265),
             "av1" | "svtav1" => Some(VideoCodec::AV1),
+            "vp9" | "libvpx-vp9" => Some(VideoCodec::Vp9),
             "copy" => Some(VideoCodec::Copy),
             _ => None,
         }
@@ -30,6 +33,7 @@ impl VideoCodec {
         match self {
             VideoCodec::H264 | VideoCodec::H265 => 51,
             VideoCodec::AV1 => 63,
+            VideoCodec::Vp9 => 63,
             VideoCodec::Copy => 0,
         }
     }
@@ -60,8 +64,25 @@ impl VideoOptions {
         self.codec.unwrap_or(VideoCodec::H265)
     }
 
+    /// Like `effective_codec`, but falls back to a container-appropriate default
+    /// when no explicit codec is set. WebM only allows VP8/VP9/AV1; use VP9.
+    pub fn effective_codec_for_ext(&self, ext: &str) -> VideoCodec {
+        if self.fast { return VideoCodec::Copy; }
+        if let Some(c) = self.codec { return c; }
+        match ext.to_ascii_lowercase().as_str() {
+            "webm" => VideoCodec::Vp9,
+            _ => VideoCodec::H265,
+        }
+    }
+
     pub fn effective_crf(&self) -> Option<u8> {
         let codec = self.effective_codec();
+        if codec == VideoCodec::Copy { return None; }
+        let quality = self.quality.unwrap_or(default_video_quality());
+        Some(quality_to_crf(quality, codec))
+    }
+
+    pub fn effective_crf_for_codec(&self, codec: VideoCodec) -> Option<u8> {
         if codec == VideoCodec::Copy { return None; }
         let quality = self.quality.unwrap_or(default_video_quality());
         Some(quality_to_crf(quality, codec))
@@ -139,7 +160,8 @@ mod tests {
         assert_eq!(VideoCodec::parse("hevc"), Some(VideoCodec::H265));
         assert_eq!(VideoCodec::parse("av1"), Some(VideoCodec::AV1));
         assert_eq!(VideoCodec::parse("copy"), Some(VideoCodec::Copy));
-        assert_eq!(VideoCodec::parse("vp9"), None);
+        assert_eq!(VideoCodec::parse("vp9"), Some(VideoCodec::Vp9));
+        assert_eq!(VideoCodec::parse("libvpx-vp9"), Some(VideoCodec::Vp9));
     }
 
     #[test]
@@ -147,6 +169,7 @@ mod tests {
         assert_eq!(VideoCodec::H264.ffmpeg_encoder(), "libx264");
         assert_eq!(VideoCodec::H265.ffmpeg_encoder(), "libx265");
         assert_eq!(VideoCodec::AV1.ffmpeg_encoder(), "libsvtav1");
+        assert_eq!(VideoCodec::Vp9.ffmpeg_encoder(), "libvpx-vp9");
         assert_eq!(VideoCodec::Copy.ffmpeg_encoder(), "copy");
     }
 }
