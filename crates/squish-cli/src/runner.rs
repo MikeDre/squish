@@ -34,6 +34,7 @@ impl RunReport {
         let vid: u64 = self.video_results.iter().map(|r| r.output_bytes).sum();
         img + vid
     }
+    #[allow(dead_code)]
     pub fn total_files(&self) -> usize {
         self.results.len() + self.video_results.len()
     }
