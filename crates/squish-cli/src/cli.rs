@@ -45,6 +45,14 @@ pub struct Args {
     #[arg(long)]
     pub quiet: bool,
 
+    /// Maximum output width in pixels (scales down proportionally).
+    #[arg(long)]
+    pub max_width: Option<u32>,
+
+    /// Maximum output height in pixels (scales down proportionally).
+    #[arg(long)]
+    pub max_height: Option<u32>,
+
     /// Video codec: h264, h265, av1 (default: h265).
     #[arg(long)]
     pub codec: Option<String>,

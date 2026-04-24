@@ -44,6 +44,8 @@ fn real_main() -> Result<u8> {
         lossless: args.lossless,
         output_format,
         force_overwrite: args.force,
+        max_width: args.max_width,
+        max_height: args.max_height,
     };
 
     let video_codec = if let Some(c) = &args.codec {
