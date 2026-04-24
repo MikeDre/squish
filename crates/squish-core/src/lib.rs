@@ -44,9 +44,20 @@ pub fn squish_file(
         (f, None) => f,
     };
 
-    let output_bytes = dispatch_compress_with_conversion(
-        format_in, format_out, &input_bytes_vec, opts, input,
-    )?;
+    // If resize is requested and format supports it, decode → resize → encode.
+    // SVG is skipped (vector). For same-format paths that normally skip decode,
+    // resize forces the decode → resize → encode path.
+    let output_bytes = if opts.needs_resize() && format_in != Format::Svg {
+        let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
+        if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
+            img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+        }
+        dispatch_encode_raster(format_out, &img, opts, input)?
+    } else {
+        dispatch_compress_with_conversion(
+            format_in, format_out, &input_bytes_vec, opts, input,
+        )?
+    };
 
     let target_ext = if format_in == format_out {
         input
