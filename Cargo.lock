@@ -1832,7 +1832,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "squish-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1842,13 +1842,14 @@ dependencies = [
  "predicates",
  "rayon",
  "squish-core",
+ "squish-video",
  "tempfile",
  "walkdir",
 ]
 
 [[package]]
 name = "squish-core"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "image",
  "imagequant",
@@ -1860,6 +1861,15 @@ dependencies = [
  "thiserror 1.0.69",
  "usvg",
  "webp",
+]
+
+[[package]]
+name = "squish-video"
+version = "0.2.0"
+dependencies = [
+ "squish-core",
+ "tempfile",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
