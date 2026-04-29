@@ -1832,7 +1832,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "squish-cli"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1849,7 +1849,7 @@ dependencies = [
 
 [[package]]
 name = "squish-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "image",
  "imagequant",
@@ -1865,7 +1865,7 @@ dependencies = [
 
 [[package]]
 name = "squish-video"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "squish-core",
  "tempfile",

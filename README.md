@@ -151,6 +151,7 @@ Audio streams are copied as-is (no audio re-encoding).
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
   -r, --recursive            Recurse into directories
       --force                Overwrite existing _squished files
+      --suffix <NAME>        Custom output filename suffix (default: squished)
       --dry-run              Show what would happen; don't write
   -j, --jobs <N>             Parallelism (default: num CPUs)
   -v, --verbose              Per-file output
