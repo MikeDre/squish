@@ -9,6 +9,7 @@
 #   - libheif    (HEIC decode/encode)
 #   - x265       (HEIC HEVC encoder)
 #   - dav1d      (AVIF decoding)
+#   - ffmpeg     (video compression)
 
 set -euo pipefail
 
@@ -35,7 +36,7 @@ install_macos() {
         die "Homebrew not installed. Install from https://brew.sh/ and re-run."
     fi
     info "Installing system deps via Homebrew..."
-    brew install gifsicle libheif x265 dav1d pkg-config
+    brew install gifsicle libheif x265 dav1d ffmpeg pkg-config
 }
 
 install_linux() {
@@ -47,13 +48,14 @@ install_linux() {
             libheif-dev \
             libx265-dev \
             libdav1d-dev \
+            ffmpeg \
             pkg-config
     elif command -v dnf >/dev/null 2>&1; then
         info "Installing system deps via dnf..."
-        sudo dnf install -y gifsicle libheif-devel x265-devel dav1d-devel pkgconfig
+        sudo dnf install -y gifsicle libheif-devel x265-devel dav1d-devel ffmpeg pkgconfig
     elif command -v pacman >/dev/null 2>&1; then
         info "Installing system deps via pacman..."
-        sudo pacman -S --needed --noconfirm gifsicle libheif x265 dav1d pkgconf
+        sudo pacman -S --needed --noconfirm gifsicle libheif x265 dav1d ffmpeg pkgconf
     else
         die "no supported package manager found (tried apt, dnf, pacman)"
     fi

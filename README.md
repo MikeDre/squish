@@ -82,6 +82,12 @@ squish photos/ -r --format webp --quality 75
 # Preserve every bit (lossless)
 squish logo.svg --lossless
 
+# Resize while compressing (never upscales)
+squish photos/ -r --max-width 2000
+
+# Fit within a box
+squish hero.jpg --max-width 1920 --max-height 1080
+
 # Preview without writing
 squish ./big-folder/ -r --dry-run
 ```
@@ -138,17 +144,19 @@ Audio streams are copied as-is (no audio re-encoding).
 ## Flags
 
 ```
-  -q, --quality <0-100>  Quality override (default: format-specific)
-      --lossless         Lossless compression (overrides --quality)
-  -f, --format <FORMAT>  Output format; default preserves input format
-  -r, --recursive        Recurse into directories
-      --force            Overwrite existing _squished files
-      --dry-run          Show what would happen; don't write
-  -j, --jobs <N>         Parallelism (default: num CPUs)
-  -v, --verbose          Per-file output
-      --quiet            Errors only
-      --codec <CODEC>    Video codec: h264, h265, av1 (default: h265)
-      --fast             Video: optimize without re-encoding
+  -q, --quality <0-100>      Quality override (default: format-specific)
+      --lossless             Lossless compression (overrides --quality)
+  -f, --format <FORMAT>      Output format; default preserves input format
+      --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
+      --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
+  -r, --recursive            Recurse into directories
+      --force                Overwrite existing _squished files
+      --dry-run              Show what would happen; don't write
+  -j, --jobs <N>             Parallelism (default: num CPUs)
+  -v, --verbose              Per-file output
+      --quiet                Errors only
+      --codec <CODEC>        Video codec: h264, h265, av1 (default: h265)
+      --fast                 Video: optimize without re-encoding
 ```
 
 ## Collision behavior
@@ -167,8 +175,8 @@ Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/s
 ## Roadmap
 
 - Audio compression (`squish-audio` crate)
-- Image resizing (`--max-width`)
-- Tauri desktop app sharing the same `squish-core` library
+- Animated WebP preservation
+- Smart auto-format selection
 
 ## License
 
