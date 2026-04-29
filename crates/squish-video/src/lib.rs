@@ -11,7 +11,7 @@ pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
 pub use result::VideoResult;
 
-use squish_core::derive_output_path;
+use squish_core::derive_output_path_with_suffix;
 use std::path::Path;
 use std::time::Instant;
 
@@ -40,7 +40,8 @@ pub fn squish_video(
         .map(|s| s.to_ascii_lowercase())
         .unwrap_or_else(|| format_out.extension().to_string());
 
-    let output_path = derive_output_path(input, &ext, opts.force_overwrite);
+    let suffix = opts.suffix.as_deref().unwrap_or("squished");
+    let output_path = derive_output_path_with_suffix(input, &ext, opts.force_overwrite, suffix);
 
     ffmpeg::run_ffmpeg(input, &output_path, opts)?;
 

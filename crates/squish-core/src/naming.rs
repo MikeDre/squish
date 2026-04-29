@@ -16,19 +16,29 @@ pub fn derive_output_path(
     target_ext: &str,
     force_overwrite: bool,
 ) -> PathBuf {
+    derive_output_path_with_suffix(input, target_ext, force_overwrite, "squished")
+}
+
+/// Like `derive_output_path` but with a custom suffix instead of "squished".
+pub fn derive_output_path_with_suffix(
+    input: &Path,
+    target_ext: &str,
+    force_overwrite: bool,
+    suffix: &str,
+) -> PathBuf {
     let parent = input.parent().unwrap_or_else(|| Path::new(""));
     let stem = input
         .file_stem()
         .and_then(|s| s.to_str())
         .unwrap_or("output");
 
-    let base = parent.join(format!("{stem}_squished.{target_ext}"));
+    let base = parent.join(format!("{stem}_{suffix}.{target_ext}"));
     if force_overwrite || !base.exists() {
         return base;
     }
 
     for n in 2u32.. {
-        let candidate = parent.join(format!("{stem}_squished_{n}.{target_ext}"));
+        let candidate = parent.join(format!("{stem}_{suffix}_{n}.{target_ext}"));
         if !candidate.exists() {
             return candidate;
         }
@@ -97,6 +107,23 @@ mod tests {
 
         let out = derive_output_path(&input, "png", true);
         assert_eq!(out, target);
+    }
+
+    #[test]
+    fn custom_suffix() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("dog.png");
+        let out = derive_output_path_with_suffix(&input, "png", false, "compressed");
+        assert_eq!(out, tmp.path().join("dog_compressed.png"));
+    }
+
+    #[test]
+    fn custom_suffix_collision() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("dog.png");
+        fs::write(tmp.path().join("dog_min.png"), b"x").unwrap();
+        let out = derive_output_path_with_suffix(&input, "png", false, "min");
+        assert_eq!(out, tmp.path().join("dog_min_2.png"));
     }
 
     #[test]

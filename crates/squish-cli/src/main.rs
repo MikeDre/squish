@@ -46,6 +46,7 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         max_width: args.max_width,
         max_height: args.max_height,
+        suffix: args.suffix.clone(),
     };
 
     let video_codec = if let Some(c) = &args.codec {
@@ -59,6 +60,7 @@ fn real_main() -> Result<u8> {
         codec: video_codec,
         fast: args.fast,
         force_overwrite: args.force,
+        suffix: args.suffix,
     };
 
     let worklist = walker::collect_worklist(&args.paths, args.recursive);

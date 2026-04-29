@@ -45,6 +45,10 @@ pub struct Args {
     #[arg(long)]
     pub quiet: bool,
 
+    /// Custom output suffix (default: "squished", e.g. dog_squished.png).
+    #[arg(long)]
+    pub suffix: Option<String>,
+
     /// Maximum output width in pixels (scales down proportionally).
     #[arg(long)]
     pub max_width: Option<u32>,

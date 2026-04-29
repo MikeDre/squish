@@ -9,7 +9,7 @@ pub mod result;
 
 pub use error::SquishError;
 pub use format::{detect_format, Format};
-pub use naming::derive_output_path;
+pub use naming::{derive_output_path, derive_output_path_with_suffix};
 pub use options::SquishOptions;
 pub use result::SquishResult;
 
@@ -69,7 +69,8 @@ pub fn squish_file(
         format_out.extension().to_string()
     };
 
-    let output_path = derive_output_path(input, &target_ext, opts.force_overwrite);
+    let suffix = opts.suffix.as_deref().unwrap_or("squished");
+    let output_path = derive_output_path_with_suffix(input, &target_ext, opts.force_overwrite, suffix);
     fs::write(&output_path, &output_bytes)?;
 
     Ok(SquishResult {

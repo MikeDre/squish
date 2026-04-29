@@ -45,6 +45,8 @@ pub struct VideoOptions {
     pub codec: Option<VideoCodec>,
     pub fast: bool,
     pub force_overwrite: bool,
+    /// Custom output suffix. `None` means "squished".
+    pub suffix: Option<String>,
 }
 
 impl Default for VideoOptions {
@@ -54,6 +56,7 @@ impl Default for VideoOptions {
             codec: None,
             fast: false,
             force_overwrite: false,
+            suffix: None,
         }
     }
 }

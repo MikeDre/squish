@@ -24,6 +24,10 @@ pub struct SquishOptions {
     /// Maximum output height in pixels. Images taller than this are scaled down
     /// proportionally. `None` means no height constraint. Never upscales.
     pub max_height: Option<u32>,
+
+    /// Custom output suffix. `None` means "squished" (e.g., `dog_squished.png`).
+    /// Set to e.g. "min" to produce `dog_min.png`.
+    pub suffix: Option<String>,
 }
 
 impl SquishOptions {
