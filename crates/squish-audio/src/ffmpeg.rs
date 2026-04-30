@@ -138,6 +138,162 @@ fn map_codec_name(name: &str) -> Option<AudioCodec> {
     }
 }
 
+use crate::options::{
+    default_audio_quality, quality_to_aac_bitrate, quality_to_flac_level, quality_to_mp3_v,
+    quality_to_opus_bitrate, quality_to_vorbis_q, AudioOptions,
+};
+
+/// Build the codec-specific portion of an ffmpeg argv. Returns the full argv
+/// after `ffmpeg -y -i <input>` and before `<output>`.
+pub fn build_codec_args(
+    opts: &AudioOptions,
+    codec: AudioCodec,
+    has_attached_picture: bool,
+) -> Vec<String> {
+    let mut args: Vec<String> = Vec::new();
+
+    // Suppress non-attached-picture video streams. When art is present and
+    // we want to keep it, we'll add `-c:v copy` instead.
+    if has_attached_picture && !opts.strip_tags {
+        args.push("-c:v".into());
+        args.push("copy".into());
+    } else {
+        args.push("-vn".into());
+    }
+
+    // Audio codec
+    args.push("-c:a".into());
+    args.push(codec.ffmpeg_encoder().into());
+
+    // Quality / bitrate args
+    let quality = opts.quality.unwrap_or(default_audio_quality());
+    match codec {
+        AudioCodec::Mp3 => {
+            if let Some(kbps) = opts.bitrate_kbps {
+                args.push("-b:a".into());
+                args.push(format!("{kbps}k"));
+            } else {
+                args.push("-q:a".into());
+                args.push(quality_to_mp3_v(quality).to_string());
+            }
+        }
+        AudioCodec::Aac => {
+            let kbps = opts.bitrate_kbps.unwrap_or_else(|| quality_to_aac_bitrate(quality));
+            args.push("-b:a".into());
+            args.push(format!("{kbps}k"));
+        }
+        AudioCodec::Opus => {
+            let kbps = opts.bitrate_kbps.unwrap_or_else(|| quality_to_opus_bitrate(quality));
+            args.push("-b:a".into());
+            args.push(format!("{kbps}k"));
+            args.push("-vbr".into());
+            args.push("on".into());
+        }
+        AudioCodec::Vorbis => {
+            if let Some(kbps) = opts.bitrate_kbps {
+                args.push("-b:a".into());
+                args.push(format!("{kbps}k"));
+            } else {
+                args.push("-q:a".into());
+                args.push(quality_to_vorbis_q(quality).to_string());
+            }
+        }
+        AudioCodec::Flac => {
+            args.push("-compression_level".into());
+            args.push(quality_to_flac_level(quality).to_string());
+        }
+        AudioCodec::Alac => {
+            // ALAC has no quality knob.
+        }
+        AudioCodec::Copy => {
+            // No extra args; -c:a copy already emitted above.
+        }
+    }
+
+    if opts.strip_tags {
+        args.push("-map_metadata".into());
+        args.push("-1".into());
+    }
+
+    args
+}
+
+/// Build and run an ffmpeg command to compress `input` to `output`.
+pub fn run_ffmpeg(
+    input: &Path,
+    output: &Path,
+    opts: &AudioOptions,
+    codec: AudioCodec,
+    has_attached_picture: bool,
+) -> Result<(), AudioError> {
+    let mut cmd = Command::new("ffmpeg");
+    cmd.arg("-y");
+    cmd.arg("-i").arg(input);
+
+    for arg in build_codec_args(opts, codec, has_attached_picture) {
+        cmd.arg(arg);
+    }
+
+    cmd.arg(output);
+
+    let result = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            AudioError::MissingDependency {
+                name: "ffmpeg".into(),
+                install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
+            }
+        } else {
+            AudioError::Io(e)
+        }
+    })?;
+
+    if !result.status.success() {
+        let _ = std::fs::remove_file(output);
+        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
+        return Err(AudioError::FfmpegFailed {
+            path: input.to_path_buf(),
+            stderr,
+        });
+    }
+
+    Ok(())
+}
+
+/// Detect whether the file has an attached picture (album art) stream.
+pub fn ffprobe_has_attached_picture(path: &Path) -> Result<bool, AudioError> {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
+            "-of", "csv=p=0",
+        ])
+        .arg(path)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                AudioError::MissingDependency {
+                    name: "ffprobe".into(),
+                    install_hint: "ffprobe ships with ffmpeg".into(),
+                }
+            } else {
+                AudioError::Io(e)
+            }
+        })?;
+    if !output.status.success() {
+        return Ok(false);
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let mut parts = line.split(',');
+        let kind = parts.next().unwrap_or("").trim();
+        let attached_pic = parts.next().unwrap_or("").trim() == "1";
+        if kind == "video" && attached_pic {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,5 +421,78 @@ mod tests {
 
         let codec = ffprobe_audio_codec(&path).unwrap();
         assert_eq!(codec, Some(AudioCodec::Mp3));
+    }
+
+    use crate::options::{AudioCodec as AC, AudioOptions};
+
+    fn args(codec: AC, opts: AudioOptions, art: bool) -> Vec<String> {
+        build_codec_args(&opts, codec, art)
+    }
+
+    #[test]
+    fn mp3_uses_q_a_by_default() {
+        let a = args(AC::Mp3, AudioOptions::default(), false);
+        assert!(a.contains(&"-vn".to_string()));
+        assert!(a.contains(&"-c:a".to_string()));
+        assert!(a.contains(&"libmp3lame".to_string()));
+        assert!(a.contains(&"-q:a".to_string()));
+    }
+
+    #[test]
+    fn mp3_bitrate_overrides_quality() {
+        let opts = AudioOptions { bitrate_kbps: Some(192), ..Default::default() };
+        let a = args(AC::Mp3, opts, false);
+        assert!(a.contains(&"-b:a".to_string()));
+        assert!(a.contains(&"192k".to_string()));
+        assert!(!a.contains(&"-q:a".to_string()));
+    }
+
+    #[test]
+    fn opus_emits_vbr_on() {
+        let a = args(AC::Opus, AudioOptions::default(), false);
+        assert!(a.contains(&"-vbr".to_string()));
+        assert!(a.contains(&"on".to_string()));
+        assert!(a.contains(&"libopus".to_string()));
+    }
+
+    #[test]
+    fn flac_uses_compression_level() {
+        let a = args(AC::Flac, AudioOptions::default(), false);
+        assert!(a.contains(&"-compression_level".to_string()));
+    }
+
+    #[test]
+    fn copy_emits_only_c_a_copy() {
+        let a = args(AC::Copy, AudioOptions::default(), false);
+        assert!(a.contains(&"-c:a".to_string()));
+        assert!(a.contains(&"copy".to_string()));
+        assert!(!a.contains(&"-q:a".to_string()));
+        assert!(!a.contains(&"-b:a".to_string()));
+    }
+
+    #[test]
+    fn art_preserved_when_present_and_tags_kept() {
+        let a = args(AC::Mp3, AudioOptions::default(), true);
+        // -c:v copy is added when art present; -vn is NOT added
+        let cv_pos = a.iter().position(|s| s == "-c:v").unwrap();
+        assert_eq!(a[cv_pos + 1], "copy");
+        assert!(!a.contains(&"-vn".to_string()));
+    }
+
+    #[test]
+    fn art_dropped_when_strip_tags() {
+        let opts = AudioOptions { strip_tags: true, ..Default::default() };
+        let a = args(AC::Mp3, opts, true);
+        assert!(a.contains(&"-vn".to_string()));
+        assert!(a.contains(&"-map_metadata".to_string()));
+        assert!(a.contains(&"-1".to_string()));
+    }
+
+    #[test]
+    fn strip_tags_emits_map_metadata_neg_1() {
+        let opts = AudioOptions { strip_tags: true, ..Default::default() };
+        let a = args(AC::Mp3, opts, false);
+        let pos = a.iter().position(|s| s == "-map_metadata").unwrap();
+        assert_eq!(a[pos + 1], "-1");
     }
 }
