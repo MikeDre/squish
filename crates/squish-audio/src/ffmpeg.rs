@@ -1,6 +1,7 @@
 //! ffmpeg/ffprobe binary detection, command building, and execution.
 
 use crate::error::AudioError;
+use crate::options::AudioCodec;
 use std::path::Path;
 use std::process::Command;
 
@@ -90,6 +91,51 @@ pub fn ffprobe_kind(path: &Path) -> Result<ProbeKind, AudioError> {
         (false, true) => ProbeKind::AudioOnly,
         _ => ProbeKind::Unknown,
     })
+}
+
+/// Detect the first audio stream's codec via ffprobe. Returns `None` for
+/// codecs we don't model (e.g. PCM in WAV, AC-3, etc.).
+pub fn ffprobe_audio_codec(path: &Path) -> Result<Option<AudioCodec>, AudioError> {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v", "error",
+            "-select_streams", "a:0",
+            "-show_entries", "stream=codec_name",
+            "-of", "csv=p=0",
+        ])
+        .arg(path)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                AudioError::MissingDependency {
+                    name: "ffprobe".into(),
+                    install_hint:
+                        "ffprobe ships with ffmpeg; brew install ffmpeg or apt install ffmpeg"
+                            .into(),
+                }
+            } else {
+                AudioError::Io(e)
+            }
+        })?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let codec_name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    Ok(map_codec_name(&codec_name))
+}
+
+fn map_codec_name(name: &str) -> Option<AudioCodec> {
+    match name {
+        "mp3" | "mp3float" => Some(AudioCodec::Mp3),
+        "aac" => Some(AudioCodec::Aac),
+        "opus" => Some(AudioCodec::Opus),
+        "vorbis" => Some(AudioCodec::Vorbis),
+        "flac" => Some(AudioCodec::Flac),
+        "alac" => Some(AudioCodec::Alac),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -183,5 +229,41 @@ mod tests {
             ProbeKind::AudioOnly => {}
             other => panic!("expected AudioOnly for attached-picture MP3, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn map_codec_name_known() {
+        assert_eq!(map_codec_name("mp3"), Some(AudioCodec::Mp3));
+        assert_eq!(map_codec_name("aac"), Some(AudioCodec::Aac));
+        assert_eq!(map_codec_name("opus"), Some(AudioCodec::Opus));
+        assert_eq!(map_codec_name("vorbis"), Some(AudioCodec::Vorbis));
+        assert_eq!(map_codec_name("flac"), Some(AudioCodec::Flac));
+        assert_eq!(map_codec_name("alac"), Some(AudioCodec::Alac));
+    }
+
+    #[test]
+    fn map_codec_name_unknown() {
+        assert_eq!(map_codec_name("pcm_s16le"), None);
+        assert_eq!(map_codec_name("ac3"), None);
+        assert_eq!(map_codec_name(""), None);
+    }
+
+    #[test]
+    fn ffprobe_audio_codec_round_trips_mp3() {
+        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("sine.mp3");
+        let status = ProcCommand::new("ffmpeg")
+            .args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.2", "-c:a", "libmp3lame"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+
+        let codec = ffprobe_audio_codec(&path).unwrap();
+        assert_eq!(codec, Some(AudioCodec::Mp3));
     }
 }
