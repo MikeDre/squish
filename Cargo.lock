@@ -1831,6 +1831,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
+name = "squish-audio"
+version = "0.2.1"
+dependencies = [
+ "squish-core",
+ "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "squish-cli"
 version = "0.2.1"
 dependencies = [
@@ -1841,6 +1850,7 @@ dependencies = [
  "indicatif",
  "predicates",
  "rayon",
+ "squish-audio",
  "squish-core",
  "squish-video",
  "tempfile",

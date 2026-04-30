@@ -141,6 +141,35 @@ Supported containers: MP4, WebM, MOV, AVI, MKV, FLV. Requires system `ffmpeg`.
 
 Audio streams are copied as-is (no audio re-encoding).
 
+### Audio
+
+Supported via `ffmpeg` + `ffprobe`: MP3, AAC/M4A, WAV, FLAC, OGG, Opus, AIFF, WebM-audio. Tags and album art are preserved by default.
+
+| Codec | Flag | Notes |
+|---|---|---|
+| MP3 | `--codec mp3` | LAME VBR quality scale |
+| AAC | `--codec aac` | Bitrate ladder (default 192 kbps at q=80) |
+| Opus | `--codec opus` | Modern lossy codec; default for lossless inputs in non-interactive mode |
+| Vorbis | `--codec vorbis` | Quality scale, in `.ogg` |
+| FLAC | `--codec flac` | Lossless re-encode |
+| ALAC | `--codec alac` | Lossless, in `.m4a` |
+
+By default, lossy inputs (MP3/AAC/etc) re-encode to the same codec; lossless inputs (FLAC/WAV/AIFF) prompt once for a target codec (defaults to Opus in non-interactive mode).
+
+```bash
+# Default: same codec re-encoded with sensible quality
+squish track.mp3
+
+# Convert lossless to Opus (lossy, ~50% size reduction)
+squish --codec opus song.flac
+
+# Pick a specific bitrate
+squish --bitrate 192k podcast.mp3
+
+# Strip ID3 tags and album art
+squish --strip-tags album/*.mp3
+```
+
 ## Flags
 
 ```
@@ -156,8 +185,10 @@ Audio streams are copied as-is (no audio re-encoding).
   -j, --jobs <N>             Parallelism (default: num CPUs)
   -v, --verbose              Per-file output
       --quiet                Errors only
-      --codec <CODEC>        Video codec: h264, h265, av1 (default: h265)
+      --codec <CODEC>        Codec: video=h264|h265|av1|vp9, audio=mp3|aac|opus|vorbis|flac|alac
       --fast                 Video: optimize without re-encoding
+      --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
+      --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
 ```
 
 ## Collision behavior
@@ -175,7 +206,6 @@ Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/s
 
 ## Roadmap
 
-- Audio compression (`squish-audio` crate)
 - Animated WebP preservation
 - Smart auto-format selection
 

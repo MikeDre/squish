@@ -39,7 +39,7 @@ impl VideoCodec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VideoOptions {
     pub quality: Option<u8>,
     pub codec: Option<VideoCodec>,
@@ -49,29 +49,23 @@ pub struct VideoOptions {
     pub suffix: Option<String>,
 }
 
-impl Default for VideoOptions {
-    fn default() -> Self {
-        VideoOptions {
-            quality: None,
-            codec: None,
-            fast: false,
-            force_overwrite: false,
-            suffix: None,
-        }
-    }
-}
-
 impl VideoOptions {
     pub fn effective_codec(&self) -> VideoCodec {
-        if self.fast { return VideoCodec::Copy; }
+        if self.fast {
+            return VideoCodec::Copy;
+        }
         self.codec.unwrap_or(VideoCodec::H265)
     }
 
     /// Like `effective_codec`, but falls back to a container-appropriate default
     /// when no explicit codec is set. WebM only allows VP8/VP9/AV1; use VP9.
     pub fn effective_codec_for_ext(&self, ext: &str) -> VideoCodec {
-        if self.fast { return VideoCodec::Copy; }
-        if let Some(c) = self.codec { return c; }
+        if self.fast {
+            return VideoCodec::Copy;
+        }
+        if let Some(c) = self.codec {
+            return c;
+        }
         match ext.to_ascii_lowercase().as_str() {
             "webm" => VideoCodec::Vp9,
             _ => VideoCodec::H265,
@@ -80,19 +74,25 @@ impl VideoOptions {
 
     pub fn effective_crf(&self) -> Option<u8> {
         let codec = self.effective_codec();
-        if codec == VideoCodec::Copy { return None; }
+        if codec == VideoCodec::Copy {
+            return None;
+        }
         let quality = self.quality.unwrap_or(default_video_quality());
         Some(quality_to_crf(quality, codec))
     }
 
     pub fn effective_crf_for_codec(&self, codec: VideoCodec) -> Option<u8> {
-        if codec == VideoCodec::Copy { return None; }
+        if codec == VideoCodec::Copy {
+            return None;
+        }
         let quality = self.quality.unwrap_or(default_video_quality());
         Some(quality_to_crf(quality, codec))
     }
 }
 
-pub fn default_video_quality() -> u8 { 80 }
+pub fn default_video_quality() -> u8 {
+    80
+}
 
 pub fn quality_to_crf(quality: u8, codec: VideoCodec) -> u8 {
     let crf_max = codec.crf_max() as f64;
@@ -121,13 +121,20 @@ mod tests {
 
     #[test]
     fn effective_codec_uses_override() {
-        let o = VideoOptions { codec: Some(VideoCodec::AV1), ..Default::default() };
+        let o = VideoOptions {
+            codec: Some(VideoCodec::AV1),
+            ..Default::default()
+        };
         assert_eq!(o.effective_codec(), VideoCodec::AV1);
     }
 
     #[test]
     fn fast_mode_forces_copy() {
-        let o = VideoOptions { fast: true, codec: Some(VideoCodec::H264), ..Default::default() };
+        let o = VideoOptions {
+            fast: true,
+            codec: Some(VideoCodec::H264),
+            ..Default::default()
+        };
         assert_eq!(o.effective_codec(), VideoCodec::Copy);
     }
 
@@ -146,7 +153,10 @@ mod tests {
 
     #[test]
     fn effective_crf_none_for_copy() {
-        let o = VideoOptions { fast: true, ..Default::default() };
+        let o = VideoOptions {
+            fast: true,
+            ..Default::default()
+        };
         assert_eq!(o.effective_crf(), None);
     }
 

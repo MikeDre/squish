@@ -34,9 +34,9 @@ pub fn looks_already_squished(path: &Path) -> bool {
         .and_then(|s| s.to_str())
         .map(|stem| {
             stem.ends_with("_squished")
-                || (stem.rsplit_once("_squished_").map_or(false, |(_, suffix)| {
-                    suffix.chars().all(|c| c.is_ascii_digit())
-                }))
+                || (stem
+                    .rsplit_once("_squished_")
+                    .is_some_and(|(_, suffix)| suffix.chars().all(|c| c.is_ascii_digit())))
         })
         .unwrap_or(false)
 }
@@ -52,7 +52,7 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let f = tmp.path().join("x.png");
         fs::write(&f, b"x").unwrap();
-        assert_eq!(collect_worklist(&[f.clone()], false), vec![f]);
+        assert_eq!(collect_worklist(std::slice::from_ref(&f), false), vec![f]);
     }
 
     #[test]
@@ -84,6 +84,8 @@ mod tests {
         assert!(looks_already_squished(Path::new("dog_squished_2.png")));
         assert!(looks_already_squished(Path::new("dog_squished_99.png")));
         assert!(!looks_already_squished(Path::new("dog.png")));
-        assert!(!looks_already_squished(Path::new("_squished_notanumber.png")));
+        assert!(!looks_already_squished(Path::new(
+            "_squished_notanumber.png"
+        )));
     }
 }
