@@ -208,4 +208,35 @@ mod tests {
             "ogg"
         );
     }
+
+    #[test]
+    fn resolve_ext_copy_preserves_input_ext() {
+        assert_eq!(
+            resolve_output_extension(Some(AudioCodec::Mp3), AudioCodec::Copy, "mp3"),
+            "mp3"
+        );
+        assert_eq!(
+            resolve_output_extension(None, AudioCodec::Copy, "wav"),
+            "wav"
+        );
+    }
+
+    #[test]
+    fn resolve_ext_falls_back_to_canonical_when_empty_input_ext() {
+        // Same-codec match but empty input_ext: must fall through to canonical.
+        assert_eq!(
+            resolve_output_extension(Some(AudioCodec::Opus), AudioCodec::Opus, ""),
+            "opus"
+        );
+    }
+
+    #[test]
+    fn resolve_ext_uses_canonical_when_input_codec_unknown() {
+        // input_codec=None with explicit output codec: same-codec branch can't
+        // match, so we get the canonical extension.
+        assert_eq!(
+            resolve_output_extension(None, AudioCodec::Opus, "wav"),
+            "opus"
+        );
+    }
 }
