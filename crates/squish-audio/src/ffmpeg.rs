@@ -495,4 +495,75 @@ mod tests {
         let pos = a.iter().position(|s| s == "-map_metadata").unwrap();
         assert_eq!(a[pos + 1], "-1");
     }
+
+    #[test]
+    fn aac_default_uses_bitrate_ladder() {
+        let a = args(AC::Aac, AudioOptions::default(), false);
+        assert!(a.contains(&"-b:a".to_string()));
+        assert!(a.contains(&"192k".to_string()));
+        assert!(!a.contains(&"-q:a".to_string()));
+    }
+
+    #[test]
+    fn opus_bitrate_overrides_ladder() {
+        let opts = AudioOptions { bitrate_kbps: Some(256), ..Default::default() };
+        let a = args(AC::Opus, opts, false);
+        assert!(a.contains(&"256k".to_string()));
+    }
+
+    #[test]
+    fn ffprobe_has_attached_picture_detects_album_art() {
+        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cover = tmp.path().join("cover.png");
+        let audio = tmp.path().join("with_art.mp3");
+
+        let cover_status = ProcCommand::new("ffmpeg")
+            .args(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-frames:v", "1"])
+            .arg(&cover)
+            .output()
+            .unwrap();
+        assert!(cover_status.status.success());
+
+        let mp3_status = ProcCommand::new("ffmpeg")
+            .args([
+                "-y",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+                "-i",
+            ])
+            .arg(&cover)
+            .args([
+                "-map", "0", "-map", "1",
+                "-c:v", "copy", "-c:a", "libmp3lame",
+                "-id3v2_version", "3",
+                "-disposition:v:0", "attached_pic",
+            ])
+            .arg(&audio)
+            .output()
+            .unwrap();
+        assert!(mp3_status.status.success(), "mp3 mux failed");
+
+        assert!(ffprobe_has_attached_picture(&audio).unwrap());
+    }
+
+    #[test]
+    fn ffprobe_has_attached_picture_returns_false_for_plain_audio() {
+        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("plain.mp3");
+        let status = ProcCommand::new("ffmpeg")
+            .args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.2", "-c:a", "libmp3lame"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(status.status.success());
+
+        assert!(!ffprobe_has_attached_picture(&path).unwrap());
+    }
 }
