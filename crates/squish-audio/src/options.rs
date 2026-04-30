@@ -54,6 +54,74 @@ impl AudioCodec {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AudioOptions {
+    pub quality: Option<u8>,
+    pub bitrate_kbps: Option<u32>,
+    pub codec: Option<AudioCodec>,
+    pub strip_tags: bool,
+    pub force_overwrite: bool,
+    pub suffix: Option<String>,
+}
+
+impl Default for AudioOptions {
+    fn default() -> Self {
+        AudioOptions {
+            quality: None,
+            bitrate_kbps: None,
+            codec: None,
+            strip_tags: false,
+            force_overwrite: false,
+            suffix: None,
+        }
+    }
+}
+
+pub fn default_audio_quality() -> u8 { 80 }
+
+/// MP3 LAME `-q:a` value (0-9, lower = higher quality).
+pub fn quality_to_mp3_v(q: u8) -> u8 {
+    let q = q.min(100) as u32;
+    let v = 9 - (q * 9 / 100);
+    v.min(9) as u8
+}
+
+/// Vorbis `-q:a` value (0-10, higher = better).
+pub fn quality_to_vorbis_q(q: u8) -> u8 {
+    let q = q.min(100) as u32;
+    (q * 10 / 100).min(10) as u8
+}
+
+/// FLAC compression level (0-12, higher = more effort).
+pub fn quality_to_flac_level(q: u8) -> u8 {
+    let q = q.min(100) as u32;
+    (q * 12 / 100).min(12) as u8
+}
+
+/// AAC bitrate ladder lookup keyed by quality bucket.
+pub fn quality_to_aac_bitrate(q: u8) -> u32 {
+    match q.min(100) {
+        0..=20 => 64,
+        21..=40 => 96,
+        41..=60 => 128,
+        61..=80 => 192,
+        81..=95 => 256,
+        _ => 320,
+    }
+}
+
+/// Opus bitrate ladder lookup keyed by quality bucket.
+pub fn quality_to_opus_bitrate(q: u8) -> u32 {
+    match q.min(100) {
+        0..=20 => 32,
+        21..=40 => 48,
+        41..=60 => 64,
+        61..=80 => 96,
+        81..=95 => 128,
+        _ => 160,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +172,52 @@ mod tests {
         assert_eq!(AudioCodec::Vorbis.canonical_extension(), "ogg");
         assert_eq!(AudioCodec::Flac.canonical_extension(), "flac");
         assert_eq!(AudioCodec::Alac.canonical_extension(), "m4a");
+    }
+
+    #[test]
+    fn default_options() {
+        let o = AudioOptions::default();
+        assert!(o.quality.is_none());
+        assert!(o.bitrate_kbps.is_none());
+        assert!(o.codec.is_none());
+        assert!(!o.strip_tags);
+        assert!(!o.force_overwrite);
+        assert!(o.suffix.is_none());
+    }
+
+    #[test]
+    fn mp3_v_mapping_boundaries() {
+        assert_eq!(quality_to_mp3_v(0), 9);
+        assert_eq!(quality_to_mp3_v(100), 0);
+        assert_eq!(quality_to_mp3_v(80), 2);
+        assert_eq!(quality_to_mp3_v(50), 5);
+    }
+
+    #[test]
+    fn vorbis_q_mapping_boundaries() {
+        assert_eq!(quality_to_vorbis_q(0), 0);
+        assert_eq!(quality_to_vorbis_q(100), 10);
+        assert_eq!(quality_to_vorbis_q(80), 8);
+    }
+
+    #[test]
+    fn flac_level_mapping_boundaries() {
+        assert_eq!(quality_to_flac_level(0), 0);
+        assert_eq!(quality_to_flac_level(100), 12);
+        assert_eq!(quality_to_flac_level(80), 9);
+    }
+
+    #[test]
+    fn aac_bitrate_ladder() {
+        assert_eq!(quality_to_aac_bitrate(0), 64);
+        assert_eq!(quality_to_aac_bitrate(80), 192);
+        assert_eq!(quality_to_aac_bitrate(100), 320);
+    }
+
+    #[test]
+    fn opus_bitrate_ladder() {
+        assert_eq!(quality_to_opus_bitrate(0), 32);
+        assert_eq!(quality_to_opus_bitrate(80), 96);
+        assert_eq!(quality_to_opus_bitrate(100), 160);
     }
 }
