@@ -3,8 +3,9 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::{self, VideoOptions, VideoResult, VideoError};
+use squish_audio::{self, AudioOptions, AudioResult};
 #[allow(unused_imports)]
-use squish_audio::{self, AudioOptions, AudioResult, AudioError};
+use squish_audio::AudioError;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -12,6 +13,8 @@ use std::time::{Duration, Instant};
 pub struct RunConfig {
     pub opts: SquishOptions,
     pub video_opts: VideoOptions,
+    #[allow(dead_code)]
+    pub audio_opts: AudioOptions,
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
@@ -20,6 +23,7 @@ pub struct RunConfig {
 pub struct RunReport {
     pub results: Vec<SquishResult>,
     pub video_results: Vec<VideoResult>,
+    pub audio_results: Vec<AudioResult>,
     pub errors: Vec<(PathBuf, String)>,
     pub skipped_unknown: Vec<PathBuf>,
     pub total_wall: Duration,
@@ -29,16 +33,18 @@ impl RunReport {
     pub fn input_bytes(&self) -> u64 {
         let img: u64 = self.results.iter().map(|r| r.input_bytes).sum();
         let vid: u64 = self.video_results.iter().map(|r| r.input_bytes).sum();
-        img + vid
+        let aud: u64 = self.audio_results.iter().map(|r| r.input_bytes).sum();
+        img + vid + aud
     }
     pub fn output_bytes(&self) -> u64 {
         let img: u64 = self.results.iter().map(|r| r.output_bytes).sum();
         let vid: u64 = self.video_results.iter().map(|r| r.output_bytes).sum();
-        img + vid
+        let aud: u64 = self.audio_results.iter().map(|r| r.output_bytes).sum();
+        img + vid + aud
     }
     #[allow(dead_code)]
     pub fn total_files(&self) -> usize {
-        self.results.len() + self.video_results.len()
+        self.results.len() + self.video_results.len() + self.audio_results.len()
     }
     pub fn exit_code(&self) -> u8 {
         if self.errors.is_empty() { 0 } else { 1 }
@@ -101,6 +107,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         return Ok(RunReport {
             results: Vec::new(),
             video_results: Vec::new(),
+            audio_results: Vec::new(),
             errors: Vec::new(),
             skipped_unknown,
             total_wall: start.elapsed(),
@@ -179,6 +186,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let report = RunReport {
         results,
         video_results,
+        audio_results: Vec::new(),
         errors,
         skipped_unknown,
         total_wall: start.elapsed(),

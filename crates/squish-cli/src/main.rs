@@ -5,6 +5,7 @@ mod walker;
 use anyhow::{Context, Result};
 use clap::Parser;
 use squish_core::{Format, SquishOptions};
+use squish_audio::AudioOptions;
 use squish_video::{VideoCodec, VideoOptions};
 
 fn main() -> std::process::ExitCode {
@@ -68,6 +69,7 @@ fn real_main() -> Result<u8> {
     let cfg = runner::RunConfig {
         opts,
         video_opts,
+        audio_opts: AudioOptions::default(),
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
