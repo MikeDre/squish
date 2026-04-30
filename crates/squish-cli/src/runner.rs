@@ -371,11 +371,11 @@ fn print_summary(r: &RunReport) {
         0.0
     };
 
-    let count_detail = match (r.results.len(), r.video_results.len()) {
-        (img, 0) => format!("{img} files"),
-        (0, vid) => format!("{vid} files"),
-        (img, vid) => format!("{} files ({img} images, {vid} videos)", img + vid),
-    };
+    let count_detail = format_count_detail(
+        r.results.len(),
+        r.video_results.len(),
+        r.audio_results.len(),
+    );
 
     println!(
         "Squished {count_detail} · {:.1} MB → {:.1} MB ({:+.1}%) · {}",
@@ -409,6 +409,25 @@ fn print_summary(r: &RunReport) {
 
 fn trim_sub_ms(d: Duration) -> Duration {
     Duration::from_millis(d.as_millis() as u64)
+}
+
+fn format_count_detail(images: usize, videos: usize, audio: usize) -> String {
+    let total = images + videos + audio;
+    let mut breakdown: Vec<String> = Vec::new();
+    if images > 0 {
+        breakdown.push(format!("{images} images"));
+    }
+    if videos > 0 {
+        breakdown.push(format!("{videos} videos"));
+    }
+    if audio > 0 {
+        breakdown.push(format!("{audio} audio"));
+    }
+    if breakdown.len() <= 1 {
+        format!("{total} files")
+    } else {
+        format!("{total} files ({})", breakdown.join(", "))
+    }
 }
 
 #[cfg(test)]
@@ -468,5 +487,51 @@ mod codec_validation_tests {
     fn no_lossless_inputs_returns_none() {
         let files = vec![PathBuf::from("song.mp3")];
         assert!(choose_lossless_codec(&files, false).is_none());
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::format_count_detail;
+
+    #[test]
+    fn images_only() {
+        assert_eq!(format_count_detail(3, 0, 0), "3 files");
+    }
+
+    #[test]
+    fn videos_only() {
+        assert_eq!(format_count_detail(0, 2, 0), "2 files");
+    }
+
+    #[test]
+    fn audio_only() {
+        assert_eq!(format_count_detail(0, 0, 5), "5 files");
+    }
+
+    #[test]
+    fn images_and_videos() {
+        assert_eq!(
+            format_count_detail(3, 2, 0),
+            "5 files (3 images, 2 videos)"
+        );
+    }
+
+    #[test]
+    fn all_three_kinds() {
+        assert_eq!(
+            format_count_detail(3, 2, 5),
+            "10 files (3 images, 2 videos, 5 audio)"
+        );
+    }
+
+    #[test]
+    fn audio_and_images() {
+        assert_eq!(format_count_detail(3, 0, 5), "8 files (3 images, 5 audio)");
+    }
+
+    #[test]
+    fn empty() {
+        assert_eq!(format_count_detail(0, 0, 0), "0 files");
     }
 }
