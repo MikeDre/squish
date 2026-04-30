@@ -41,10 +41,13 @@ pub enum ProbeKind {
 /// `AudioOnly` if only audio + (optionally) attached pictures, `Unknown` if
 /// the probe yielded no usable answer.
 pub fn ffprobe_kind(path: &Path) -> Result<ProbeKind, AudioError> {
+    // Request `attached_pic` as its own column so we don't have to parse
+    // ffprobe's bulk disposition list (which varies in shape between versions
+    // and even drops entirely on some builds when the result is "no flags set").
     let output = Command::new("ffprobe")
         .args([
             "-v", "error",
-            "-show_entries", "stream=codec_type,disposition",
+            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
             "-of", "csv=p=0",
         ])
         .arg(path)
@@ -70,20 +73,13 @@ pub fn ffprobe_kind(path: &Path) -> Result<ProbeKind, AudioError> {
     let mut has_real_video = false;
     let mut has_audio = false;
 
+    // Each line is `<codec_type>,<attached_pic_flag>` where the flag is "0" or "1".
     for line in stdout.lines() {
-        // ffprobe csv: codec_type,disposition... where disposition is a comma-list.
-        // We asked for codec_type + disposition, so the line shape is:
-        //   "video,attached_pic" / "video,..." / "audio,..." etc.
         let mut parts = line.split(',');
         let kind = parts.next().unwrap_or("").trim();
-        let disp = parts.next().unwrap_or("");
+        let attached_pic = parts.next().unwrap_or("").trim() == "1";
         match kind {
-            "video" => {
-                let attached_pic = disp.contains("attached_pic") || disp == "1";
-                if !attached_pic {
-                    has_real_video = true;
-                }
-            }
+            "video" if !attached_pic => has_real_video = true,
             "audio" => has_audio = true,
             _ => {}
         }
@@ -139,10 +135,53 @@ mod tests {
     }
 
     #[test]
-    fn ffprobe_kind_returns_error_when_path_missing() {
+    fn ffprobe_kind_returns_unknown_for_missing_path() {
         // Probe a non-existent file; ffprobe writes to stderr and exits nonzero,
         // and we map that to ProbeKind::Unknown (not MissingDependency).
         let result = ffprobe_kind(&PathBuf::from("/definitely/does/not/exist.mp3"));
         assert!(matches!(result, Ok(ProbeKind::Unknown)));
+    }
+
+    #[test]
+    fn ffprobe_kind_treats_attached_picture_as_audio_only() {
+        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cover = tmp.path().join("cover.png");
+        let audio = tmp.path().join("with_art.mp3");
+
+        // Generate a single-frame PNG as the cover image.
+        let cover_status = ProcCommand::new("ffmpeg")
+            .args(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-frames:v", "1"])
+            .arg(&cover)
+            .output()
+            .unwrap();
+        assert!(cover_status.status.success(), "cover generation failed");
+
+        // Wrap a sine wave + the cover as an MP3 with attached_pic disposition.
+        let mp3_status = ProcCommand::new("ffmpeg")
+            .args([
+                "-y",
+                "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+                "-i",
+            ])
+            .arg(&cover)
+            .args([
+                "-map", "0", "-map", "1",
+                "-c:v", "copy", "-c:a", "libmp3lame",
+                "-id3v2_version", "3",
+                "-disposition:v:0", "attached_pic",
+            ])
+            .arg(&audio)
+            .output()
+            .unwrap();
+        assert!(mp3_status.status.success(), "mp3 mux failed: {}", String::from_utf8_lossy(&mp3_status.stderr));
+
+        match ffprobe_kind(&audio).unwrap() {
+            ProbeKind::AudioOnly => {}
+            other => panic!("expected AudioOnly for attached-picture MP3, got {other:?}"),
+        }
     }
 }
