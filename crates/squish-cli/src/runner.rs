@@ -80,14 +80,12 @@ fn classify_file(path: &Path) -> FileKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
 enum CodecAppliesTo {
     Video,
     Audio,
     Neither,
 }
 
-#[allow(dead_code)]
 fn classify_codec_string(s: &str) -> CodecAppliesTo {
     let v = VideoCodec::parse(s).is_some();
     let a = AudioCodec::parse(s).is_some();
@@ -100,7 +98,6 @@ fn classify_codec_string(s: &str) -> CodecAppliesTo {
 
 /// Validate the user-supplied --codec against the batch contents. Returns
 /// `Ok((maybe_video_codec, maybe_audio_codec))`.
-#[allow(dead_code)]
 pub fn validate_codec_string(
     codec: Option<&str>,
     has_video: bool,
