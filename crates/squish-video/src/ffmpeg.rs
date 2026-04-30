@@ -65,6 +65,13 @@ pub fn run_ffmpeg(
             VideoCodec::Copy => unreachable!(),
         }
 
+        // ffmpeg defaults H.265 in MP4/MOV to the `hev1` codec tag, which
+        // QuickTime/Safari/iOS refuse to decode. Force `hvc1` so the output
+        // plays everywhere H.265 is supported.
+        if codec == VideoCodec::H265 && matches!(out_ext, "mp4" | "m4v" | "mov") {
+            cmd.arg("-tag:v").arg("hvc1");
+        }
+
         // Copy audio stream as-is
         cmd.arg("-c:a").arg("copy");
 
