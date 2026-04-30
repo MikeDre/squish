@@ -54,7 +54,7 @@ impl AudioCodec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct AudioOptions {
     pub quality: Option<u8>,
     pub bitrate_kbps: Option<u32>,
@@ -62,19 +62,6 @@ pub struct AudioOptions {
     pub strip_tags: bool,
     pub force_overwrite: bool,
     pub suffix: Option<String>,
-}
-
-impl Default for AudioOptions {
-    fn default() -> Self {
-        AudioOptions {
-            quality: None,
-            bitrate_kbps: None,
-            codec: None,
-            strip_tags: false,
-            force_overwrite: false,
-            suffix: None,
-        }
-    }
 }
 
 pub fn default_audio_quality() -> u8 { 80 }
