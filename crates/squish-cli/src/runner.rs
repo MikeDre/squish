@@ -3,6 +3,8 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::{self, VideoOptions, VideoResult, VideoError};
+#[allow(unused_imports)]
+use squish_audio::{self, AudioOptions, AudioResult, AudioError};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -46,17 +48,28 @@ impl RunReport {
 enum FileKind {
     Image,
     Video,
+    Audio,
     Unknown,
 }
 
 fn classify_file(path: &Path) -> FileKind {
     if peek_image_format(path).unwrap_or(None).is_some() {
-        FileKind::Image
-    } else if squish_video::detect_video_format(path).is_some() {
-        FileKind::Video
-    } else {
-        FileKind::Unknown
+        return FileKind::Image;
     }
+    if let Some(audio_fmt) = squish_audio::detect_audio_format(path) {
+        if audio_fmt.is_ambiguous() {
+            match squish_audio::ffmpeg::ffprobe_kind(path) {
+                Ok(squish_audio::ProbeKind::AudioOnly) => return FileKind::Audio,
+                Ok(squish_audio::ProbeKind::HasVideo) => return FileKind::Video,
+                _ => {}
+            }
+        }
+        return FileKind::Audio;
+    }
+    if squish_video::detect_video_format(path).is_some() {
+        return FileKind::Video;
+    }
+    FileKind::Unknown
 }
 
 pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
@@ -70,6 +83,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         match classify_file(path) {
             FileKind::Image => image_files.push(path.clone()),
             FileKind::Video => video_files.push(path.clone()),
+            FileKind::Audio => skipped_unknown.push(path.clone()),
             FileKind::Unknown => skipped_unknown.push(path.clone()),
         }
     }
