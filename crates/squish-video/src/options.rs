@@ -29,12 +29,17 @@ impl VideoCodec {
         }
     }
 
-    fn crf_max(&self) -> u8 {
+    /// Inclusive CRF range mapped onto the 0-100 quality dial.
+    /// `(min_crf @ q=100, max_crf @ q=0)`. The bounds correspond to
+    /// "visually lossless" and "noticeably degraded" within each codec's
+    /// effective quality envelope, not the codec's full theoretical range.
+    fn crf_range(&self) -> (u8, u8) {
         match self {
-            VideoCodec::H264 | VideoCodec::H265 => 51,
-            VideoCodec::AV1 => 63,
-            VideoCodec::Vp9 => 63,
-            VideoCodec::Copy => 0,
+            VideoCodec::H264 => (18, 32),
+            VideoCodec::H265 => (22, 38),
+            VideoCodec::AV1 => (25, 50),
+            VideoCodec::Vp9 => (25, 50),
+            VideoCodec::Copy => (0, 0),
         }
     }
 }
@@ -95,10 +100,13 @@ pub fn default_video_quality() -> u8 {
 }
 
 pub fn quality_to_crf(quality: u8, codec: VideoCodec) -> u8 {
-    let crf_max = codec.crf_max() as f64;
-    let q = quality.min(100) as f64;
-    let crf = crf_max - (q / 100.0 * crf_max);
-    crf.round() as u8
+    let (min_crf, max_crf) = codec.crf_range();
+    if codec == VideoCodec::Copy {
+        return 0;
+    }
+    let q = quality.min(100) as f64 / 100.0;
+    let span = (max_crf as f64) - (min_crf as f64);
+    ((max_crf as f64) - q * span).round() as u8
 }
 
 #[cfg(test)]
@@ -139,16 +147,33 @@ mod tests {
     }
 
     #[test]
-    fn quality_to_crf_h265() {
-        assert_eq!(quality_to_crf(100, VideoCodec::H265), 0);
-        assert_eq!(quality_to_crf(0, VideoCodec::H265), 51);
-        assert_eq!(quality_to_crf(80, VideoCodec::H265), 10);
+    fn quality_to_crf_h265_endpoints_and_default() {
+        assert_eq!(quality_to_crf(100, VideoCodec::H265), 22);
+        assert_eq!(quality_to_crf(0, VideoCodec::H265), 38);
+        // q=80 sits 80% of the way from max(38) to min(22) → 38 - 0.8*16 = 25.2 → 25
+        assert_eq!(quality_to_crf(80, VideoCodec::H265), 25);
     }
 
     #[test]
-    fn quality_to_crf_av1() {
-        assert_eq!(quality_to_crf(100, VideoCodec::AV1), 0);
-        assert_eq!(quality_to_crf(0, VideoCodec::AV1), 63);
+    fn quality_to_crf_h264_endpoints() {
+        assert_eq!(quality_to_crf(100, VideoCodec::H264), 18);
+        assert_eq!(quality_to_crf(0, VideoCodec::H264), 32);
+        // q=80 → 32 - 0.8*14 = 20.8 → 21
+        assert_eq!(quality_to_crf(80, VideoCodec::H264), 21);
+    }
+
+    #[test]
+    fn quality_to_crf_av1_endpoints() {
+        assert_eq!(quality_to_crf(100, VideoCodec::AV1), 25);
+        assert_eq!(quality_to_crf(0, VideoCodec::AV1), 50);
+        // q=80 → 50 - 0.8*25 = 30
+        assert_eq!(quality_to_crf(80, VideoCodec::AV1), 30);
+    }
+
+    #[test]
+    fn quality_to_crf_vp9_endpoints() {
+        assert_eq!(quality_to_crf(100, VideoCodec::Vp9), 25);
+        assert_eq!(quality_to_crf(0, VideoCodec::Vp9), 50);
     }
 
     #[test]
@@ -162,8 +187,9 @@ mod tests {
 
     #[test]
     fn effective_crf_uses_default_quality() {
+        // Default quality 80 + default codec H.265 → CRF 25
         let o = VideoOptions::default();
-        assert_eq!(o.effective_crf().unwrap(), 10);
+        assert_eq!(o.effective_crf().unwrap(), 25);
     }
 
     #[test]
