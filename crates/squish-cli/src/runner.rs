@@ -3,7 +3,9 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::{self, VideoOptions, VideoResult, VideoError};
+use squish_video::VideoCodec;
 use squish_audio::{self, AudioOptions, AudioResult};
+use squish_audio::AudioCodec;
 #[allow(unused_imports)]
 use squish_audio::AudioError;
 use std::path::{Path, PathBuf};
@@ -76,6 +78,53 @@ fn classify_file(path: &Path) -> FileKind {
         return FileKind::Video;
     }
     FileKind::Unknown
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum CodecAppliesTo {
+    Video,
+    Audio,
+    Neither,
+}
+
+#[allow(dead_code)]
+fn classify_codec_string(s: &str) -> CodecAppliesTo {
+    let v = VideoCodec::parse(s).is_some();
+    let a = AudioCodec::parse(s).is_some();
+    match (v, a) {
+        (true, _) => CodecAppliesTo::Video,
+        (false, true) => CodecAppliesTo::Audio,
+        (false, false) => CodecAppliesTo::Neither,
+    }
+}
+
+/// Validate the user-supplied --codec against the batch contents. Returns
+/// `Ok((maybe_video_codec, maybe_audio_codec))`.
+#[allow(dead_code)]
+pub fn validate_codec_string(
+    codec: Option<&str>,
+    has_video: bool,
+    has_audio: bool,
+) -> anyhow::Result<(Option<VideoCodec>, Option<AudioCodec>)> {
+    let Some(s) = codec else { return Ok((None, None)); };
+    match classify_codec_string(s) {
+        CodecAppliesTo::Video => {
+            if !has_video {
+                anyhow::bail!("--codec {s} is a video codec, but no video files in batch");
+            }
+            Ok((VideoCodec::parse(s), None))
+        }
+        CodecAppliesTo::Audio => {
+            if !has_audio {
+                anyhow::bail!("--codec {s} is an audio codec, but no audio files in batch");
+            }
+            Ok((None, AudioCodec::parse(s)))
+        }
+        CodecAppliesTo::Neither => {
+            anyhow::bail!("--codec {s} is not a recognized video or audio codec");
+        }
+    }
 }
 
 pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
@@ -278,4 +327,47 @@ fn print_summary(r: &RunReport) {
 
 fn trim_sub_ms(d: Duration) -> Duration {
     Duration::from_millis(d.as_millis() as u64)
+}
+
+#[cfg(test)]
+mod codec_validation_tests {
+    use super::*;
+
+    #[test]
+    fn none_codec_passes() {
+        let (v, a) = validate_codec_string(None, true, true).unwrap();
+        assert!(v.is_none() && a.is_none());
+    }
+
+    #[test]
+    fn video_codec_with_video_files() {
+        let (v, a) = validate_codec_string(Some("h265"), true, false).unwrap();
+        assert_eq!(v, Some(VideoCodec::H265));
+        assert!(a.is_none());
+    }
+
+    #[test]
+    fn audio_codec_with_audio_files() {
+        let (v, a) = validate_codec_string(Some("opus"), false, true).unwrap();
+        assert!(v.is_none());
+        assert_eq!(a, Some(AudioCodec::Opus));
+    }
+
+    #[test]
+    fn video_codec_with_audio_only_batch_errors() {
+        let err = validate_codec_string(Some("h265"), false, true).unwrap_err();
+        assert!(format!("{err}").contains("video codec"));
+    }
+
+    #[test]
+    fn audio_codec_with_video_only_batch_errors() {
+        let err = validate_codec_string(Some("opus"), true, false).unwrap_err();
+        assert!(format!("{err}").contains("audio codec"));
+    }
+
+    #[test]
+    fn unrecognized_codec_errors() {
+        let err = validate_codec_string(Some("nope"), true, true).unwrap_err();
+        assert!(format!("{err}").contains("not a recognized"));
+    }
 }
