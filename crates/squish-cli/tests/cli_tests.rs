@@ -267,3 +267,130 @@ fn video_dry_run() {
 
     assert!(!tmp.path().join("sample_squished.mp4").exists());
 }
+
+// ----- Audio integration tests -----
+
+fn make_sine(path: &std::path::Path, codec_args: &[&str]) {
+    let mut cmd = std::process::Command::new("ffmpeg");
+    cmd.args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1.0", "-ac", "2"]);
+    for a in codec_args {
+        cmd.arg(a);
+    }
+    cmd.arg(path);
+    let out = cmd.output().expect("ffmpeg invocation failed");
+    assert!(out.status.success(), "ffmpeg failed: {}", String::from_utf8_lossy(&out.stderr));
+}
+
+#[test]
+fn cli_compresses_mp3() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    make_sine(&input, &["-c:a", "libmp3lame"]);
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    cmd.arg(&input).assert().success();
+
+    assert!(tmp.path().join("sine_squished.mp3").exists());
+}
+
+#[test]
+fn cli_lossless_non_tty_defaults_to_opus() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.wav");
+    make_sine(&input, &[]);
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    // assert_cmd does not allocate a TTY, so std::io::stdin().is_terminal() is false.
+    cmd.arg(&input).assert().success();
+
+    assert!(tmp.path().join("sine_squished.opus").exists());
+}
+
+#[test]
+fn cli_codec_validation_rejects_video_codec_with_audio_only_batch() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    make_sine(&input, &["-c:a", "libmp3lame"]);
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let assert = cmd.args(["--codec", "h265"]).arg(&input).assert().failure();
+    let output = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(output.contains("video codec"));
+}
+
+#[test]
+fn cli_bitrate_rejected_with_flac() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.flac");
+    make_sine(&input, &["-c:a", "flac"]);
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    cmd.args(["--codec", "flac", "--bitrate", "128k"])
+        .arg(&input)
+        .assert()
+        .failure();
+}
+
+#[test]
+fn cli_strip_tags_removes_title() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("tagged.mp3");
+    let status = std::process::Command::new("ffmpeg")
+        .args([
+            "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+            "-c:a", "libmp3lame", "-metadata", "title=KeepMe",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(status.status.success());
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    cmd.arg("--strip-tags").arg(&input).assert().success();
+
+    let probe = std::process::Command::new("ffprobe")
+        .args(["-v", "error", "-show_entries", "format_tags=title", "-of", "csv=p=0"])
+        .arg(tmp.path().join("tagged_squished.mp3"))
+        .output()
+        .unwrap();
+    let title = String::from_utf8_lossy(&probe.stdout);
+    assert!(!title.trim().contains("KeepMe"), "title should be stripped: {title}");
+}
+
+#[test]
+fn cli_dry_run_lists_audio() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    make_sine(&input, &["-c:a", "libmp3lame"]);
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let out = cmd.args(["--dry-run"]).arg(&input).assert().success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    assert!(stdout.contains("would squish (audio)"));
+    // No output file should be produced.
+    assert!(!tmp.path().join("sine_squished.mp3").exists());
+}
+
+#[test]
+fn cli_mixed_batch_summary_shows_three_kinds() {
+    if !has_ffmpeg() { return; }
+    let tmp = TempDir::new().unwrap();
+    let audio = tmp.path().join("sine.mp3");
+    make_sine(&audio, &["-c:a", "libmp3lame"]);
+
+    // Use the existing shared PNG fixture for a valid image input.
+    let img = tmp.path().join("dot.png");
+    std::fs::copy(core_fixture("sample.png"), &img).unwrap();
+
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let out = cmd.arg(&audio).arg(&img).assert().success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    assert!(stdout.contains("audio"));
+    assert!(stdout.contains("images"));
+}
