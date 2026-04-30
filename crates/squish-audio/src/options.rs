@@ -64,7 +64,9 @@ pub struct AudioOptions {
     pub suffix: Option<String>,
 }
 
-pub fn default_audio_quality() -> u8 { 80 }
+pub fn default_audio_quality() -> u8 {
+    80
+}
 
 /// MP3 LAME `-q:a` value (0-9, lower = higher quality).
 pub fn quality_to_mp3_v(q: u8) -> u8 {

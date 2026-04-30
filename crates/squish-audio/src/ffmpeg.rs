@@ -47,9 +47,12 @@ pub fn ffprobe_kind(path: &Path) -> Result<ProbeKind, AudioError> {
     // and even drops entirely on some builds when the result is "no flags set").
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
-            "-of", "csv=p=0",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type:stream_disposition=attached_pic",
+            "-of",
+            "csv=p=0",
         ])
         .arg(path)
         .output()
@@ -98,10 +101,14 @@ pub fn ffprobe_kind(path: &Path) -> Result<ProbeKind, AudioError> {
 pub fn ffprobe_audio_codec(path: &Path) -> Result<Option<AudioCodec>, AudioError> {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-select_streams", "a:0",
-            "-show_entries", "stream=codec_name",
-            "-of", "csv=p=0",
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=codec_name",
+            "-of",
+            "csv=p=0",
         ])
         .arg(path)
         .output()
@@ -178,12 +185,16 @@ pub fn build_codec_args(
             }
         }
         AudioCodec::Aac => {
-            let kbps = opts.bitrate_kbps.unwrap_or_else(|| quality_to_aac_bitrate(quality));
+            let kbps = opts
+                .bitrate_kbps
+                .unwrap_or_else(|| quality_to_aac_bitrate(quality));
             args.push("-b:a".into());
             args.push(format!("{kbps}k"));
         }
         AudioCodec::Opus => {
-            let kbps = opts.bitrate_kbps.unwrap_or_else(|| quality_to_opus_bitrate(quality));
+            let kbps = opts
+                .bitrate_kbps
+                .unwrap_or_else(|| quality_to_opus_bitrate(quality));
             args.push("-b:a".into());
             args.push(format!("{kbps}k"));
             args.push("-vbr".into());
@@ -263,9 +274,12 @@ pub fn run_ffmpeg(
 pub fn ffprobe_has_attached_picture(path: &Path) -> Result<bool, AudioError> {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-show_entries", "stream=codec_type:stream_disposition=attached_pic",
-            "-of", "csv=p=0",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type:stream_disposition=attached_pic",
+            "-of",
+            "csv=p=0",
         ])
         .arg(path)
         .output()
@@ -317,14 +331,27 @@ mod tests {
 
     #[test]
     fn ffprobe_kind_audio_only_for_generated_wav() {
-        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             eprintln!("skipping: ffmpeg not present");
             return;
         }
         let tmp = tempfile::TempDir::new().unwrap();
         let path = tmp.path().join("sine.wav");
         let status = ProcCommand::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.2", "-ac", "1"])
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.2",
+                "-ac",
+                "1",
+            ])
             .arg(&path)
             .output()
             .unwrap();
@@ -346,7 +373,12 @@ mod tests {
 
     #[test]
     fn ffprobe_kind_treats_attached_picture_as_audio_only() {
-        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             eprintln!("skipping: ffmpeg not present");
             return;
         }
@@ -356,7 +388,15 @@ mod tests {
 
         // Generate a single-frame PNG as the cover image.
         let cover_status = ProcCommand::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-frames:v", "1"])
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=64x64:d=1",
+                "-frames:v",
+                "1",
+            ])
             .arg(&cover)
             .output()
             .unwrap();
@@ -366,20 +406,35 @@ mod tests {
         let mp3_status = ProcCommand::new("ffmpeg")
             .args([
                 "-y",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.5",
                 "-i",
             ])
             .arg(&cover)
             .args([
-                "-map", "0", "-map", "1",
-                "-c:v", "copy", "-c:a", "libmp3lame",
-                "-id3v2_version", "3",
-                "-disposition:v:0", "attached_pic",
+                "-map",
+                "0",
+                "-map",
+                "1",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "libmp3lame",
+                "-id3v2_version",
+                "3",
+                "-disposition:v:0",
+                "attached_pic",
             ])
             .arg(&audio)
             .output()
             .unwrap();
-        assert!(mp3_status.status.success(), "mp3 mux failed: {}", String::from_utf8_lossy(&mp3_status.stderr));
+        assert!(
+            mp3_status.status.success(),
+            "mp3 mux failed: {}",
+            String::from_utf8_lossy(&mp3_status.stderr)
+        );
 
         match ffprobe_kind(&audio).unwrap() {
             ProbeKind::AudioOnly => {}
@@ -406,14 +461,27 @@ mod tests {
 
     #[test]
     fn ffprobe_audio_codec_round_trips_mp3() {
-        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             eprintln!("skipping: ffmpeg not present");
             return;
         }
         let tmp = tempfile::TempDir::new().unwrap();
         let path = tmp.path().join("sine.mp3");
         let status = ProcCommand::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.2", "-c:a", "libmp3lame"])
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.2",
+                "-c:a",
+                "libmp3lame",
+            ])
             .arg(&path)
             .output()
             .unwrap();
@@ -440,7 +508,10 @@ mod tests {
 
     #[test]
     fn mp3_bitrate_overrides_quality() {
-        let opts = AudioOptions { bitrate_kbps: Some(192), ..Default::default() };
+        let opts = AudioOptions {
+            bitrate_kbps: Some(192),
+            ..Default::default()
+        };
         let a = args(AC::Mp3, opts, false);
         assert!(a.contains(&"-b:a".to_string()));
         assert!(a.contains(&"192k".to_string()));
@@ -481,7 +552,10 @@ mod tests {
 
     #[test]
     fn art_dropped_when_strip_tags() {
-        let opts = AudioOptions { strip_tags: true, ..Default::default() };
+        let opts = AudioOptions {
+            strip_tags: true,
+            ..Default::default()
+        };
         let a = args(AC::Mp3, opts, true);
         assert!(a.contains(&"-vn".to_string()));
         assert!(a.contains(&"-map_metadata".to_string()));
@@ -490,7 +564,10 @@ mod tests {
 
     #[test]
     fn strip_tags_emits_map_metadata_neg_1() {
-        let opts = AudioOptions { strip_tags: true, ..Default::default() };
+        let opts = AudioOptions {
+            strip_tags: true,
+            ..Default::default()
+        };
         let a = args(AC::Mp3, opts, false);
         let pos = a.iter().position(|s| s == "-map_metadata").unwrap();
         assert_eq!(a[pos + 1], "-1");
@@ -506,14 +583,22 @@ mod tests {
 
     #[test]
     fn opus_bitrate_overrides_ladder() {
-        let opts = AudioOptions { bitrate_kbps: Some(256), ..Default::default() };
+        let opts = AudioOptions {
+            bitrate_kbps: Some(256),
+            ..Default::default()
+        };
         let a = args(AC::Opus, opts, false);
         assert!(a.contains(&"256k".to_string()));
     }
 
     #[test]
     fn ffprobe_has_attached_picture_detects_album_art() {
-        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             eprintln!("skipping: ffmpeg not present");
             return;
         }
@@ -522,7 +607,15 @@ mod tests {
         let audio = tmp.path().join("with_art.mp3");
 
         let cover_status = ProcCommand::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-frames:v", "1"])
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "color=c=blue:s=64x64:d=1",
+                "-frames:v",
+                "1",
+            ])
             .arg(&cover)
             .output()
             .unwrap();
@@ -531,15 +624,26 @@ mod tests {
         let mp3_status = ProcCommand::new("ffmpeg")
             .args([
                 "-y",
-                "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.5",
                 "-i",
             ])
             .arg(&cover)
             .args([
-                "-map", "0", "-map", "1",
-                "-c:v", "copy", "-c:a", "libmp3lame",
-                "-id3v2_version", "3",
-                "-disposition:v:0", "attached_pic",
+                "-map",
+                "0",
+                "-map",
+                "1",
+                "-c:v",
+                "copy",
+                "-c:a",
+                "libmp3lame",
+                "-id3v2_version",
+                "3",
+                "-disposition:v:0",
+                "attached_pic",
             ])
             .arg(&audio)
             .output()
@@ -551,14 +655,27 @@ mod tests {
 
     #[test]
     fn ffprobe_has_attached_picture_returns_false_for_plain_audio() {
-        if !ProcCommand::new("ffmpeg").arg("-version").output().map(|o| o.status.success()).unwrap_or(false) {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
             eprintln!("skipping: ffmpeg not present");
             return;
         }
         let tmp = tempfile::TempDir::new().unwrap();
         let path = tmp.path().join("plain.mp3");
         let status = ProcCommand::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.2", "-c:a", "libmp3lame"])
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=0.2",
+                "-c:a",
+                "libmp3lame",
+            ])
             .arg(&path)
             .output()
             .unwrap();

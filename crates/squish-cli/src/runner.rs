@@ -1,12 +1,12 @@
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use rayon::prelude::*;
-use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
-use squish_video::{self, VideoOptions, VideoResult, VideoError};
-use squish_video::VideoCodec;
-use squish_audio::{self, AudioOptions, AudioResult};
 use squish_audio::AudioCodec;
 use squish_audio::AudioError;
+use squish_audio::{self, AudioOptions, AudioResult};
+use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
+use squish_video::VideoCodec;
+use squish_video::{self, VideoError, VideoOptions, VideoResult};
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -48,7 +48,11 @@ impl RunReport {
         self.results.len() + self.video_results.len() + self.audio_results.len()
     }
     pub fn exit_code(&self) -> u8 {
-        if self.errors.is_empty() { 0 } else { 1 }
+        if self.errors.is_empty() {
+            0
+        } else {
+            1
+        }
     }
 }
 
@@ -103,7 +107,9 @@ pub fn validate_codec_string(
     has_video: bool,
     has_audio: bool,
 ) -> anyhow::Result<(Option<VideoCodec>, Option<AudioCodec>)> {
-    let Some(s) = codec else { return Ok((None, None)); };
+    let Some(s) = codec else {
+        return Ok((None, None));
+    };
     match classify_codec_string(s) {
         CodecAppliesTo::Video => {
             if !has_video {
@@ -126,7 +132,9 @@ pub fn validate_codec_string(
 fn is_lossless_input(path: &Path) -> bool {
     matches!(
         squish_audio::detect_audio_format(path),
-        Some(squish_audio::AudioFormat::Flac) | Some(squish_audio::AudioFormat::Wav) | Some(squish_audio::AudioFormat::Aiff)
+        Some(squish_audio::AudioFormat::Flac)
+            | Some(squish_audio::AudioFormat::Wav)
+            | Some(squish_audio::AudioFormat::Aiff)
     )
 }
 
@@ -228,7 +236,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 match &res {
                     Ok(r) => eprintln!(
                         "[{n}/{total}] {} → {} ({:.1}% saved)",
-                        path.display(), r.output_path.display(), r.reduction_percent()
+                        path.display(),
+                        r.output_path.display(),
+                        r.reduction_percent()
                     ),
                     Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
                 }
@@ -250,7 +260,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             match &res {
                 Ok(r) => eprintln!(
                     "[{n}/{total}] {} → {} ({:.1}% saved)",
-                    path.display(), r.output_path.display(), r.reduction_percent()
+                    path.display(),
+                    r.output_path.display(),
+                    r.reduction_percent()
                 ),
                 Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
             }
@@ -271,7 +283,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             match &res {
                 Ok(r) => eprintln!(
                     "[{n}/{total}] {} → {} ({:.1}% saved)",
-                    path.display(), r.output_path.display(), r.reduction_percent()
+                    path.display(),
+                    r.output_path.display(),
+                    r.reduction_percent()
                 ),
                 Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
             }
@@ -334,11 +348,10 @@ fn build_progress_bar(total: u64, cfg: &RunConfig) -> Option<ProgressBar> {
     let pb = ProgressBar::with_draw_target(Some(total), ProgressDrawTarget::stderr());
     // `with_draw_target` uses stderr; when it's not a TTY indicatif defaults to
     // a hidden draw target, so no extra TTY check is needed here.
-    let style = ProgressStyle::with_template(
-        "{spinner} [{bar:30.cyan/blue}] {pos}/{len} {wide_msg:.dim}",
-    )
-    .unwrap()
-    .progress_chars("=> ");
+    let style =
+        ProgressStyle::with_template("{spinner} [{bar:30.cyan/blue}] {pos}/{len} {wide_msg:.dim}")
+            .unwrap()
+            .progress_chars("=> ");
     pb.set_style(style);
     pb.enable_steady_tick(Duration::from_millis(100));
     Some(pb)
@@ -386,7 +399,12 @@ fn print_summary(r: &RunReport) {
             .skipped_unknown
             .iter()
             .take(5)
-            .map(|p| p.file_name().and_then(|n| n.to_str()).unwrap_or("?").to_string())
+            .map(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_string()
+            })
             .collect();
         let extra = r.skipped_unknown.len().saturating_sub(5);
         let list = if extra > 0 {
@@ -508,10 +526,7 @@ mod summary_tests {
 
     #[test]
     fn images_and_videos() {
-        assert_eq!(
-            format_count_detail(3, 2, 0),
-            "5 files (3 images, 2 videos)"
-        );
+        assert_eq!(format_count_detail(3, 2, 0), "5 files (3 images, 2 videos)");
     }
 
     #[test]

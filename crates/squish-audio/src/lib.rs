@@ -139,11 +139,8 @@ mod tests {
 
     #[test]
     fn missing_file_returns_io_error() {
-        let err = squish_audio(
-            Path::new("/nonexistent/song.mp3"),
-            &AudioOptions::default(),
-        )
-        .unwrap_err();
+        let err =
+            squish_audio(Path::new("/nonexistent/song.mp3"), &AudioOptions::default()).unwrap_err();
         assert!(matches!(
             err,
             AudioError::Io(_) | AudioError::MissingDependency { .. }
@@ -152,7 +149,10 @@ mod tests {
 
     #[test]
     fn resolve_codec_uses_explicit_override() {
-        let opts = AudioOptions { codec: Some(AudioCodec::Mp3), ..Default::default() };
+        let opts = AudioOptions {
+            codec: Some(AudioCodec::Mp3),
+            ..Default::default()
+        };
         assert_eq!(
             resolve_output_codec(&opts, Some(AudioCodec::Flac)),
             AudioCodec::Mp3

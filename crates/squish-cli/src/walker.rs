@@ -34,9 +34,9 @@ pub fn looks_already_squished(path: &Path) -> bool {
         .and_then(|s| s.to_str())
         .map(|stem| {
             stem.ends_with("_squished")
-                || (stem.rsplit_once("_squished_").is_some_and(|(_, suffix)| {
-                    suffix.chars().all(|c| c.is_ascii_digit())
-                }))
+                || (stem
+                    .rsplit_once("_squished_")
+                    .is_some_and(|(_, suffix)| suffix.chars().all(|c| c.is_ascii_digit())))
         })
         .unwrap_or(false)
 }
@@ -84,6 +84,8 @@ mod tests {
         assert!(looks_already_squished(Path::new("dog_squished_2.png")));
         assert!(looks_already_squished(Path::new("dog_squished_99.png")));
         assert!(!looks_already_squished(Path::new("dog.png")));
-        assert!(!looks_already_squished(Path::new("_squished_notanumber.png")));
+        assert!(!looks_already_squished(Path::new(
+            "_squished_notanumber.png"
+        )));
     }
 }

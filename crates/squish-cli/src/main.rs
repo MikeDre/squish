@@ -4,8 +4,8 @@ mod walker;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use squish_core::{Format, SquishOptions};
 use squish_audio::AudioOptions;
+use squish_core::{Format, SquishOptions};
 use squish_video::VideoOptions;
 
 fn main() -> std::process::ExitCode {
@@ -45,9 +45,7 @@ fn real_main() -> Result<u8> {
         Some(s) => {
             let trimmed = s.trim_end_matches('k').trim_end_matches('K');
             Some(trimmed.parse::<u32>().map_err(|_| {
-                anyhow::anyhow!(
-                    "--bitrate must be a number optionally suffixed with k (e.g. 192k)"
-                )
+                anyhow::anyhow!("--bitrate must be a number optionally suffixed with k (e.g. 192k)")
             })?)
         }
     };

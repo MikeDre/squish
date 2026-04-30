@@ -34,7 +34,8 @@ fn has_ffmpeg() -> bool {
 
 #[test]
 fn help_exits_zero_and_prints_usage() {
-    bin().arg("--help")
+    bin()
+        .arg("--help")
         .assert()
         .success()
         .stdout(predicate::str::contains("Usage"))
@@ -43,7 +44,8 @@ fn help_exits_zero_and_prints_usage() {
 
 #[test]
 fn missing_path_is_fatal() {
-    bin().arg("/definitely/does/not/exist.png")
+    bin()
+        .arg("/definitely/does/not/exist.png")
         .assert()
         .failure()
         .code(2);
@@ -55,7 +57,8 @@ fn single_png_produces_squished_sibling() {
     let input = tmp.path().join("sample.png");
     fs::copy(core_fixture("sample.png"), &input).unwrap();
 
-    bin().arg(&input)
+    bin()
+        .arg(&input)
         .assert()
         .success()
         .stdout(predicate::str::contains("Squished 1 files"));
@@ -70,7 +73,8 @@ fn directory_non_recursive_skips_subfolders() {
     fs::create_dir(tmp.path().join("sub")).unwrap();
     fs::copy(core_fixture("sample.png"), tmp.path().join("sub/b.png")).unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("Squished 1 files"));
@@ -86,7 +90,8 @@ fn recursive_flag_includes_subdirs() {
     fs::create_dir(tmp.path().join("sub")).unwrap();
     fs::copy(core_fixture("sample.png"), tmp.path().join("sub/b.png")).unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .arg("-r")
         .assert()
         .success()
@@ -126,7 +131,8 @@ fn dry_run_does_not_write_files() {
     let input = tmp.path().join("x.png");
     fs::copy(core_fixture("sample.png"), &input).unwrap();
 
-    bin().arg(&input)
+    bin()
+        .arg(&input)
         .arg("--dry-run")
         .assert()
         .success()
@@ -141,7 +147,8 @@ fn unrecognized_file_is_skipped_with_log() {
     let weird = tmp.path().join("thing.xyz");
     fs::write(&weird, b"random bytes").unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("Skipped 1"))
@@ -154,7 +161,8 @@ fn one_failing_file_doesnt_abort_batch() {
     fs::copy(core_fixture("sample.png"), tmp.path().join("ok.png")).unwrap();
     fs::write(tmp.path().join("corrupt.png"), b"not actually a PNG").unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .assert()
         .code(1)
         .stdout(predicate::str::contains("Squished 1 files"));
@@ -167,8 +175,10 @@ fn format_conversion_png_to_webp() {
     let tmp = TempDir::new().unwrap();
     fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
 
-    bin().arg(tmp.path().join("a.png"))
-        .arg("--format").arg("webp")
+    bin()
+        .arg(tmp.path().join("a.png"))
+        .arg("--format")
+        .arg("webp")
         .assert()
         .success();
 
@@ -178,12 +188,15 @@ fn format_conversion_png_to_webp() {
 
 #[test]
 fn single_mp4_produces_squished_sibling() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin().arg(&input)
+    bin()
+        .arg(&input)
         .assert()
         .success()
         .stdout(predicate::str::contains("Squished 1 files"));
@@ -193,12 +206,15 @@ fn single_mp4_produces_squished_sibling() {
 
 #[test]
 fn mixed_batch_images_and_videos() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("b.mp4")).unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("images"))
@@ -210,28 +226,31 @@ fn mixed_batch_images_and_videos() {
 
 #[test]
 fn fast_flag_works_for_video() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin().arg(&input)
-        .arg("--fast")
-        .assert()
-        .success();
+    bin().arg(&input).arg("--fast").assert().success();
 
     assert!(tmp.path().join("sample_squished.mp4").exists());
 }
 
 #[test]
 fn codec_flag_works() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin().arg(&input)
-        .arg("--codec").arg("h264")
+    bin()
+        .arg(&input)
+        .arg("--codec")
+        .arg("h264")
         .assert()
         .success();
 
@@ -240,11 +259,14 @@ fn codec_flag_works() {
 
 #[test]
 fn video_in_directory_walk() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("v.mp4")).unwrap();
 
-    bin().arg(tmp.path())
+    bin()
+        .arg(tmp.path())
         .assert()
         .success()
         .stdout(predicate::str::contains("Squished 1 files"));
@@ -254,12 +276,15 @@ fn video_in_directory_walk() {
 
 #[test]
 fn video_dry_run() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin().arg(&input)
+    bin()
+        .arg(&input)
         .arg("--dry-run")
         .assert()
         .success()
@@ -272,18 +297,32 @@ fn video_dry_run() {
 
 fn make_sine(path: &std::path::Path, codec_args: &[&str]) {
     let mut cmd = std::process::Command::new("ffmpeg");
-    cmd.args(["-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=1.0", "-ac", "2"]);
+    cmd.args([
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "sine=frequency=440:duration=1.0",
+        "-ac",
+        "2",
+    ]);
     for a in codec_args {
         cmd.arg(a);
     }
     cmd.arg(path);
     let out = cmd.output().expect("ffmpeg invocation failed");
-    assert!(out.status.success(), "ffmpeg failed: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "ffmpeg failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
 
 #[test]
 fn cli_compresses_mp3() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
@@ -296,7 +335,9 @@ fn cli_compresses_mp3() {
 
 #[test]
 fn cli_lossless_non_tty_defaults_to_opus() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sine.wav");
     make_sine(&input, &[]);
@@ -310,7 +351,9 @@ fn cli_lossless_non_tty_defaults_to_opus() {
 
 #[test]
 fn cli_codec_validation_rejects_video_codec_with_audio_only_batch() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
@@ -323,7 +366,9 @@ fn cli_codec_validation_rejects_video_codec_with_audio_only_batch() {
 
 #[test]
 fn cli_bitrate_rejected_with_flac() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sine.flac");
     make_sine(&input, &["-c:a", "flac"]);
@@ -337,13 +382,22 @@ fn cli_bitrate_rejected_with_flac() {
 
 #[test]
 fn cli_strip_tags_removes_title() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("tagged.mp3");
     let status = std::process::Command::new("ffmpeg")
         .args([
-            "-y", "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
-            "-c:a", "libmp3lame", "-metadata", "title=KeepMe",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=0.5",
+            "-c:a",
+            "libmp3lame",
+            "-metadata",
+            "title=KeepMe",
         ])
         .arg(&input)
         .output()
@@ -354,17 +408,29 @@ fn cli_strip_tags_removes_title() {
     cmd.arg("--strip-tags").arg(&input).assert().success();
 
     let probe = std::process::Command::new("ffprobe")
-        .args(["-v", "error", "-show_entries", "format_tags=title", "-of", "csv=p=0"])
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format_tags=title",
+            "-of",
+            "csv=p=0",
+        ])
         .arg(tmp.path().join("tagged_squished.mp3"))
         .output()
         .unwrap();
     let title = String::from_utf8_lossy(&probe.stdout);
-    assert!(!title.trim().contains("KeepMe"), "title should be stripped: {title}");
+    assert!(
+        !title.trim().contains("KeepMe"),
+        "title should be stripped: {title}"
+    );
 }
 
 #[test]
 fn cli_dry_run_lists_audio() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
@@ -379,7 +445,9 @@ fn cli_dry_run_lists_audio() {
 
 #[test]
 fn cli_mixed_batch_summary_shows_three_kinds() {
-    if !has_ffmpeg() { return; }
+    if !has_ffmpeg() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let audio = tmp.path().join("sine.mp3");
     make_sine(&audio, &["-c:a", "libmp3lame"]);
