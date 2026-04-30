@@ -8,6 +8,7 @@ use squish_audio::{self, AudioOptions, AudioResult};
 use squish_audio::AudioCodec;
 #[allow(unused_imports)]
 use squish_audio::AudioError;
+use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -124,6 +125,53 @@ pub fn validate_codec_string(
         CodecAppliesTo::Neither => {
             anyhow::bail!("--codec {s} is not a recognized video or audio codec");
         }
+    }
+}
+
+#[allow(dead_code)]
+fn is_lossless_input(path: &Path) -> bool {
+    matches!(
+        squish_audio::detect_audio_format(path),
+        Some(squish_audio::AudioFormat::Flac) | Some(squish_audio::AudioFormat::Wav) | Some(squish_audio::AudioFormat::Aiff)
+    )
+}
+
+#[allow(dead_code)]
+fn prompt_lossy_codec() -> AudioCodec {
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    let _ = write!(
+        stdout,
+        "Found lossless audio. Convert to: [Opus] / AAC / MP3 > "
+    );
+    let _ = stdout.flush();
+
+    let mut line = String::new();
+    if stdin.lock().read_line(&mut line).is_err() {
+        return AudioCodec::Opus;
+    }
+    match line.trim().to_ascii_lowercase().as_str() {
+        "" | "opus" | "o" => AudioCodec::Opus,
+        "aac" | "a" => AudioCodec::Aac,
+        "mp3" | "m" => AudioCodec::Mp3,
+        _ => AudioCodec::Opus,
+    }
+}
+
+/// Choose the codec for lossless inputs when no explicit `--codec` was given.
+/// TTY → ask; non-TTY → silent Opus default.
+#[allow(dead_code)]
+pub fn choose_lossless_codec(audio_files: &[PathBuf], audio_codec_set: bool) -> Option<AudioCodec> {
+    if audio_codec_set {
+        return None;
+    }
+    if !audio_files.iter().any(|p| is_lossless_input(p)) {
+        return None;
+    }
+    if std::io::stdin().is_terminal() {
+        Some(prompt_lossy_codec())
+    } else {
+        Some(AudioCodec::Opus)
     }
 }
 
@@ -369,5 +417,22 @@ mod codec_validation_tests {
     fn unrecognized_codec_errors() {
         let err = validate_codec_string(Some("nope"), true, true).unwrap_err();
         assert!(format!("{err}").contains("not a recognized"));
+    }
+
+    #[test]
+    fn no_audio_files_returns_none() {
+        assert!(choose_lossless_codec(&[], false).is_none());
+    }
+
+    #[test]
+    fn explicit_codec_skips_prompt() {
+        let files = vec![PathBuf::from("song.flac")];
+        assert!(choose_lossless_codec(&files, true).is_none());
+    }
+
+    #[test]
+    fn no_lossless_inputs_returns_none() {
+        let files = vec![PathBuf::from("song.mp3")];
+        assert!(choose_lossless_codec(&files, false).is_none());
     }
 }
