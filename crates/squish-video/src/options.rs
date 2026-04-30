@@ -39,7 +39,7 @@ impl VideoCodec {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct VideoOptions {
     pub quality: Option<u8>,
     pub codec: Option<VideoCodec>,
@@ -49,17 +49,6 @@ pub struct VideoOptions {
     pub suffix: Option<String>,
 }
 
-impl Default for VideoOptions {
-    fn default() -> Self {
-        VideoOptions {
-            quality: None,
-            codec: None,
-            fast: false,
-            force_overwrite: false,
-            suffix: None,
-        }
-    }
-}
 
 impl VideoOptions {
     pub fn effective_codec(&self) -> VideoCodec {

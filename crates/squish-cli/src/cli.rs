@@ -57,11 +57,19 @@ pub struct Args {
     #[arg(long)]
     pub max_height: Option<u32>,
 
-    /// Video codec: h264, h265, av1 (default: h265).
+    /// Codec: video=h264|h265|av1|vp9, audio=mp3|aac|opus|vorbis|flac|alac (default: kind-specific).
     #[arg(long)]
     pub codec: Option<String>,
 
     /// Video fast mode: optimize without re-encoding.
     #[arg(long)]
     pub fast: bool,
+
+    /// Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio.
+    #[arg(long)]
+    pub bitrate: Option<String>,
+
+    /// Strip audio metadata (ID3 tags, album art). Default: preserved.
+    #[arg(long = "strip-tags")]
+    pub strip_tags: bool,
 }
