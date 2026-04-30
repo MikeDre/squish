@@ -6,7 +6,6 @@ use squish_video::{self, VideoOptions, VideoResult, VideoError};
 use squish_video::VideoCodec;
 use squish_audio::{self, AudioOptions, AudioResult};
 use squish_audio::AudioCodec;
-#[allow(unused_imports)]
 use squish_audio::AudioError;
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -16,7 +15,6 @@ use std::time::{Duration, Instant};
 pub struct RunConfig {
     pub opts: SquishOptions,
     pub video_opts: VideoOptions,
-    #[allow(dead_code)]
     pub audio_opts: AudioOptions,
     pub verbose: bool,
     pub quiet: bool,
@@ -128,7 +126,6 @@ pub fn validate_codec_string(
     }
 }
 
-#[allow(dead_code)]
 fn is_lossless_input(path: &Path) -> bool {
     matches!(
         squish_audio::detect_audio_format(path),
@@ -136,7 +133,6 @@ fn is_lossless_input(path: &Path) -> bool {
     )
 }
 
-#[allow(dead_code)]
 fn prompt_lossy_codec() -> AudioCodec {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
@@ -160,7 +156,6 @@ fn prompt_lossy_codec() -> AudioCodec {
 
 /// Choose the codec for lossless inputs when no explicit `--codec` was given.
 /// TTY → ask; non-TTY → silent Opus default.
-#[allow(dead_code)]
 pub fn choose_lossless_codec(audio_files: &[PathBuf], audio_codec_set: bool) -> Option<AudioCodec> {
     if audio_codec_set {
         return None;
@@ -180,13 +175,14 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
 
     let mut image_files = Vec::new();
     let mut video_files = Vec::new();
+    let mut audio_files = Vec::new();
     let mut skipped_unknown = Vec::new();
 
     for path in paths {
         match classify_file(path) {
             FileKind::Image => image_files.push(path.clone()),
             FileKind::Video => video_files.push(path.clone()),
-            FileKind::Audio => skipped_unknown.push(path.clone()),
+            FileKind::Audio => audio_files.push(path.clone()),
             FileKind::Unknown => skipped_unknown.push(path.clone()),
         }
     }
@@ -197,6 +193,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
         for p in &video_files {
             println!("would squish (video): {}", p.display());
+        }
+        for p in &audio_files {
+            println!("would squish (audio): {}", p.display());
         }
         for p in &skipped_unknown {
             println!("would skip (unrecognized): {}", p.display());
@@ -211,11 +210,18 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         });
     }
 
-    let total = (image_files.len() + video_files.len()) as u64;
+    let mut audio_opts = cfg.audio_opts.clone();
+    if audio_opts.codec.is_none() {
+        if let Some(c) = choose_lossless_codec(&audio_files, false) {
+            audio_opts.codec = Some(c);
+        }
+    }
+
+    let total = (image_files.len() + video_files.len() + audio_files.len()) as u64;
     let processed = AtomicU64::new(0);
     let progress = build_progress_bar(total, cfg);
 
-    // Process images in parallel
+    // Images in parallel.
     let image_pairs: Vec<(PathBuf, Result<SquishResult, SquishError>)> = image_files
         .par_iter()
         .map(|path| {
@@ -238,7 +244,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         })
         .collect();
 
-    // Process videos sequentially (ffmpeg uses multiple cores internally)
+    // Videos sequentially.
     let mut video_pairs: Vec<(PathBuf, Result<VideoResult, VideoError>)> = Vec::new();
     for path in &video_files {
         let res = squish_video::squish_video(path, &cfg.video_opts);
@@ -259,12 +265,34 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         video_pairs.push((path.clone(), res));
     }
 
+    // Audio sequentially.
+    let mut audio_pairs: Vec<(PathBuf, Result<AudioResult, AudioError>)> = Vec::new();
+    for path in &audio_files {
+        let res = squish_audio::squish_audio(path, &audio_opts);
+        let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
+        if !cfg.quiet && cfg.verbose {
+            match &res {
+                Ok(r) => eprintln!(
+                    "[{n}/{total}] {} → {} ({:.1}% saved)",
+                    path.display(), r.output_path.display(), r.reduction_percent()
+                ),
+                Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
+            }
+        }
+        if let Some(pb) = &progress {
+            pb.set_message(display_filename(path));
+            pb.inc(1);
+        }
+        audio_pairs.push((path.clone(), res));
+    }
+
     if let Some(pb) = progress {
         pb.finish_and_clear();
     }
 
     let mut results = Vec::new();
     let mut video_results = Vec::new();
+    let mut audio_results = Vec::new();
     let mut errors: Vec<(PathBuf, String)> = Vec::new();
 
     for (p, r) in image_pairs {
@@ -279,11 +307,17 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             Err(e) => errors.push((p, format!("{e}"))),
         }
     }
+    for (p, r) in audio_pairs {
+        match r {
+            Ok(r) => audio_results.push(r),
+            Err(e) => errors.push((p, format!("{e}"))),
+        }
+    }
 
     let report = RunReport {
         results,
         video_results,
-        audio_results: Vec::new(),
+        audio_results,
         errors,
         skipped_unknown,
         total_wall: start.elapsed(),
