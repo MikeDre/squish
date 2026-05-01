@@ -9,7 +9,7 @@ pub mod result;
 
 pub use error::SquishError;
 pub use format::{detect_format, Format};
-pub use naming::{derive_output_path, derive_output_path_with_suffix};
+pub use naming::{derive_output_path, derive_output_path_with_suffix, derive_output_path_with_suffix_sep};
 pub use options::SquishOptions;
 pub use result::SquishResult;
 
