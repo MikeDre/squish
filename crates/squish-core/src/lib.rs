@@ -9,7 +9,9 @@ pub mod result;
 
 pub use error::SquishError;
 pub use format::{detect_format, Format};
-pub use naming::{derive_output_path, derive_output_path_with_suffix, derive_output_path_with_suffix_sep};
+pub use naming::{
+    derive_output_path, derive_output_path_with_suffix, derive_output_path_with_suffix_sep,
+};
 pub use options::SquishOptions;
 pub use result::SquishResult;
 
@@ -22,19 +24,15 @@ use std::time::Instant;
 /// path (derived from `naming::derive_output_path`), returns a `SquishResult`.
 ///
 /// On error, no output file is written.
-pub fn squish_file(
-    input: &Path,
-    opts: &SquishOptions,
-) -> Result<SquishResult, SquishError> {
+pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, SquishError> {
     let start = Instant::now();
     let input_bytes_vec = fs::read(input)?;
 
-    let format_in = detect_format(input, &input_bytes_vec).ok_or_else(|| {
-        SquishError::UnsupportedFormat {
+    let format_in =
+        detect_format(input, &input_bytes_vec).ok_or_else(|| SquishError::UnsupportedFormat {
             path: input.to_path_buf(),
             reason: "could not identify format from extension or magic bytes".into(),
-        }
-    })?;
+        })?;
 
     // TIFF default-output rule: when input is TIFF and user didn't specify a
     // target format, convert to JPEG.
@@ -54,9 +52,7 @@ pub fn squish_file(
         }
         dispatch_encode_raster(format_out, &img, opts, input)?
     } else {
-        dispatch_compress_with_conversion(
-            format_in, format_out, &input_bytes_vec, opts, input,
-        )?
+        dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
     };
 
     let target_ext = if format_in == format_out {
@@ -70,7 +66,8 @@ pub fn squish_file(
     };
 
     let suffix = opts.suffix.as_deref().unwrap_or("squished");
-    let output_path = derive_output_path_with_suffix(input, &target_ext, opts.force_overwrite, suffix);
+    let output_path =
+        derive_output_path_with_suffix(input, &target_ext, opts.force_overwrite, suffix);
     fs::write(&output_path, &output_bytes)?;
 
     Ok(SquishResult {
@@ -185,10 +182,7 @@ fn decode_to_dynamic_image(
     }
 }
 
-fn decode_heic_to_dynamic_image(
-    input: &[u8],
-    path: &Path,
-) -> Result<DynamicImage, SquishError> {
+fn decode_heic_to_dynamic_image(input: &[u8], path: &Path) -> Result<DynamicImage, SquishError> {
     use libheif_rs::{ColorSpace, HeifContext, LibHeif, RgbChroma};
 
     let lib = LibHeif::new();
@@ -196,10 +190,12 @@ fn decode_heic_to_dynamic_image(
         path: path.to_path_buf(),
         source: Box::new(e),
     })?;
-    let handle = ctx.primary_image_handle().map_err(|e| SquishError::DecodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })?;
+    let handle = ctx
+        .primary_image_handle()
+        .map_err(|e| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
     let image = lib
         .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None)
         .map_err(|e| SquishError::DecodeFailed {
@@ -210,10 +206,12 @@ fn decode_heic_to_dynamic_image(
     let w = image.width();
     let h = image.height();
     let planes = image.planes();
-    let plane = planes.interleaved.ok_or_else(|| SquishError::DecodeFailed {
-        path: path.to_path_buf(),
-        source: "HEIC decoder did not return an interleaved RGBA plane".into(),
-    })?;
+    let plane = planes
+        .interleaved
+        .ok_or_else(|| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: "HEIC decoder did not return an interleaved RGBA plane".into(),
+        })?;
 
     let row_bytes = (w as usize) * 4;
     let mut rgba = Vec::with_capacity(row_bytes * h as usize);
@@ -252,8 +250,11 @@ mod tests {
 
     #[test]
     fn missing_file_returns_io_error() {
-        let err = squish_file(Path::new("/nonexistent/path/xyz.png"), &SquishOptions::default())
-            .unwrap_err();
+        let err = squish_file(
+            Path::new("/nonexistent/path/xyz.png"),
+            &SquishOptions::default(),
+        )
+        .unwrap_err();
         assert!(matches!(err, SquishError::Io(_)));
     }
 }

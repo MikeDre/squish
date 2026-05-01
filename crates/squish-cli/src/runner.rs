@@ -262,7 +262,8 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
     }
 
-    let total = (image_files.len() + video_files.len() + audio_files.len() + code_files.len()) as u64;
+    let total =
+        (image_files.len() + video_files.len() + audio_files.len() + code_files.len()) as u64;
     let processed = AtomicU64::new(0);
     let progress = build_progress_bar(total, cfg);
 

@@ -76,8 +76,7 @@ const y = 2;</script></body></html>"#;
         // keep_comments = false.  The non-conditional content must still survive.
         // Note: minify-html also drops optional closing tags (<p>, <body>, etc.)
         // so we assert on the opening tag only.
-        let input =
-            r#"<html><body><!--[if IE]><p>old</p><![endif]--><p>new</p></body></html>"#;
+        let input = r#"<html><body><!--[if IE]><p>old</p><![endif]--><p>new</p></body></html>"#;
         let out = minify(input, &CodeOptions::default(), &p()).unwrap();
         assert!(out.code.contains("<p>new"));
     }

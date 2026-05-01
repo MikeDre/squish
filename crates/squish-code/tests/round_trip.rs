@@ -39,7 +39,10 @@ fn js_safe_mode_preserves_identifiers() {
     };
     let result = squish_code(&input, &opts).unwrap();
     let body = fs::read_to_string(&result.output_path).unwrap();
-    assert!(body.contains("greetUser"), "safe mode must not mangle: {body}");
+    assert!(
+        body.contains("greetUser"),
+        "safe mode must not mangle: {body}"
+    );
 }
 
 #[test]
@@ -70,7 +73,10 @@ fn ts_input_produces_js_output() {
     let result = squish_code(&input, &CodeOptions::default()).unwrap();
     assert!(result.output_path.to_string_lossy().ends_with("app.min.js"));
     let body = fs::read_to_string(&result.output_path).unwrap();
-    assert!(!body.contains("interface"), "interfaces must be erased: {body}");
+    assert!(
+        !body.contains("interface"),
+        "interfaces must be erased: {body}"
+    );
 }
 
 #[test]

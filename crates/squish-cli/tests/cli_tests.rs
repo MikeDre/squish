@@ -469,7 +469,11 @@ fn cli_mixed_batch_summary_shows_three_kinds() {
 fn cli_minifies_js() {
     let tmp = tempfile::TempDir::new().unwrap();
     let input = tmp.path().join("app.js");
-    std::fs::write(&input, b"console.log('hi ' + 'world ' + 42 + ' more text');").unwrap();
+    std::fs::write(
+        &input,
+        b"console.log('hi ' + 'world ' + 42 + ' more text');",
+    )
+    .unwrap();
 
     let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
     cmd.arg(&input).assert().success();
@@ -501,7 +505,10 @@ fn cli_custom_suffix_for_code_uses_dot_separator() {
     std::fs::write(&input, b"console.log('x');").unwrap();
 
     let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
-    cmd.args(["--suffix", "tiny"]).arg(&input).assert().success();
+    cmd.args(["--suffix", "tiny"])
+        .arg(&input)
+        .assert()
+        .success();
 
     assert!(tmp.path().join("app.tiny.js").exists());
 }

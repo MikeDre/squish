@@ -11,11 +11,7 @@ use std::path::{Path, PathBuf};
 /// `target_ext` should be the desired output extension without the leading dot
 /// (e.g., "png", "jpg", "webp"). When preserving input extension, pass the
 /// original extension exactly — callers decide "jpg" vs "jpeg" case.
-pub fn derive_output_path(
-    input: &Path,
-    target_ext: &str,
-    force_overwrite: bool,
-) -> PathBuf {
+pub fn derive_output_path(input: &Path, target_ext: &str, force_overwrite: bool) -> PathBuf {
     derive_output_path_with_suffix(input, target_ext, force_overwrite, "squished")
 }
 
@@ -52,7 +48,9 @@ pub fn derive_output_path_with_suffix_sep(
     }
 
     for n in 2u32.. {
-        let candidate = parent.join(format!("{stem}{separator}{suffix}{separator}{n}.{target_ext}"));
+        let candidate = parent.join(format!(
+            "{stem}{separator}{suffix}{separator}{n}.{target_ext}"
+        ));
         if !candidate.exists() {
             return candidate;
         }

@@ -43,10 +43,15 @@ pub fn minify(input: &str, opts: &CodeOptions, path: &Path) -> Result<MinifyOutp
         })?;
 
     let source_map_string = if let Some(mut sm) = source_map {
-        Some(sm.to_json(None).map_err(|e: parcel_sourcemap::SourceMapError| CodeError::MinifyFailed {
-            path: path.to_path_buf(),
-            reason: format!("source map serialization: {e:?}"),
-        })?)
+        Some(
+            sm.to_json(None)
+                .map_err(
+                    |e: parcel_sourcemap::SourceMapError| CodeError::MinifyFailed {
+                        path: path.to_path_buf(),
+                        reason: format!("source map serialization: {e:?}"),
+                    },
+                )?,
+        )
     } else {
         None
     };

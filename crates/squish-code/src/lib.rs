@@ -39,9 +39,7 @@ pub fn squish_code(input: &Path, opts: &CodeOptions) -> Result<CodeResult, CodeE
     };
 
     let minified = match format {
-        CodeFormat::Js | CodeFormat::Ts => {
-            languages::js::minify(&source, opts, input, format)?
-        }
+        CodeFormat::Js | CodeFormat::Ts => languages::js::minify(&source, opts, input, format)?,
         CodeFormat::Css => languages::css::minify(&source, opts, input)?,
         CodeFormat::Html => languages::html::minify(&source, opts, input)?,
         CodeFormat::Json => languages::json::minify(&source, opts, input)?,
@@ -49,13 +47,8 @@ pub fn squish_code(input: &Path, opts: &CodeOptions) -> Result<CodeResult, CodeE
 
     let output_ext = output_extension(format, input);
     let suffix = opts.suffix.as_deref().unwrap_or("min");
-    let output_path = derive_output_path_with_suffix_sep(
-        input,
-        &output_ext,
-        opts.force_overwrite,
-        suffix,
-        '.',
-    );
+    let output_path =
+        derive_output_path_with_suffix_sep(input, &output_ext, opts.force_overwrite, suffix, '.');
 
     fs::write(&output_path, minified.code.as_bytes())?;
 
@@ -105,8 +98,8 @@ mod tests {
 
     #[test]
     fn missing_file_returns_io_error() {
-        let err = squish_code(Path::new("/nonexistent/file.js"), &CodeOptions::default())
-            .unwrap_err();
+        let err =
+            squish_code(Path::new("/nonexistent/file.js"), &CodeOptions::default()).unwrap_err();
         assert!(matches!(err, CodeError::Io(_)));
     }
 

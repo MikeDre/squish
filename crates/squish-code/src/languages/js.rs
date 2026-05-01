@@ -117,7 +117,10 @@ mod tests {
             ..Default::default()
         };
         let out = minify(input, &opts, &path, CodeFormat::Js).unwrap();
-        assert!(out.code.contains("greetUser"), "safe mode must not mangle identifier names");
+        assert!(
+            out.code.contains("greetUser"),
+            "safe mode must not mangle identifier names"
+        );
     }
 
     #[test]

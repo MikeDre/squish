@@ -74,7 +74,18 @@ mod tests {
     #[test]
     fn no_source_map_emitted() {
         let input = r#"{"a":1}"#;
-        let out = minify(input, &CodeOptions { source_map: true, ..Default::default() }, &p()).unwrap();
-        assert!(out.source_map.is_none(), "JSON should never emit source maps");
+        let out = minify(
+            input,
+            &CodeOptions {
+                source_map: true,
+                ..Default::default()
+            },
+            &p(),
+        )
+        .unwrap();
+        assert!(
+            out.source_map.is_none(),
+            "JSON should never emit source maps"
+        );
     }
 }
