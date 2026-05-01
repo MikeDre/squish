@@ -104,11 +104,18 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
     };
 
+    let code_opts = CodeOptions {
+        safe: args.safe,
+        source_map: args.source_map,
+        force_overwrite: args.force,
+        suffix: args.suffix.clone(),
+    };
+
     let cfg = runner::RunConfig {
         opts,
         video_opts,
         audio_opts,
-        code_opts: CodeOptions::default(),
+        code_opts,
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
