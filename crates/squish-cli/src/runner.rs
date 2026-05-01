@@ -4,6 +4,8 @@ use rayon::prelude::*;
 use squish_audio::AudioCodec;
 use squish_audio::AudioError;
 use squish_audio::{self, AudioOptions, AudioResult};
+#[allow(unused_imports)]
+use squish_code::{self, CodeOptions, CodeResult, CodeError};
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::VideoCodec;
 use squish_video::{self, VideoError, VideoOptions, VideoResult};
@@ -60,6 +62,7 @@ enum FileKind {
     Image,
     Video,
     Audio,
+    Code,
     Unknown,
 }
 
@@ -79,6 +82,9 @@ fn classify_file(path: &Path) -> FileKind {
     }
     if squish_video::detect_video_format(path).is_some() {
         return FileKind::Video;
+    }
+    if squish_code::detect_code_format(path).is_some() {
+        return FileKind::Code;
     }
     FileKind::Unknown
 }
@@ -188,6 +194,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             FileKind::Image => image_files.push(path.clone()),
             FileKind::Video => video_files.push(path.clone()),
             FileKind::Audio => audio_files.push(path.clone()),
+            FileKind::Code => skipped_unknown.push(path.clone()),
             FileKind::Unknown => skipped_unknown.push(path.clone()),
         }
     }
@@ -205,6 +212,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         for p in &skipped_unknown {
             println!("would skip (unrecognized): {}", p.display());
         }
+        // code files are routed to skipped_unknown for now (Task 17 wires real processing)
         return Ok(RunReport {
             results: Vec::new(),
             video_results: Vec::new(),
