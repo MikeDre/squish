@@ -5,6 +5,7 @@ mod walker;
 use anyhow::{Context, Result};
 use clap::Parser;
 use squish_audio::AudioOptions;
+use squish_code::CodeOptions;
 use squish_core::{Format, SquishOptions};
 use squish_video::VideoOptions;
 
@@ -107,6 +108,7 @@ fn real_main() -> Result<u8> {
         opts,
         video_opts,
         audio_opts,
+        code_opts: CodeOptions::default(),
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
