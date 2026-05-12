@@ -72,4 +72,12 @@ pub struct Args {
     /// Strip audio metadata (ID3 tags, album art). Default: preserved.
     #[arg(long = "strip-tags")]
     pub strip_tags: bool,
+
+    /// Code: skip mangling and dead-code elimination (whitespace-only).
+    #[arg(long)]
+    pub safe: bool,
+
+    /// Code: emit a .map file alongside minified output (JS/TS/CSS only).
+    #[arg(long = "source-map")]
+    pub source_map: bool,
 }

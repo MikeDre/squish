@@ -4,6 +4,7 @@ use rayon::prelude::*;
 use squish_audio::AudioCodec;
 use squish_audio::AudioError;
 use squish_audio::{self, AudioOptions, AudioResult};
+use squish_code::{self, CodeError, CodeOptions, CodeResult};
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::VideoCodec;
 use squish_video::{self, VideoError, VideoOptions, VideoResult};
@@ -16,6 +17,7 @@ pub struct RunConfig {
     pub opts: SquishOptions,
     pub video_opts: VideoOptions,
     pub audio_opts: AudioOptions,
+    pub code_opts: CodeOptions,
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
@@ -25,6 +27,7 @@ pub struct RunReport {
     pub results: Vec<SquishResult>,
     pub video_results: Vec<VideoResult>,
     pub audio_results: Vec<AudioResult>,
+    pub code_results: Vec<CodeResult>,
     pub errors: Vec<(PathBuf, String)>,
     pub skipped_unknown: Vec<PathBuf>,
     pub total_wall: Duration,
@@ -35,17 +38,22 @@ impl RunReport {
         let img: u64 = self.results.iter().map(|r| r.input_bytes).sum();
         let vid: u64 = self.video_results.iter().map(|r| r.input_bytes).sum();
         let aud: u64 = self.audio_results.iter().map(|r| r.input_bytes).sum();
-        img + vid + aud
+        let cod: u64 = self.code_results.iter().map(|r| r.input_bytes).sum();
+        img + vid + aud + cod
     }
     pub fn output_bytes(&self) -> u64 {
         let img: u64 = self.results.iter().map(|r| r.output_bytes).sum();
         let vid: u64 = self.video_results.iter().map(|r| r.output_bytes).sum();
         let aud: u64 = self.audio_results.iter().map(|r| r.output_bytes).sum();
-        img + vid + aud
+        let cod: u64 = self.code_results.iter().map(|r| r.output_bytes).sum();
+        img + vid + aud + cod
     }
     #[allow(dead_code)]
     pub fn total_files(&self) -> usize {
-        self.results.len() + self.video_results.len() + self.audio_results.len()
+        self.results.len()
+            + self.video_results.len()
+            + self.audio_results.len()
+            + self.code_results.len()
     }
     pub fn exit_code(&self) -> u8 {
         if self.errors.is_empty() {
@@ -60,6 +68,7 @@ enum FileKind {
     Image,
     Video,
     Audio,
+    Code,
     Unknown,
 }
 
@@ -79,6 +88,9 @@ fn classify_file(path: &Path) -> FileKind {
     }
     if squish_video::detect_video_format(path).is_some() {
         return FileKind::Video;
+    }
+    if squish_code::detect_code_format(path).is_some() {
+        return FileKind::Code;
     }
     FileKind::Unknown
 }
@@ -175,12 +187,31 @@ pub fn choose_lossless_codec(audio_files: &[PathBuf], audio_codec_set: bool) -> 
     }
 }
 
+/// Validate `--source-map`: returns Err if set but no JS/TS/CSS files exist.
+pub fn validate_source_map(source_map: bool, code_files: &[PathBuf]) -> anyhow::Result<()> {
+    if !source_map {
+        return Ok(());
+    }
+    let any_supports_map = code_files.iter().any(|p| {
+        squish_code::detect_code_format(p)
+            .map(|f| f.supports_source_map())
+            .unwrap_or(false)
+    });
+    if !any_supports_map {
+        anyhow::bail!(
+            "--source-map requires at least one .js/.ts/.css/.tsx/.jsx/.mjs/.cjs/.mts/.cts file in the batch"
+        );
+    }
+    Ok(())
+}
+
 pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let start = Instant::now();
 
     let mut image_files = Vec::new();
     let mut video_files = Vec::new();
     let mut audio_files = Vec::new();
+    let mut code_files = Vec::new();
     let mut skipped_unknown = Vec::new();
 
     for path in paths {
@@ -188,6 +219,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             FileKind::Image => image_files.push(path.clone()),
             FileKind::Video => video_files.push(path.clone()),
             FileKind::Audio => audio_files.push(path.clone()),
+            FileKind::Code => code_files.push(path.clone()),
             FileKind::Unknown => skipped_unknown.push(path.clone()),
         }
     }
@@ -202,6 +234,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         for p in &audio_files {
             println!("would squish (audio): {}", p.display());
         }
+        for p in &code_files {
+            println!("would squish (code): {}", p.display());
+        }
         for p in &skipped_unknown {
             println!("would skip (unrecognized): {}", p.display());
         }
@@ -209,12 +244,17 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             results: Vec::new(),
             video_results: Vec::new(),
             audio_results: Vec::new(),
+            code_results: Vec::new(),
             errors: Vec::new(),
             skipped_unknown,
             total_wall: start.elapsed(),
         });
     }
 
+    // Validate --source-map applicability against the batch.
+    validate_source_map(cfg.code_opts.source_map, &code_files)?;
+
+    // Lossless audio prompt (existing behavior).
     let mut audio_opts = cfg.audio_opts.clone();
     if audio_opts.codec.is_none() {
         if let Some(c) = choose_lossless_codec(&audio_files, false) {
@@ -222,7 +262,8 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
     }
 
-    let total = (image_files.len() + video_files.len() + audio_files.len()) as u64;
+    let total =
+        (image_files.len() + video_files.len() + audio_files.len() + code_files.len()) as u64;
     let processed = AtomicU64::new(0);
     let progress = build_progress_bar(total, cfg);
 
@@ -297,6 +338,31 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         audio_pairs.push((path.clone(), res));
     }
 
+    // Code in parallel.
+    let code_pairs: Vec<(PathBuf, Result<CodeResult, CodeError>)> = code_files
+        .par_iter()
+        .map(|path| {
+            let res = squish_code::squish_code(path, &cfg.code_opts);
+            let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
+            if !cfg.quiet && cfg.verbose {
+                match &res {
+                    Ok(r) => eprintln!(
+                        "[{n}/{total}] {} → {} ({:.1}% saved)",
+                        path.display(),
+                        r.output_path.display(),
+                        r.reduction_percent()
+                    ),
+                    Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
+                }
+            }
+            if let Some(pb) = &progress {
+                pb.set_message(display_filename(path));
+                pb.inc(1);
+            }
+            (path.clone(), res)
+        })
+        .collect();
+
     if let Some(pb) = progress {
         pb.finish_and_clear();
     }
@@ -304,6 +370,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let mut results = Vec::new();
     let mut video_results = Vec::new();
     let mut audio_results = Vec::new();
+    let mut code_results = Vec::new();
     let mut errors: Vec<(PathBuf, String)> = Vec::new();
 
     for (p, r) in image_pairs {
@@ -324,11 +391,18 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             Err(e) => errors.push((p, format!("{e}"))),
         }
     }
+    for (p, r) in code_pairs {
+        match r {
+            Ok(r) => code_results.push(r),
+            Err(e) => errors.push((p, format!("{e}"))),
+        }
+    }
 
     let report = RunReport {
         results,
         video_results,
         audio_results,
+        code_results,
         errors,
         skipped_unknown,
         total_wall: start.elapsed(),
@@ -385,6 +459,7 @@ fn print_summary(r: &RunReport) {
         r.results.len(),
         r.video_results.len(),
         r.audio_results.len(),
+        r.code_results.len(),
     );
 
     println!(
@@ -426,8 +501,8 @@ fn trim_sub_ms(d: Duration) -> Duration {
     Duration::from_millis(d.as_millis() as u64)
 }
 
-fn format_count_detail(images: usize, videos: usize, audio: usize) -> String {
-    let total = images + videos + audio;
+fn format_count_detail(images: usize, videos: usize, audio: usize, code: usize) -> String {
+    let total = images + videos + audio + code;
     let mut breakdown: Vec<String> = Vec::new();
     if images > 0 {
         breakdown.push(format!("{images} images"));
@@ -437,6 +512,9 @@ fn format_count_detail(images: usize, videos: usize, audio: usize) -> String {
     }
     if audio > 0 {
         breakdown.push(format!("{audio} audio"));
+    }
+    if code > 0 {
+        breakdown.push(format!("{code} code"));
     }
     if breakdown.len() <= 1 {
         format!("{total} files")
@@ -511,39 +589,101 @@ mod summary_tests {
 
     #[test]
     fn images_only() {
-        assert_eq!(format_count_detail(3, 0, 0), "3 files");
+        assert_eq!(format_count_detail(3, 0, 0, 0), "3 files");
     }
 
     #[test]
     fn videos_only() {
-        assert_eq!(format_count_detail(0, 2, 0), "2 files");
+        assert_eq!(format_count_detail(0, 2, 0, 0), "2 files");
     }
 
     #[test]
     fn audio_only() {
-        assert_eq!(format_count_detail(0, 0, 5), "5 files");
+        assert_eq!(format_count_detail(0, 0, 5, 0), "5 files");
+    }
+
+    #[test]
+    fn code_only() {
+        assert_eq!(format_count_detail(0, 0, 0, 4), "4 files");
     }
 
     #[test]
     fn images_and_videos() {
-        assert_eq!(format_count_detail(3, 2, 0), "5 files (3 images, 2 videos)");
+        assert_eq!(
+            format_count_detail(3, 2, 0, 0),
+            "5 files (3 images, 2 videos)"
+        );
     }
 
     #[test]
-    fn all_three_kinds() {
+    fn all_three_legacy_kinds() {
         assert_eq!(
-            format_count_detail(3, 2, 5),
+            format_count_detail(3, 2, 5, 0),
             "10 files (3 images, 2 videos, 5 audio)"
         );
     }
 
     #[test]
-    fn audio_and_images() {
-        assert_eq!(format_count_detail(3, 0, 5), "8 files (3 images, 5 audio)");
+    fn all_four_kinds() {
+        assert_eq!(
+            format_count_detail(3, 2, 5, 4),
+            "14 files (3 images, 2 videos, 5 audio, 4 code)"
+        );
+    }
+
+    #[test]
+    fn code_with_images() {
+        assert_eq!(
+            format_count_detail(3, 0, 0, 4),
+            "7 files (3 images, 4 code)"
+        );
     }
 
     #[test]
     fn empty() {
-        assert_eq!(format_count_detail(0, 0, 0), "0 files");
+        assert_eq!(format_count_detail(0, 0, 0, 0), "0 files");
+    }
+}
+
+#[cfg(test)]
+mod source_map_validation_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn source_map_off_passes() {
+        assert!(validate_source_map(false, &[]).is_ok());
+    }
+
+    #[test]
+    fn source_map_on_with_js_passes() {
+        let files = vec![PathBuf::from("a.js")];
+        assert!(validate_source_map(true, &files).is_ok());
+    }
+
+    #[test]
+    fn source_map_on_with_css_passes() {
+        let files = vec![PathBuf::from("style.css")];
+        assert!(validate_source_map(true, &files).is_ok());
+    }
+
+    #[test]
+    fn source_map_on_with_only_html_errors() {
+        let files = vec![PathBuf::from("page.html")];
+        let err = validate_source_map(true, &files).unwrap_err();
+        assert!(format!("{err}").contains("source-map"));
+    }
+
+    #[test]
+    fn source_map_on_with_only_json_errors() {
+        let files = vec![PathBuf::from("data.json")];
+        let err = validate_source_map(true, &files).unwrap_err();
+        assert!(format!("{err}").contains("source-map"));
+    }
+
+    #[test]
+    fn source_map_on_with_mixed_html_and_js_passes() {
+        let files = vec![PathBuf::from("page.html"), PathBuf::from("a.js")];
+        assert!(validate_source_map(true, &files).is_ok());
     }
 }

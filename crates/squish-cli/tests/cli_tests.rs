@@ -462,3 +462,122 @@ fn cli_mixed_batch_summary_shows_three_kinds() {
     assert!(stdout.contains("audio"));
     assert!(stdout.contains("images"));
 }
+
+// ----- Code integration tests -----
+
+#[test]
+fn cli_minifies_js() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(
+        &input,
+        b"console.log('hi ' + 'world ' + 42 + ' more text');",
+    )
+    .unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    cmd.arg(&input).assert().success();
+
+    let output = tmp.path().join("app.min.js");
+    assert!(output.exists());
+    let body_in = std::fs::read_to_string(&input).unwrap();
+    let body_out = std::fs::read_to_string(&output).unwrap();
+    assert!(body_out.len() < body_in.len());
+}
+
+#[test]
+fn cli_default_suffix_is_min_with_dot_separator() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(&input, b"console.log('x');").unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    cmd.arg(&input).assert().success();
+
+    assert!(tmp.path().join("app.min.js").exists());
+    assert!(!tmp.path().join("app_squished.js").exists());
+}
+
+#[test]
+fn cli_custom_suffix_for_code_uses_dot_separator() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(&input, b"console.log('x');").unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    cmd.args(["--suffix", "tiny"])
+        .arg(&input)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("app.tiny.js").exists());
+}
+
+#[test]
+fn cli_source_map_emits_map_file() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(&input, b"console.log('hello world');").unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    cmd.arg("--source-map").arg(&input).assert().success();
+
+    assert!(tmp.path().join("app.min.js").exists());
+    assert!(tmp.path().join("app.min.js.map").exists());
+}
+
+#[test]
+fn cli_source_map_errors_on_json_only_batch() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("data.json");
+    std::fs::write(&input, br#"{"a":1}"#).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let assert = cmd.arg("--source-map").arg(&input).assert().failure();
+    let output = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(output.contains("source-map"));
+}
+
+#[test]
+fn cli_source_map_with_mixed_js_and_json_succeeds() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let js_input = tmp.path().join("app.js");
+    let json_input = tmp.path().join("data.json");
+    std::fs::write(&js_input, b"console.log('x');").unwrap();
+    std::fs::write(&json_input, br#"{"a":1}"#).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    cmd.arg("--source-map")
+        .arg(&js_input)
+        .arg(&json_input)
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("app.min.js.map").exists());
+    assert!(!tmp.path().join("data.min.json.map").exists());
+}
+
+#[test]
+fn cli_dry_run_lists_code() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(&input, b"console.log('x');").unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let out = cmd.args(["--dry-run"]).arg(&input).assert().success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    assert!(stdout.contains("would squish (code)"));
+    assert!(!tmp.path().join("app.min.js").exists());
+}
+
+#[test]
+fn cli_summary_includes_code_count() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    std::fs::write(&input, b"console.log('x');").unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let out = cmd.arg(&input).assert().success();
+    let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
+    assert!(stdout.contains("Squished"));
+}

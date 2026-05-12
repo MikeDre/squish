@@ -11,20 +11,30 @@ use std::path::{Path, PathBuf};
 /// `target_ext` should be the desired output extension without the leading dot
 /// (e.g., "png", "jpg", "webp"). When preserving input extension, pass the
 /// original extension exactly — callers decide "jpg" vs "jpeg" case.
-pub fn derive_output_path(
-    input: &Path,
-    target_ext: &str,
-    force_overwrite: bool,
-) -> PathBuf {
+pub fn derive_output_path(input: &Path, target_ext: &str, force_overwrite: bool) -> PathBuf {
     derive_output_path_with_suffix(input, target_ext, force_overwrite, "squished")
 }
 
 /// Like `derive_output_path` but with a custom suffix instead of "squished".
+/// Uses `_` as the separator between stem, suffix, and collision counter.
 pub fn derive_output_path_with_suffix(
     input: &Path,
     target_ext: &str,
     force_overwrite: bool,
     suffix: &str,
+) -> PathBuf {
+    derive_output_path_with_suffix_sep(input, target_ext, force_overwrite, suffix, '_')
+}
+
+/// Like `derive_output_path_with_suffix` but with a custom separator
+/// between stem, suffix, and collision counter. Use `_` for media (default)
+/// and `.` for code minification (e.g. `app.min.js`).
+pub fn derive_output_path_with_suffix_sep(
+    input: &Path,
+    target_ext: &str,
+    force_overwrite: bool,
+    suffix: &str,
+    separator: char,
 ) -> PathBuf {
     let parent = input.parent().unwrap_or_else(|| Path::new(""));
     let stem = input
@@ -32,13 +42,15 @@ pub fn derive_output_path_with_suffix(
         .and_then(|s| s.to_str())
         .unwrap_or("output");
 
-    let base = parent.join(format!("{stem}_{suffix}.{target_ext}"));
+    let base = parent.join(format!("{stem}{separator}{suffix}.{target_ext}"));
     if force_overwrite || !base.exists() {
         return base;
     }
 
     for n in 2u32.. {
-        let candidate = parent.join(format!("{stem}_{suffix}_{n}.{target_ext}"));
+        let candidate = parent.join(format!(
+            "{stem}{separator}{suffix}{separator}{n}.{target_ext}"
+        ));
         if !candidate.exists() {
             return candidate;
         }
@@ -134,5 +146,31 @@ mod tests {
         let input = tmp.path().join("dog_squished.png");
         let out = derive_output_path(&input, "png", false);
         assert_eq!(out, tmp.path().join("dog_squished_squished.png"));
+    }
+
+    #[test]
+    fn derives_with_dot_separator() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("app.js");
+        let out = derive_output_path_with_suffix_sep(&input, "js", false, "min", '.');
+        assert_eq!(out, tmp.path().join("app.min.js"));
+    }
+
+    #[test]
+    fn derives_with_underscore_via_default_unchanged() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("dog.png");
+        let out = derive_output_path_with_suffix(&input, "png", false, "squished");
+        assert_eq!(out, tmp.path().join("dog_squished.png"));
+    }
+
+    #[test]
+    fn dot_separator_collision_uses_dot() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("app.js");
+        fs::write(tmp.path().join("app.min.js"), b"x").unwrap();
+
+        let out = derive_output_path_with_suffix_sep(&input, "js", false, "min", '.');
+        assert_eq!(out, tmp.path().join("app.min.2.js"));
     }
 }

@@ -1,0 +1,29 @@
+[package]
+name = "squish-code"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme.workspace = true
+keywords.workspace = true
+categories.workspace = true
+description = "Code minification library for squish (JS/TS/CSS/HTML/JSON)"
+
+[dependencies]
+squish-core = { workspace = true }
+thiserror = { workspace = true }
+serde_json = "1"
+lightningcss = "1.0.0-alpha.71"
+parcel_sourcemap = "2"
+minify-html = "0.18.1"
+oxc_allocator = "0.128.0"
+oxc_ast = "0.128.0"
+oxc_codegen = "0.128.0"
+oxc_minifier = "0.128.0"
+oxc_parser = "0.128.0"
+oxc_span = "0.128.0"
+
+[dev-dependencies]
+tempfile = "3"

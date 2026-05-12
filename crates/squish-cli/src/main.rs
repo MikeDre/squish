@@ -5,6 +5,7 @@ mod walker;
 use anyhow::{Context, Result};
 use clap::Parser;
 use squish_audio::AudioOptions;
+use squish_code::CodeOptions;
 use squish_core::{Format, SquishOptions};
 use squish_video::VideoOptions;
 
@@ -103,10 +104,18 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
     };
 
+    let code_opts = CodeOptions {
+        safe: args.safe,
+        source_map: args.source_map,
+        force_overwrite: args.force,
+        suffix: args.suffix.clone(),
+    };
+
     let cfg = runner::RunConfig {
         opts,
         video_opts,
         audio_opts,
+        code_opts,
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
