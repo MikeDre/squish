@@ -170,6 +170,39 @@ squish --bitrate 192k podcast.mp3
 squish --strip-tags album/*.mp3
 ```
 
+### Code
+
+Minifies JavaScript, TypeScript, CSS, HTML, and JSON via pure-Rust libraries — no Node runtime required.
+
+| Language | Library | Default behavior |
+|---|---|---|
+| JS / TS | `oxc_minifier` | Mangle + DCE; `--safe` for whitespace-only |
+| CSS | `lightningcss` | Whitespace + comment removal, normalization |
+| HTML | `minify-html` | Whitespace + comment removal; preserves `<script>` content |
+| JSON | `serde_json` | Whitespace removal; rejects JSON5/JSONC |
+
+Output uses `.min` suffix with `.` separator (industry convention): `app.js` → `app.min.js`. TypeScript and JSX inputs become `.js` (types are erased; JSX is compiled).
+
+```sh
+# Default — minify everything in dist/
+squish dist/ -r
+
+# Safe mode for JS (no identifier mangling)
+squish --safe app.js
+
+# Emit source maps for debugging in browser DevTools
+squish --source-map app.js style.css
+
+# Custom suffix
+squish --suffix tiny app.js   # → app.tiny.js
+```
+
+SVG continues to be handled as an image (better structural compaction via `usvg`).
+
+**Known limitations:**
+- TS `enum`, `namespace`, and `import =` constructs are not transformed to JS — files using them will produce invalid output. Modern TS code (interfaces, type aliases, regular classes, ES modules) works correctly.
+- IE conditional comments (`<!--[if IE]>...<![endif]-->`) are stripped along with regular comments. Pass `--source-map` if you need to preserve comments in JS/CSS for debugging.
+
 ## Flags
 
 ```
@@ -189,6 +222,8 @@ squish --strip-tags album/*.mp3
       --fast                 Video: optimize without re-encoding
       --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
       --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
+      --safe                 Code: skip mangling and DCE (whitespace-only minification)
+      --source-map           Code: emit a .map file alongside output (JS/TS/CSS only)
 ```
 
 ## Collision behavior
