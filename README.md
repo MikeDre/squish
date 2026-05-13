@@ -24,6 +24,8 @@ curl --proto '=https' --tlsv1.2 -sSf https://rustup.rs | sh
 
 Once the installer finishes, open a **new terminal** (or run `source ~/.cargo/env`) so that `cargo` is available on your PATH.
 
+> **Note:** the workspace pins a nightly toolchain via `rust-toolchain.toml` because `oxc_transformer` (used for TypeScript minification) depends on the unstable `if_let_guard` feature. `rustup` will auto-install the required nightly the first time you build — no manual action needed, but the first build is slower while the toolchain downloads. Once `if_let_guard` stabilizes in stable Rust we'll drop the pin.
+
 **2. Install system deps and build:**
 
 ```bash
@@ -200,7 +202,6 @@ squish --suffix tiny app.js   # → app.tiny.js
 SVG continues to be handled as an image (better structural compaction via `usvg`).
 
 **Known limitations:**
-- TS `enum`, `namespace`, and `import =` constructs are not transformed to JS — files using them will produce invalid output. Modern TS code (interfaces, type aliases, regular classes, ES modules) works correctly.
 - IE conditional comments (`<!--[if IE]>...<![endif]-->`) are stripped along with regular comments. Pass `--source-map` if you need to preserve comments in JS/CSS for debugging.
 
 ## Flags

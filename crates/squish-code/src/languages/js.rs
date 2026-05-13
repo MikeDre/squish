@@ -3,11 +3,12 @@ use crate::format::CodeFormat;
 use crate::languages::MinifyOutput;
 use crate::options::CodeOptions;
 use oxc_allocator::Allocator;
-use oxc_ast::ast::Statement;
 use oxc_codegen::{Codegen, CodegenOptions, CommentOptions};
 use oxc_minifier::{Minifier, MinifierOptions};
 use oxc_parser::Parser;
+use oxc_semantic::SemanticBuilder;
 use oxc_span::SourceType;
+use oxc_transformer::{JsxOptions, TransformOptions, Transformer, TypeScriptOptions};
 use std::path::Path;
 
 pub fn minify(
@@ -41,20 +42,40 @@ pub fn minify(
 
     let mut program = parser_ret.program;
 
-    // For TypeScript input, strip purely type-level declarations from the
-    // program body before running the minifier and codegen.  oxc 0.128 does
-    // not include a transformer that erases TS syntax, so we handle it here
-    // by removing statement variants whose entire purpose is type information
-    // (interfaces and type aliases).  Runtime-affecting TS constructs (enums,
-    // namespaces, import-equals) are left in place so the minifier can see
-    // and process them.
     if is_ts {
-        program.body.retain(|stmt| {
-            !matches!(
-                stmt,
-                Statement::TSTypeAliasDeclaration(_) | Statement::TSInterfaceDeclaration(_)
-            )
-        });
+        // TS-only transform: erase types, lower enum/namespace/import-equals.
+        // We intentionally do NOT enable decorator or ES-target transforms —
+        // squish-code's contract is "minify, don't transform" beyond what's needed
+        // for the output to be valid JS.
+        //
+        // Notes on the non-obvious options:
+        //   * JsxOptions::disable() — JsxOptions::default() has jsx_plugin:true which would
+        //     silently compile JSX to React runtime calls; we explicitly disable that.
+        //   * SemanticBuilder::new().with_enum_eval(true) — the transformer panics on `enum`
+        //     statements unless the scoping was produced with enum constant-folding enabled.
+        let transform_opts = TransformOptions {
+            typescript: TypeScriptOptions::default(),
+            jsx: JsxOptions::disable(),
+            ..TransformOptions::default()
+        };
+        // build_with_scoping requires semantic scoping, so run the semantic
+        // analyser first to obtain a Scoping object.  Enum constant-folding must
+        // be enabled in the semantic pass so that the transformer can lower enums.
+        let scoping = SemanticBuilder::new()
+            .with_enum_eval(true)
+            .build(&program)
+            .semantic
+            .into_scoping();
+        let transformer_ret = Transformer::new(&allocator, path, &transform_opts)
+            .build_with_scoping(scoping, &mut program);
+        if !transformer_ret.errors.is_empty() {
+            let first_err = &transformer_ret.errors[0];
+            return Err(CodeError::ParseFailed {
+                path: path.to_path_buf(),
+                line: None,
+                reason: first_err.to_string(),
+            });
+        }
     }
 
     // Run the minifier (compress + mangle) unless safe mode is requested.
@@ -180,5 +201,146 @@ mod tests {
         let path = PathBuf::from("x.js");
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Js).unwrap();
         assert!(out.source_map.is_none());
+    }
+
+    /// Parse `code` as JavaScript (NOT TypeScript) and assert no parse errors.
+    /// Used to prove the transformer's output is valid JS, not TS.
+    fn assert_valid_js(code: &str) {
+        let alloc = oxc_allocator::Allocator::default();
+        let st = oxc_span::SourceType::default().with_module(true);
+        let ret = oxc_parser::Parser::new(&alloc, code, st).parse();
+        assert!(
+            ret.errors.is_empty(),
+            "output is not valid JS: {:?}\noutput was:\n{}",
+            ret.errors,
+            code
+        );
+    }
+
+    #[test]
+    fn ts_enum_compiles_to_runtime_js() {
+        let input = "enum Color { Red, Green }\nconsole.log(Color.Red);";
+        let path = PathBuf::from("colors.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        assert!(
+            !out.code.contains("enum "),
+            "enum keyword leaked: {}",
+            out.code
+        );
+        assert!(out.code.contains("console.log"));
+        assert_valid_js(&out.code);
+    }
+
+    #[test]
+    fn ts_namespace_compiles_to_iife() {
+        let input = "namespace Util { export const X = 1; }\nconsole.log(Util.X);";
+        let path = PathBuf::from("util.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        assert!(
+            !out.code.contains("namespace "),
+            "namespace keyword leaked: {}",
+            out.code
+        );
+        assert_valid_js(&out.code);
+    }
+
+    #[test]
+    fn ts_import_equals_compiles() {
+        let input = "import fs = require('fs');\nconsole.log(fs);";
+        let path = PathBuf::from("legacy.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        // The "import X =" syntax must not survive in the output.
+        assert!(
+            !out.code.contains("import ") || !out.code.contains(" = require"),
+            "import-equals syntax leaked: {}",
+            out.code
+        );
+        // require('fs') or an equivalent CJS-style reference should be present.
+        assert!(
+            out.code.contains("require") || out.code.contains("fs"),
+            "expected CJS-style fs reference: {}",
+            out.code
+        );
+        assert_valid_js(&out.code);
+    }
+
+    #[test]
+    fn ts_const_enum_compiles_or_inlines() {
+        let input = "const enum Direction { Up = 1, Down }\nconsole.log(Direction.Up);";
+        let path = PathBuf::from("direction.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        // Either the const enum is inlined to literals OR compiled to an IIFE.
+        // Both are valid; what must not survive is the `enum` keyword itself.
+        assert!(
+            !out.code.contains("const enum "),
+            "const enum keyword leaked: {}",
+            out.code
+        );
+        assert!(
+            !out.code.contains("enum "),
+            "enum keyword leaked: {}",
+            out.code
+        );
+        assert_valid_js(&out.code);
+    }
+
+    #[test]
+    fn ts_decorator_passes_through_untouched() {
+        // Decorators are Stage-3 JS and we intentionally do not transform them.
+        // Re-parse the output in TS mode (where decorators are guaranteed accepted)
+        // to confirm the decorator syntax round-trips.
+        let input =
+            "function frozen<T>(x: T) { return x; }\n@frozen class Foo {}\nconsole.log(Foo);";
+        let path = PathBuf::from("dec.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        let alloc = oxc_allocator::Allocator::default();
+        let st = oxc_span::SourceType::default()
+            .with_typescript(true)
+            .with_module(true);
+        let ret = oxc_parser::Parser::new(&alloc, &out.code, st).parse();
+        assert!(
+            ret.errors.is_empty(),
+            "output didn't re-parse: {:?}\noutput:\n{}",
+            ret.errors,
+            out.code
+        );
+    }
+
+    #[test]
+    fn tsx_strips_types_keeps_jsx() {
+        let input = "const el: JSX.Element = <div>hi</div>;\nconsole.log(el);";
+        let path = PathBuf::from("c.tsx");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        // Types must be erased.
+        assert!(
+            !out.code.contains("JSX.Element"),
+            "type annotation leaked: {}",
+            out.code
+        );
+        // JSX must be preserved (we don't compile JSX).
+        assert!(
+            out.code.contains("<div") || out.code.contains("\"div\""),
+            "JSX missing: {}",
+            out.code
+        );
+    }
+
+    #[test]
+    fn ts_dts_produces_empty_or_trivial() {
+        let input = "export interface Foo { x: number; }\nexport type Bar = string;";
+        let path = PathBuf::from("app.d.ts");
+        let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
+        let trimmed = out.code.trim();
+        // Acceptable outputs after type erasure: empty, or a minimal module shape preserved
+        // by the transformer like "export{}". The codegen may or may not add a trailing
+        // semicolon, so we accept both forms.
+        assert!(
+            trimmed.is_empty()
+                || trimmed == "export{}"
+                || trimmed == "export{};"
+                || trimmed == "export {};"
+                || trimmed == "export {}",
+            "expected near-empty output for .d.ts, got: {trimmed:?}"
+        );
     }
 }

@@ -169,3 +169,25 @@ fn force_overwrite_reuses_path() {
     let r2 = squish_code(&input, &opts).unwrap();
     assert_eq!(r1.output_path, r2.output_path);
 }
+
+#[test]
+fn ts_with_enum_roundtrips_to_valid_js() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("colors.ts");
+    fs::write(&input, "enum Color { Red, Green }\nconsole.log(Color.Red);").unwrap();
+    let result = squish_code(&input, &CodeOptions::default()).unwrap();
+    let output_text = fs::read_to_string(&result.output_path).unwrap();
+    // Output must be valid JS: parse it with oxc_parser in JS mode.
+    let alloc = oxc_allocator::Allocator::default();
+    let st = oxc_span::SourceType::default().with_module(true);
+    let ret = oxc_parser::Parser::new(&alloc, &output_text, st).parse();
+    assert!(
+        ret.errors.is_empty(),
+        "output is not valid JS: {:?}",
+        ret.errors
+    );
+    assert!(
+        !output_text.contains("enum "),
+        "output contained 'enum' keyword: {output_text}"
+    );
+}
