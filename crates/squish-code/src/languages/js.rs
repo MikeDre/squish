@@ -66,9 +66,8 @@ pub fn minify(
             .build(&program)
             .semantic
             .into_scoping();
-        let transformer_ret =
-            Transformer::new(&allocator, path, &transform_opts)
-                .build_with_scoping(scoping, &mut program);
+        let transformer_ret = Transformer::new(&allocator, path, &transform_opts)
+            .build_with_scoping(scoping, &mut program);
         if !transformer_ret.errors.is_empty() {
             let first_err = &transformer_ret.errors[0];
             return Err(CodeError::ParseFailed {
@@ -223,7 +222,11 @@ mod tests {
         let input = "enum Color { Red, Green }\nconsole.log(Color.Red);";
         let path = PathBuf::from("colors.ts");
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
-        assert!(!out.code.contains("enum "), "enum keyword leaked: {}", out.code);
+        assert!(
+            !out.code.contains("enum "),
+            "enum keyword leaked: {}",
+            out.code
+        );
         assert!(out.code.contains("console.log"));
         assert_valid_js(&out.code);
     }
@@ -233,7 +236,11 @@ mod tests {
         let input = "namespace Util { export const X = 1; }\nconsole.log(Util.X);";
         let path = PathBuf::from("util.ts");
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
-        assert!(!out.code.contains("namespace "), "namespace keyword leaked: {}", out.code);
+        assert!(
+            !out.code.contains("namespace "),
+            "namespace keyword leaked: {}",
+            out.code
+        );
         assert_valid_js(&out.code);
     }
 
@@ -264,8 +271,16 @@ mod tests {
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
         // Either the const enum is inlined to literals OR compiled to an IIFE.
         // Both are valid; what must not survive is the `enum` keyword itself.
-        assert!(!out.code.contains("const enum "), "const enum keyword leaked: {}", out.code);
-        assert!(!out.code.contains("enum "), "enum keyword leaked: {}", out.code);
+        assert!(
+            !out.code.contains("const enum "),
+            "const enum keyword leaked: {}",
+            out.code
+        );
+        assert!(
+            !out.code.contains("enum "),
+            "enum keyword leaked: {}",
+            out.code
+        );
         assert_valid_js(&out.code);
     }
 
@@ -274,11 +289,14 @@ mod tests {
         // Decorators are Stage-3 JS and we intentionally do not transform them.
         // Re-parse the output in TS mode (where decorators are guaranteed accepted)
         // to confirm the decorator syntax round-trips.
-        let input = "function frozen<T>(x: T) { return x; }\n@frozen class Foo {}\nconsole.log(Foo);";
+        let input =
+            "function frozen<T>(x: T) { return x; }\n@frozen class Foo {}\nconsole.log(Foo);";
         let path = PathBuf::from("dec.ts");
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
         let alloc = oxc_allocator::Allocator::default();
-        let st = oxc_span::SourceType::default().with_typescript(true).with_module(true);
+        let st = oxc_span::SourceType::default()
+            .with_typescript(true)
+            .with_module(true);
         let ret = oxc_parser::Parser::new(&alloc, &out.code, st).parse();
         assert!(
             ret.errors.is_empty(),
@@ -294,7 +312,11 @@ mod tests {
         let path = PathBuf::from("c.tsx");
         let out = minify(input, &CodeOptions::default(), &path, CodeFormat::Ts).unwrap();
         // Types must be erased.
-        assert!(!out.code.contains("JSX.Element"), "type annotation leaked: {}", out.code);
+        assert!(
+            !out.code.contains("JSX.Element"),
+            "type annotation leaked: {}",
+            out.code
+        );
         // JSX must be preserved (we don't compile JSX).
         assert!(
             out.code.contains("<div") || out.code.contains("\"div\""),
