@@ -12,6 +12,7 @@ pub struct SquishResult {
     pub format_in: Format,
     pub format_out: Format,
     pub duration: Duration,
+    pub warnings: Vec<String>,
 }
 
 impl SquishResult {
@@ -39,6 +40,7 @@ mod tests {
             format_in: Format::Png,
             format_out: Format::Png,
             duration: Duration::from_millis(10),
+            warnings: Vec::new(),
         }
     }
 
