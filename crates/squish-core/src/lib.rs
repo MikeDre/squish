@@ -51,15 +51,15 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
         format_in == Format::Webp && formats::webp::is_animated_webp(&input_bytes_vec);
     let (output_bytes, warnings) =
         if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
-        let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
-        if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
-            img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
-        }
-        let bytes = dispatch_encode_raster(format_out, &img, opts, input)?;
-        (bytes, Vec::new())
-    } else {
-        dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
-    };
+            let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
+            if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
+                img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+            }
+            let bytes = dispatch_encode_raster(format_out, &img, opts, input)?;
+            (bytes, Vec::new())
+        } else {
+            dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
+        };
 
     let target_ext = if format_in == format_out {
         input

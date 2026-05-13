@@ -87,7 +87,7 @@ mod tests {
         buf.extend_from_slice(b"WEBP");
         buf.extend_from_slice(first_chunk);
         buf.extend_from_slice(&[10, 0, 0, 0]); // chunk size
-        // VP8X body: flags(1) + reserved(3) + width(3) + height(3) = 10 bytes
+                                               // VP8X body: flags(1) + reserved(3) + width(3) + height(3) = 10 bytes
         buf.push(vp8x_flags);
         buf.extend_from_slice(&[0; 9]);
         buf
@@ -127,8 +127,10 @@ mod tests {
     #[test]
     fn is_animated_webp_false_for_non_webp() {
         // PNG magic (89 50 4E 47 0D 0A 1A 0A)
-        let png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0,
-                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        let png = [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
         assert!(!is_animated_webp(&png));
     }
 
@@ -142,10 +144,20 @@ mod tests {
     #[test]
     fn compress_passes_animated_through_unchanged() {
         let input = anim_fixture();
-        let (bytes, warnings) =
-            compress(&input, &SquishOptions::default(), &PathBuf::from("anim.webp")).unwrap();
-        assert_eq!(bytes, input, "animated WebP should pass through byte-for-byte");
-        assert!(warnings.is_empty(), "no flags conflict; no warnings expected");
+        let (bytes, warnings) = compress(
+            &input,
+            &SquishOptions::default(),
+            &PathBuf::from("anim.webp"),
+        )
+        .unwrap();
+        assert_eq!(
+            bytes, input,
+            "animated WebP should pass through byte-for-byte"
+        );
+        assert!(
+            warnings.is_empty(),
+            "no flags conflict; no warnings expected"
+        );
     }
 
     #[test]
@@ -187,6 +199,10 @@ mod tests {
         };
         let (bytes, warnings) = compress(&input, &opts, &PathBuf::from("anim.webp")).unwrap();
         assert_eq!(bytes, input);
-        assert_eq!(warnings.len(), 1, "both flags should produce one warning, not two");
+        assert_eq!(
+            warnings.len(),
+            1,
+            "both flags should produce one warning, not two"
+        );
     }
 }
