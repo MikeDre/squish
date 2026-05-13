@@ -216,3 +216,37 @@ fn svg_cross_format_is_rejected_cleanly() {
         other => panic!("expected UnsupportedFormat, got: {other:?}"),
     }
 }
+
+#[test]
+fn animated_webp_roundtrips_unchanged() {
+    let (_tmp, input) = copy_fixture("anim.webp");
+    let original = fs::read(&input).unwrap();
+
+    let result = squish_file(&input, &SquishOptions::default()).unwrap();
+
+    let output = fs::read(&result.output_path).unwrap();
+    assert_eq!(output, original, "animated WebP must pass through unchanged");
+    assert!(
+        result.output_path.to_string_lossy().ends_with("_squished.webp"),
+        "output path: {}",
+        result.output_path.display()
+    );
+    assert!(result.warnings.is_empty());
+}
+
+#[test]
+fn animated_webp_with_resize_produces_warning() {
+    let (_tmp, input) = copy_fixture("anim.webp");
+    let original = fs::read(&input).unwrap();
+
+    let opts = SquishOptions {
+        max_width: Some(100),
+        ..Default::default()
+    };
+    let result = squish_file(&input, &opts).unwrap();
+
+    let output = fs::read(&result.output_path).unwrap();
+    assert_eq!(output, original, "resize must not modify animated WebP");
+    assert_eq!(result.warnings.len(), 1);
+    assert!(result.warnings[0].contains("cannot be resized"));
+}

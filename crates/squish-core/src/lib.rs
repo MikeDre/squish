@@ -43,9 +43,14 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
     };
 
     // If resize is requested and format supports it, decode → resize → encode.
-    // SVG is skipped (vector). For same-format paths that normally skip decode,
-    // resize forces the decode → resize → encode path.
-    let (output_bytes, warnings) = if opts.needs_resize() && format_in != Format::Svg {
+    // SVG is skipped (vector). Animated WebP is also skipped — the webp codec
+    // cannot resize animations; webp::compress emits a warning and passes through.
+    // For same-format paths that normally skip decode, resize forces the
+    // decode → resize → encode path.
+    let is_animated_webp =
+        format_in == Format::Webp && formats::webp::is_animated_webp(&input_bytes_vec);
+    let (output_bytes, warnings) =
+        if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
         let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
         if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
             img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
