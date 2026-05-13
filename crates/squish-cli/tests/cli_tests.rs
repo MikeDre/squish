@@ -581,3 +581,88 @@ fn cli_summary_includes_code_count() {
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
     assert!(stdout.contains("Squished"));
 }
+
+// ----- Animated WebP warning integration tests -----
+
+fn core_fixture_anim() -> std::path::PathBuf {
+    let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    p.pop(); // crates/
+    p.push("squish-core/tests/fixtures/anim.webp");
+    p
+}
+
+#[test]
+fn cli_animated_webp_with_resize_prints_warning_in_verbose() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("anim.webp");
+    std::fs::copy(core_fixture_anim(), &input).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let assert = cmd
+        .args(["--verbose", "--max-width", "100"])
+        .arg(&input)
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(
+        stderr.contains("cannot be resized"),
+        "expected warning in stderr; got: {stderr}"
+    );
+}
+
+#[test]
+fn cli_animated_webp_quiet_no_warning_output() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("anim.webp");
+    std::fs::copy(core_fixture_anim(), &input).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let assert = cmd
+        .args(["--quiet", "--max-width", "100"])
+        .arg(&input)
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(
+        !stderr.contains("cannot be resized"),
+        "quiet mode should suppress warnings; got: {stderr}"
+    );
+}
+
+#[test]
+fn cli_animated_webp_default_mode_shows_warning() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("anim.webp");
+    std::fs::copy(core_fixture_anim(), &input).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let assert = cmd
+        .args(["--max-width", "100"])
+        .arg(&input)
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(stderr.contains("cannot be resized"));
+}
+
+#[test]
+fn cli_animated_webp_no_resize_no_warning() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("anim.webp");
+    std::fs::copy(core_fixture_anim(), &input).unwrap();
+
+    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let assert = cmd.arg(&input).assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    assert!(
+        !stderr.contains("cannot be resized"),
+        "no conflict; no warning expected; got: {stderr}"
+    );
+
+    // Output exists and is a byte-for-byte copy of the input.
+    let output = tmp.path().join("anim_squished.webp");
+    assert!(output.exists());
+    let input_bytes = std::fs::read(&input).unwrap();
+    let output_bytes = std::fs::read(&output).unwrap();
+    assert_eq!(output_bytes, input_bytes);
+}

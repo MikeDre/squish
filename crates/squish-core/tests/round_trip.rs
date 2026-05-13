@@ -26,29 +26,47 @@ fn copy_fixture(name: &str) -> (TempDir, PathBuf) {
 fn png_compresses() {
     let (_tmp, input) = copy_fixture("sample.png");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
-    assert!(r.output_bytes < r.input_bytes, "PNG output not smaller: {r:?}");
+    assert!(
+        r.output_bytes < r.input_bytes,
+        "PNG output not smaller: {r:?}"
+    );
     assert!(r.output_path.exists());
     // Decodes as PNG
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Png));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Png)
+    );
 }
 
 #[test]
 fn jpeg_compresses() {
     let (_tmp, input) = copy_fixture("sample.jpg");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
-    assert!(r.output_bytes < r.input_bytes, "JPEG output not smaller: {r:?}");
+    assert!(
+        r.output_bytes < r.input_bytes,
+        "JPEG output not smaller: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Jpeg)
+    );
 }
 
 #[test]
 fn webp_compresses() {
     let (_tmp, input) = copy_fixture("sample.webp");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
-    assert!(r.output_bytes < r.input_bytes, "WebP output not smaller: {r:?}");
+    assert!(
+        r.output_bytes < r.input_bytes,
+        "WebP output not smaller: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Webp));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Webp)
+    );
 }
 
 #[test]
@@ -56,9 +74,15 @@ fn avif_compresses() {
     let (_tmp, input) = copy_fixture("sample.avif");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
     // AVIF can grow slightly on already-optimal inputs; allow up to 10% growth.
-    assert!(r.output_bytes <= r.input_bytes * 11 / 10, "AVIF output grew >10%: {r:?}");
+    assert!(
+        r.output_bytes <= r.input_bytes * 11 / 10,
+        "AVIF output grew >10%: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Avif));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Avif)
+    );
 }
 
 #[test]
@@ -67,9 +91,15 @@ fn tiff_converts_to_jpeg_by_default() {
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
     assert_eq!(r.format_in, squish_core::Format::Tiff);
     assert_eq!(r.format_out, squish_core::Format::Jpeg);
-    assert_eq!(r.output_path.extension().and_then(|s| s.to_str()), Some("jpg"));
+    assert_eq!(
+        r.output_path.extension().and_then(|s| s.to_str()),
+        Some("jpg")
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Jpeg)
+    );
 }
 
 #[test]
@@ -88,18 +118,30 @@ fn heic_compresses() {
     let (_tmp, input) = copy_fixture("sample.heic");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
     // HEIC from phones is often well-compressed; allow up to 5% growth.
-    assert!(r.output_bytes <= r.input_bytes * 21 / 20, "HEIC output grew >5%: {r:?}");
+    assert!(
+        r.output_bytes <= r.input_bytes * 21 / 20,
+        "HEIC output grew >5%: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Heic));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Heic)
+    );
 }
 
 #[test]
 fn gif_compresses() {
     let (_tmp, input) = copy_fixture("sample.gif");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
-    assert!(r.output_bytes < r.input_bytes, "GIF output not smaller: {r:?}");
+    assert!(
+        r.output_bytes < r.input_bytes,
+        "GIF output not smaller: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Gif));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Gif)
+    );
 }
 
 #[test]
@@ -107,16 +149,25 @@ fn animated_gif_preserves_frames() {
     let (_tmp, input) = copy_fixture("sample_animated.gif");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Gif));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Gif)
+    );
 }
 
 #[test]
 fn svg_compresses() {
     let (_tmp, input) = copy_fixture("sample.svg");
     let r = squish_file(&input, &SquishOptions::default()).unwrap();
-    assert!(r.output_bytes < r.input_bytes, "SVG output not smaller: {r:?}");
+    assert!(
+        r.output_bytes < r.input_bytes,
+        "SVG output not smaller: {r:?}"
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Svg));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Svg)
+    );
 }
 
 #[test]
@@ -128,9 +179,15 @@ fn png_to_webp_conversion() {
     };
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Webp);
-    assert_eq!(r.output_path.extension().and_then(|s| s.to_str()), Some("webp"));
+    assert_eq!(
+        r.output_path.extension().and_then(|s| s.to_str()),
+        Some("webp")
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Webp));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Webp)
+    );
 }
 
 #[test]
@@ -144,9 +201,15 @@ fn png_to_jpeg_conversion() {
     };
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Jpeg);
-    assert_eq!(r.output_path.extension().and_then(|s| s.to_str()), Some("jpg"));
+    assert_eq!(
+        r.output_path.extension().and_then(|s| s.to_str()),
+        Some("jpg")
+    );
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Jpeg)
+    );
 }
 
 #[test]
@@ -159,7 +222,10 @@ fn jpeg_to_png_conversion() {
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Png);
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Png));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Png)
+    );
 }
 
 #[test]
@@ -172,7 +238,10 @@ fn webp_to_gif_conversion() {
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Gif);
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Gif));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Gif)
+    );
 }
 
 #[test]
@@ -185,7 +254,10 @@ fn heic_to_jpeg_conversion() {
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Jpeg);
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Jpeg));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Jpeg)
+    );
 }
 
 #[test]
@@ -198,7 +270,10 @@ fn png_to_heic_conversion() {
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(r.format_out, squish_core::Format::Heic);
     let bytes = fs::read(&r.output_path).unwrap();
-    assert_eq!(squish_core::detect_format(&r.output_path, &bytes), Some(squish_core::Format::Heic));
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Heic)
+    );
 }
 
 #[test]
@@ -211,8 +286,51 @@ fn svg_cross_format_is_rejected_cleanly() {
     let err = squish_file(&input, &opts).unwrap_err();
     match err {
         squish_core::SquishError::UnsupportedFormat { reason, .. } => {
-            assert!(reason.to_lowercase().contains("svg"), "reason did not mention SVG: {reason}");
+            assert!(
+                reason.to_lowercase().contains("svg"),
+                "reason did not mention SVG: {reason}"
+            );
         }
         other => panic!("expected UnsupportedFormat, got: {other:?}"),
     }
+}
+
+#[test]
+fn animated_webp_roundtrips_unchanged() {
+    let (_tmp, input) = copy_fixture("anim.webp");
+    let original = fs::read(&input).unwrap();
+
+    let result = squish_file(&input, &SquishOptions::default()).unwrap();
+
+    let output = fs::read(&result.output_path).unwrap();
+    assert_eq!(
+        output, original,
+        "animated WebP must pass through unchanged"
+    );
+    assert!(
+        result
+            .output_path
+            .to_string_lossy()
+            .ends_with("_squished.webp"),
+        "output path: {}",
+        result.output_path.display()
+    );
+    assert!(result.warnings.is_empty());
+}
+
+#[test]
+fn animated_webp_with_resize_produces_warning() {
+    let (_tmp, input) = copy_fixture("anim.webp");
+    let original = fs::read(&input).unwrap();
+
+    let opts = SquishOptions {
+        max_width: Some(100),
+        ..Default::default()
+    };
+    let result = squish_file(&input, &opts).unwrap();
+
+    let output = fs::read(&result.output_path).unwrap();
+    assert_eq!(output, original, "resize must not modify animated WebP");
+    assert_eq!(result.warnings.len(), 1);
+    assert!(result.warnings[0].contains("cannot be resized"));
 }

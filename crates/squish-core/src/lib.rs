@@ -43,17 +43,23 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
     };
 
     // If resize is requested and format supports it, decode → resize → encode.
-    // SVG is skipped (vector). For same-format paths that normally skip decode,
-    // resize forces the decode → resize → encode path.
-    let output_bytes = if opts.needs_resize() && format_in != Format::Svg {
-        let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
-        if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
-            img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
-        }
-        dispatch_encode_raster(format_out, &img, opts, input)?
-    } else {
-        dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
-    };
+    // SVG is skipped (vector). Animated WebP is also skipped — the webp codec
+    // cannot resize animations; webp::compress emits a warning and passes through.
+    // For same-format paths that normally skip decode, resize forces the
+    // decode → resize → encode path.
+    let is_animated_webp =
+        format_in == Format::Webp && formats::webp::is_animated_webp(&input_bytes_vec);
+    let (output_bytes, warnings) =
+        if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
+            let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
+            if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
+                img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+            }
+            let bytes = dispatch_encode_raster(format_out, &img, opts, input)?;
+            (bytes, Vec::new())
+        } else {
+            dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
+        };
 
     let target_ext = if format_in == format_out {
         input
@@ -78,6 +84,7 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
         format_in,
         format_out,
         duration: start.elapsed(),
+        warnings,
     })
 }
 
@@ -87,7 +94,7 @@ fn dispatch_compress_with_conversion(
     input: &[u8],
     opts: &SquishOptions,
     path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
     // Same-format fast path: route to the native single-format compressor, which
     // can use format-specific decoders (e.g. mozjpeg) and preserve features like
     // animated-GIF frames.
@@ -98,7 +105,7 @@ fn dispatch_compress_with_conversion(
     // TIFF → JPEG is the documented default when TIFF is input without override.
     // Keep the existing direct path so we don't double-decode.
     if format_in == Format::Tiff && format_out == Format::Jpeg {
-        return formats::tiff::compress_as_jpeg(input, opts, path);
+        return formats::tiff::compress_as_jpeg(input, opts, path).map(|b| (b, Vec::new()));
     }
 
     // SVG cannot be rasterized here (no renderer linked), and no raster source
@@ -118,7 +125,7 @@ fn dispatch_compress_with_conversion(
     // Generic cross-format path: decode source to a DynamicImage, then hand
     // off to the target encoder's raster entry point.
     let img = decode_to_dynamic_image(format_in, input, path)?;
-    dispatch_encode_raster(format_out, &img, opts, path)
+    dispatch_encode_raster(format_out, &img, opts, path).map(|b| (b, Vec::new()))
 }
 
 fn dispatch_same_format(
@@ -126,16 +133,16 @@ fn dispatch_same_format(
     input: &[u8],
     opts: &SquishOptions,
     path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
     match format {
-        Format::Png => formats::png::compress(input, opts, path),
-        Format::Jpeg => formats::jpeg::compress(input, opts, path),
+        Format::Png => formats::png::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Jpeg => formats::jpeg::compress(input, opts, path).map(|b| (b, Vec::new())),
         Format::Webp => formats::webp::compress(input, opts, path),
-        Format::Avif => formats::avif::compress(input, opts, path),
-        Format::Svg => formats::svg::compress(input, opts, path),
-        Format::Gif => formats::gif::compress(input, opts, path),
-        Format::Heic => formats::heic::compress(input, opts, path),
-        Format::Tiff => formats::tiff::compress(input, opts, path),
+        Format::Avif => formats::avif::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Svg => formats::svg::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Gif => formats::gif::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Heic => formats::heic::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Tiff => formats::tiff::compress(input, opts, path).map(|b| (b, Vec::new())),
     }
 }
 

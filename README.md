@@ -120,7 +120,7 @@ Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TI
 |---|---|
 | PNG | `oxipng` + `imagequant` |
 | JPEG | `mozjpeg` (progressive, optimized Huffman) |
-| WebP | `libwebp` |
+| WebP | `libwebp` (static); animated WebP copies through unchanged |
 | AVIF | `ravif` (encode) + `dav1d` (decode) |
 | SVG | `usvg` (compact serialization) |
 | GIF (static + animated) | `gifsicle -O3` |
