@@ -275,13 +275,25 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
             if !cfg.quiet && cfg.verbose {
                 match &res {
-                    Ok(r) => eprintln!(
-                        "[{n}/{total}] {} → {} ({:.1}% saved)",
-                        path.display(),
-                        r.output_path.display(),
-                        r.reduction_percent()
-                    ),
+                    Ok(r) => {
+                        eprintln!(
+                            "[{n}/{total}] {} → {} ({:.1}% saved)",
+                            path.display(),
+                            r.output_path.display(),
+                            r.reduction_percent()
+                        );
+                        for w in &r.warnings {
+                            eprintln!("  WARNING: {w}");
+                        }
+                    }
                     Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
+                }
+            }
+            if !cfg.quiet && !cfg.verbose {
+                if let Ok(r) = &res {
+                    for w in &r.warnings {
+                        eprintln!("WARNING: {w}");
+                    }
                 }
             }
             if let Some(pb) = &progress {
