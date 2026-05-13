@@ -132,7 +132,7 @@ fn dispatch_same_format(
     match format {
         Format::Png => formats::png::compress(input, opts, path).map(|b| (b, Vec::new())),
         Format::Jpeg => formats::jpeg::compress(input, opts, path).map(|b| (b, Vec::new())),
-        Format::Webp => formats::webp::compress(input, opts, path).map(|b| (b, Vec::new())),
+        Format::Webp => formats::webp::compress(input, opts, path),
         Format::Avif => formats::avif::compress(input, opts, path).map(|b| (b, Vec::new())),
         Format::Svg => formats::svg::compress(input, opts, path).map(|b| (b, Vec::new())),
         Format::Gif => formats::gif::compress(input, opts, path).map(|b| (b, Vec::new())),

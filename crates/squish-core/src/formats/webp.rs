@@ -3,14 +3,29 @@ use crate::options::SquishOptions;
 use image::{DynamicImage, GenericImageView};
 use std::path::Path;
 
-/// Static WebP compression. NOTE: does not preserve animated WebP animation
-/// (it would produce a single-frame output). Animated-WebP support is planned
-/// as follow-up work.
+/// Compress a WebP file. Animated WebPs are passed through unchanged
+/// (the current encoder doesn't support animation). Static WebPs are
+/// decoded and re-encoded with `encode_raster`.
+///
+/// Returns `(bytes, warnings)`. Warnings surface when the caller passed
+/// flags we can't honor on an animated input (currently `--max-width` /
+/// `--max-height`).
 pub fn compress(
     input: &[u8],
     opts: &SquishOptions,
     path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
+    if is_animated_webp(input) {
+        let mut warnings = Vec::new();
+        if opts.max_width.is_some() || opts.max_height.is_some() {
+            warnings.push(format!(
+                "{}: animated WebP cannot be resized; passing through unchanged",
+                path.display()
+            ));
+        }
+        return Ok((input.to_vec(), warnings));
+    }
+
     // Decode whatever raster the caller gave us (could be WebP, PNG, JPEG, etc.
     // since this may be reached via --format conversion).
     let img = image::load_from_memory(input).map_err(|e| SquishError::DecodeFailed {
@@ -18,7 +33,7 @@ pub fn compress(
         source: Box::new(e),
     })?;
 
-    encode_raster(&img, opts, path)
+    encode_raster(&img, opts, path).map(|b| (b, Vec::new()))
 }
 
 /// Encode an already-decoded raster as WebP.
@@ -115,5 +130,63 @@ mod tests {
         let png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0,
                    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         assert!(!is_animated_webp(&png));
+    }
+
+    use crate::options::SquishOptions;
+    use std::path::PathBuf;
+
+    fn anim_fixture() -> Vec<u8> {
+        std::fs::read("tests/fixtures/anim.webp").expect("fixture missing")
+    }
+
+    #[test]
+    fn compress_passes_animated_through_unchanged() {
+        let input = anim_fixture();
+        let (bytes, warnings) =
+            compress(&input, &SquishOptions::default(), &PathBuf::from("anim.webp")).unwrap();
+        assert_eq!(bytes, input, "animated WebP should pass through byte-for-byte");
+        assert!(warnings.is_empty(), "no flags conflict; no warnings expected");
+    }
+
+    #[test]
+    fn compress_emits_warning_with_max_width_on_animated() {
+        let input = anim_fixture();
+        let opts = SquishOptions {
+            max_width: Some(100),
+            ..Default::default()
+        };
+        let (bytes, warnings) = compress(&input, &opts, &PathBuf::from("anim.webp")).unwrap();
+        assert_eq!(bytes, input);
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].contains("cannot be resized"),
+            "warning text: {}",
+            warnings[0]
+        );
+    }
+
+    #[test]
+    fn compress_emits_warning_with_max_height_on_animated() {
+        let input = anim_fixture();
+        let opts = SquishOptions {
+            max_height: Some(100),
+            ..Default::default()
+        };
+        let (bytes, warnings) = compress(&input, &opts, &PathBuf::from("anim.webp")).unwrap();
+        assert_eq!(bytes, input);
+        assert_eq!(warnings.len(), 1);
+    }
+
+    #[test]
+    fn compress_emits_single_warning_with_both_max_dims() {
+        let input = anim_fixture();
+        let opts = SquishOptions {
+            max_width: Some(100),
+            max_height: Some(100),
+            ..Default::default()
+        };
+        let (bytes, warnings) = compress(&input, &opts, &PathBuf::from("anim.webp")).unwrap();
+        assert_eq!(bytes, input);
+        assert_eq!(warnings.len(), 1, "both flags should produce one warning, not two");
     }
 }
