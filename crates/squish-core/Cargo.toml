@@ -10,6 +10,7 @@ readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
 description = "Core image compression library for squish"
+exclude = ["tests/**"]
 
 [dependencies]
 thiserror.workspace = true
