@@ -240,10 +240,6 @@ cargo build --release   # optimized binary
 
 Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/squish-video/tests/fixtures/` (videos). See the README in each for sources.
 
-## Roadmap
-
-- Smart auto-format selection
-
 ## License
 
 MIT.
