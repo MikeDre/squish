@@ -242,7 +242,6 @@ Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/s
 
 ## Roadmap
 
-- Animated WebP preservation
 - Smart auto-format selection
 
 ## License
