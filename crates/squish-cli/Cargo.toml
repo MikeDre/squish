@@ -1,5 +1,5 @@
 [package]
-name = "squish-cli"
+name = "squish-media-cli"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,7 +9,7 @@ homepage.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Image compression CLI"
+description = "Local media compression & conversion CLI"
 
 [[bin]]
 name = "squish"

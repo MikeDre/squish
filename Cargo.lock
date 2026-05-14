@@ -3286,25 +3286,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "squish-cli"
-version = "0.3.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "humantime",
- "indicatif",
- "predicates",
- "rayon",
- "squish-audio",
- "squish-code",
- "squish-core",
- "squish-video",
- "tempfile",
- "walkdir",
-]
-
-[[package]]
 name = "squish-code"
 version = "0.3.0"
 dependencies = [
@@ -3339,6 +3320,25 @@ dependencies = [
  "thiserror 1.0.69",
  "usvg",
  "webp",
+]
+
+[[package]]
+name = "squish-media-cli"
+version = "0.3.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "humantime",
+ "indicatif",
+ "predicates",
+ "rayon",
+ "squish-audio",
+ "squish-code",
+ "squish-core",
+ "squish-video",
+ "tempfile",
+ "walkdir",
 ]
 
 [[package]]
