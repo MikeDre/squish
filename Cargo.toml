@@ -27,6 +27,11 @@ squish-video = { version = "0.3.1", path = "crates/squish-video" }
 squish-audio = { version = "0.3.1", path = "crates/squish-audio" }
 squish-code = { version = "0.3.1", path = "crates/squish-code" }
 
+# Release profile used by cargo-dist when building installers/binaries.
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
 # Config for 'dist'
 [workspace.metadata.dist]
 # The preferred dist version to use in CI (Conditions for На script generation)
