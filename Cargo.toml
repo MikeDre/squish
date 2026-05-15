@@ -50,3 +50,12 @@ pr-run-mode = "skip"
 create-release = true
 # Dispatch on manual trigger too
 dispatch-releases = true
+
+# System libraries the build needs on macOS runners. Mirrors scripts/setup.sh.
+[workspace.metadata.dist.dependencies.homebrew]
+dav1d = "*"
+libheif = "*"
+x265 = "*"
+gifsicle = "*"
+ffmpeg = "*"
+pkg-config = "*"
