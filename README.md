@@ -7,7 +7,7 @@ Super fast local image & media compression on your machine. Takes files or direc
 ### Pre-built binary (macOS)
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MikeDre/squish/releases/latest/download/squish-cli-installer.sh | sh
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MikeDre/squish/releases/latest/download/squish-media-cli-installer.sh | sh
 ```
 
 This downloads the latest release for your architecture (Apple Silicon or Intel) and installs it to `~/.cargo/bin`.
