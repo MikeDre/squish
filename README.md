@@ -4,15 +4,15 @@ Super fast local image & media compression on your machine. Takes files or direc
 
 ## Install
 
-### Pre-built binary (macOS)
+### Install via cargo (recommended)
+
+If you have Rust installed (see step 1 below), the fastest path is:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -LsSf https://github.com/MikeDre/squish/releases/latest/download/squish-media-cli-installer.sh | sh
+cargo install squish-media-cli
 ```
 
-This downloads the latest release for your architecture (Apple Silicon or Intel) and installs it to `~/.cargo/bin`.
-
-After installing, you still need the system dependencies for full format support (see below).
+This compiles squish from crates.io and places the `squish` binary in `~/.cargo/bin`. You still need the system dependencies for full format support (see below).
 
 ### Build from source
 
