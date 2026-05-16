@@ -51,10 +51,16 @@ create-release = true
 # Dispatch on manual trigger too
 dispatch-releases = true
 
-# System libraries the build needs on macOS runners. Mirrors scripts/setup.sh.
+# System libraries the build needs on macOS runners. Mirrors scripts/setup.sh
+# plus libheif's transitive deps (libde265, aom, webp/libsharpyuv) so their
+# .pc files land on PKG_CONFIG_PATH (cargo-dist only wires explicitly listed
+# formulas, not transitive ones).
 [workspace.metadata.dist.dependencies.homebrew]
 dav1d = "*"
 libheif = "*"
+libde265 = "*"
+aom = "*"
+webp = "*"
 x265 = "*"
 gifsicle = "*"
 ffmpeg = "*"
