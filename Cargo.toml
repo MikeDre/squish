@@ -6,6 +6,7 @@ members = [
     "crates/squish-video",
     "crates/squish-audio",
     "crates/squish-code",
+    "crates/squish-media",
 ]
 
 [workspace.package]
@@ -26,3 +27,4 @@ squish-core = { version = "0.3.1", path = "crates/squish-core" }
 squish-video = { version = "0.3.1", path = "crates/squish-video" }
 squish-audio = { version = "0.3.1", path = "crates/squish-audio" }
 squish-code = { version = "0.3.1", path = "crates/squish-code" }
+squish-media = { version = "0.3.1", path = "crates/squish-media" }
