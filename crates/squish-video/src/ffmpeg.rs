@@ -1,66 +1,40 @@
-//! ffmpeg binary detection, command building, and execution.
+//! Codec-specific argv construction. Delegates execution to squish-media.
 
-use crate::error::VideoError;
 use crate::options::{VideoCodec, VideoOptions};
+use crate::VideoError;
+use std::ffi::OsString;
 use std::path::Path;
-use std::process::Command;
 
-/// Check that ffmpeg is available on PATH.
-pub fn check_ffmpeg() -> Result<(), VideoError> {
-    match Command::new("ffmpeg").arg("-version").output() {
-        Ok(output) if output.status.success() => Ok(()),
-        _ => Err(VideoError::MissingDependency {
-            name: "ffmpeg".into(),
-            install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
-        }),
-    }
-}
-
-/// Build and run an ffmpeg command to compress `input` to `output`.
-pub fn run_ffmpeg(
-    input: &Path,
-    output: &Path,
-    opts: &VideoOptions,
-) -> Result<(), VideoError> {
-    let mut cmd = Command::new("ffmpeg");
-
-    // Overwrite output without asking
-    cmd.arg("-y");
-
-    // Input file
-    cmd.arg("-i").arg(input);
-
-    // Derive codec using the output container extension so we always pick a
-    // compatible default (e.g. VP9 for WebM, H.265 for everything else).
-    let out_ext = output
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+/// Build the codec-specific portion of an ffmpeg argv. Returns the full argv
+/// after `ffmpeg -y -i <input>` and before `<output>`.
+pub fn build_codec_args(out_ext: &str, opts: &VideoOptions) -> Vec<OsString> {
+    let mut args: Vec<OsString> = Vec::new();
     let codec = opts.effective_codec_for_ext(out_ext);
 
     if codec == VideoCodec::Copy {
-        // Fast passthrough: copy all streams
-        cmd.arg("-c").arg("copy");
+        args.push("-c".into());
+        args.push("copy".into());
     } else {
-        // Video codec
-        cmd.arg("-c:v").arg(codec.ffmpeg_encoder());
+        args.push("-c:v".into());
+        args.push(codec.ffmpeg_encoder().into());
 
-        // CRF quality
         if let Some(crf) = opts.effective_crf_for_codec(codec) {
-            cmd.arg("-crf").arg(crf.to_string());
+            args.push("-crf".into());
+            args.push(crf.to_string().into());
         }
 
-        // Codec-specific rate-control / preset arguments
         match codec {
             VideoCodec::H264 | VideoCodec::H265 => {
-                cmd.arg("-preset").arg("medium");
+                args.push("-preset".into());
+                args.push("medium".into());
             }
             VideoCodec::AV1 => {
-                cmd.arg("-preset").arg("6");
+                args.push("-preset".into());
+                args.push("6".into());
             }
             VideoCodec::Vp9 => {
-                // VP9 CRF mode requires -b:v 0
-                cmd.arg("-b:v").arg("0");
+                args.push("-b:v".into());
+                args.push("0".into());
             }
             VideoCodec::Copy => unreachable!(),
         }
@@ -69,54 +43,89 @@ pub fn run_ffmpeg(
         // QuickTime/Safari/iOS refuse to decode. Force `hvc1` so the output
         // plays everywhere H.265 is supported.
         if codec == VideoCodec::H265 && matches!(out_ext, "mp4" | "m4v" | "mov") {
-            cmd.arg("-tag:v").arg("hvc1");
+            args.push("-tag:v".into());
+            args.push("hvc1".into());
         }
 
-        // Copy audio stream as-is
-        cmd.arg("-c:a").arg("copy");
-
-        // Copy subtitle streams
-        cmd.arg("-c:s").arg("copy");
+        args.push("-c:a".into());
+        args.push("copy".into());
+        args.push("-c:s".into());
+        args.push("copy".into());
     }
 
-    // Strip metadata
-    cmd.arg("-map_metadata").arg("-1");
+    args.push("-map_metadata".into());
+    args.push("-1".into());
 
-    // Output file
-    cmd.arg(output);
+    args
+}
 
-    let result = cmd.output().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            VideoError::MissingDependency {
-                name: "ffmpeg".into(),
-                install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
-            }
-        } else {
-            VideoError::Io(e)
-        }
-    })?;
-
-    if !result.status.success() {
-        // Clean up partial output
-        let _ = std::fs::remove_file(output);
-        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
-        return Err(VideoError::FfmpegFailed {
-            path: input.to_path_buf(),
-            stderr,
-        });
-    }
-
-    Ok(())
+/// Build and run an ffmpeg command to compress `input` to `output`.
+pub fn run_ffmpeg(
+    input: &Path,
+    output: &Path,
+    opts: &VideoOptions,
+) -> Result<(), VideoError> {
+    let out_ext = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    let args = build_codec_args(out_ext, opts);
+    squish_media::run_ffmpeg(input, output, &args)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::options::{VideoCodec, VideoOptions};
+
+    fn args(out_ext: &str, opts: VideoOptions) -> Vec<String> {
+        build_codec_args(out_ext, &opts)
+            .into_iter()
+            .map(|o| o.into_string().unwrap())
+            .collect()
+    }
 
     #[test]
-    fn check_ffmpeg_returns_ok_when_available() {
-        if Command::new("ffmpeg").arg("-version").output().is_ok() {
-            assert!(check_ffmpeg().is_ok());
-        }
+    fn h265_mp4_emits_hvc1_tag() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::H265),
+            ..Default::default()
+        };
+        let a = args("mp4", opts);
+        let pos = a.iter().position(|s| s == "-tag:v").expect("expected -tag:v");
+        assert_eq!(a[pos + 1], "hvc1");
+    }
+
+    #[test]
+    fn h264_does_not_emit_hvc1() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::H264),
+            ..Default::default()
+        };
+        let a = args("mp4", opts);
+        assert!(!a.contains(&"-tag:v".to_string()));
+    }
+
+    #[test]
+    fn copy_codec_only_emits_c_copy() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::Copy),
+            ..Default::default()
+        };
+        let a = args("mp4", opts);
+        assert!(a.contains(&"-c".to_string()));
+        assert!(a.contains(&"copy".to_string()));
+        assert!(!a.contains(&"-c:v".to_string()));
+    }
+
+    #[test]
+    fn vp9_emits_bv_zero() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::Vp9),
+            ..Default::default()
+        };
+        let a = args("webm", opts);
+        let pos = a.iter().position(|s| s == "-b:v").expect("expected -b:v");
+        assert_eq!(a[pos + 1], "0");
     }
 }

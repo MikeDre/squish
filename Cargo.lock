@@ -3354,6 +3354,7 @@ name = "squish-video"
 version = "0.3.1"
 dependencies = [
  "squish-core",
+ "squish-media",
  "tempfile",
  "thiserror 1.0.69",
 ]

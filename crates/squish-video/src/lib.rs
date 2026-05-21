@@ -1,12 +1,11 @@
 //! Video compression library for squish (ffmpeg-backed).
 
-pub mod error;
 pub mod ffmpeg;
 pub mod format;
 pub mod options;
 pub mod result;
 
-pub use error::VideoError;
+pub use squish_media::MediaError as VideoError;
 pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
 pub use result::VideoResult;
@@ -22,7 +21,7 @@ pub fn squish_video(
     input: &Path,
     opts: &VideoOptions,
 ) -> Result<VideoResult, VideoError> {
-    ffmpeg::check_ffmpeg()?;
+    squish_media::check_ffmpeg()?;
 
     let start = Instant::now();
     let input_bytes = std::fs::metadata(input)?.len();
