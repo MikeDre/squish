@@ -2,3 +2,5 @@
 
 pub mod error;
 pub mod ffmpeg;
+
+pub use error::MediaError;
