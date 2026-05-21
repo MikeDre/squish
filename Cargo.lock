@@ -3283,7 +3283,6 @@ dependencies = [
  "squish-core",
  "squish-media",
  "tempfile",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3357,7 +3356,6 @@ dependencies = [
  "squish-core",
  "squish-media",
  "tempfile",
- "thiserror 1.0.69",
 ]
 
 [[package]]
