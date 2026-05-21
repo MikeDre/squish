@@ -13,6 +13,7 @@ description = "Audio compression library for squish (ffmpeg-backed)"
 
 [dependencies]
 squish-core = { workspace = true }
+squish-media = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
