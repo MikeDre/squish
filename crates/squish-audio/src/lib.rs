@@ -1,12 +1,11 @@
 //! Audio compression library for squish (ffmpeg-backed).
 
-pub mod error;
 pub mod ffmpeg;
 pub mod format;
 pub mod options;
 pub mod result;
 
-pub use error::AudioError;
+pub use squish_media::MediaError as AudioError;
 pub use ffmpeg::ProbeKind;
 pub use format::{detect_audio_format, detect_audio_from_bytes, AudioFormat};
 pub use options::{AudioCodec, AudioOptions};
@@ -20,7 +19,7 @@ use std::time::Instant;
 ///
 /// On error, any partial output file is cleaned up.
 pub fn squish_audio(input: &Path, opts: &AudioOptions) -> Result<AudioResult, AudioError> {
-    ffmpeg::check_ffmpeg()?;
+    squish_media::check_ffmpeg()?;
     ffmpeg::check_ffprobe()?;
 
     let start = Instant::now();

@@ -1,5 +1,5 @@
 [package]
-name = "squish-audio"
+name = "squish-media"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,11 +9,10 @@ homepage.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Audio compression library for squish (ffmpeg-backed)"
+description = "Shared ffmpeg plumbing for squish-video and squish-audio"
 
 [dependencies]
-squish-core = { workspace = true }
-squish-media = { workspace = true }
+thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

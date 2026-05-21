@@ -1,20 +1,9 @@
 //! ffmpeg/ffprobe binary detection, command building, and execution.
 
-use crate::error::AudioError;
+use crate::AudioError;
 use crate::options::AudioCodec;
 use std::path::Path;
 use std::process::Command;
-
-/// Check that ffmpeg is available on PATH.
-pub fn check_ffmpeg() -> Result<(), AudioError> {
-    match Command::new("ffmpeg").arg("-version").output() {
-        Ok(output) if output.status.success() => Ok(()),
-        _ => Err(AudioError::MissingDependency {
-            name: "ffmpeg".into(),
-            install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
-        }),
-    }
-}
 
 /// Check that ffprobe is available on PATH.
 pub fn check_ffprobe() -> Result<(), AudioError> {
@@ -237,37 +226,11 @@ pub fn run_ffmpeg(
     codec: AudioCodec,
     has_attached_picture: bool,
 ) -> Result<(), AudioError> {
-    let mut cmd = Command::new("ffmpeg");
-    cmd.arg("-y");
-    cmd.arg("-i").arg(input);
-
-    for arg in build_codec_args(opts, codec, has_attached_picture) {
-        cmd.arg(arg);
-    }
-
-    cmd.arg(output);
-
-    let result = cmd.output().map_err(|e| {
-        if e.kind() == std::io::ErrorKind::NotFound {
-            AudioError::MissingDependency {
-                name: "ffmpeg".into(),
-                install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
-            }
-        } else {
-            AudioError::Io(e)
-        }
-    })?;
-
-    if !result.status.success() {
-        let _ = std::fs::remove_file(output);
-        let stderr = String::from_utf8_lossy(&result.stderr).to_string();
-        return Err(AudioError::FfmpegFailed {
-            path: input.to_path_buf(),
-            stderr,
-        });
-    }
-
-    Ok(())
+    let args: Vec<std::ffi::OsString> = build_codec_args(opts, codec, has_attached_picture)
+        .into_iter()
+        .map(std::ffi::OsString::from)
+        .collect();
+    squish_media::run_ffmpeg(input, output, &args)
 }
 
 /// Detect whether the file has an attached picture (album art) stream.
@@ -311,13 +274,6 @@ pub fn ffprobe_has_attached_picture(path: &Path) -> Result<bool, AudioError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn check_ffmpeg_returns_ok_when_available() {
-        if Command::new("ffmpeg").arg("-version").output().is_ok() {
-            assert!(check_ffmpeg().is_ok());
-        }
-    }
 
     #[test]
     fn check_ffprobe_returns_ok_when_available() {

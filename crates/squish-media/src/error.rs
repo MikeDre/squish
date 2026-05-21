@@ -2,8 +2,8 @@ use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-pub enum AudioError {
-    #[error("unsupported audio format at {path}: {reason}")]
+pub enum MediaError {
+    #[error("unsupported format at {path}: {reason}")]
     UnsupportedFormat { path: PathBuf, reason: String },
 
     #[error("ffmpeg failed for {path}: {stderr}")]
@@ -28,29 +28,29 @@ mod tests {
 
     #[test]
     fn display_unsupported_format() {
-        let e = AudioError::UnsupportedFormat {
-            path: PathBuf::from("/a.xyz"),
-            reason: "not audio".into(),
+        let e = MediaError::UnsupportedFormat {
+            path: PathBuf::from("/a.rar"),
+            reason: "not a media file".into(),
         };
         let s = format!("{e}");
-        assert!(s.contains("/a.xyz"));
-        assert!(s.contains("not audio"));
+        assert!(s.contains("/a.rar"));
+        assert!(s.contains("not a media file"));
     }
 
     #[test]
     fn display_ffmpeg_failed() {
-        let e = AudioError::FfmpegFailed {
-            path: PathBuf::from("/a.mp3"),
-            stderr: "no encoder".into(),
+        let e = MediaError::FfmpegFailed {
+            path: PathBuf::from("/a.mp4"),
+            stderr: "codec not found".into(),
         };
         let s = format!("{e}");
-        assert!(s.contains("/a.mp3"));
-        assert!(s.contains("no encoder"));
+        assert!(s.contains("/a.mp4"));
+        assert!(s.contains("codec not found"));
     }
 
     #[test]
     fn display_missing_dependency() {
-        let e = AudioError::MissingDependency {
+        let e = MediaError::MissingDependency {
             name: "ffmpeg".into(),
             install_hint: "brew install ffmpeg".into(),
         };
@@ -61,7 +61,7 @@ mod tests {
 
     #[test]
     fn display_invalid_option() {
-        let e = AudioError::InvalidOption {
+        let e = MediaError::InvalidOption {
             reason: "--bitrate not allowed with FLAC".into(),
         };
         let s = format!("{e}");
@@ -70,7 +70,7 @@ mod tests {
 
     #[test]
     fn display_not_audio() {
-        let e = AudioError::NotAudio {
+        let e = MediaError::NotAudio {
             path: PathBuf::from("/movie.mp4"),
         };
         let s = format!("{e}");
@@ -81,7 +81,7 @@ mod tests {
     #[test]
     fn from_io_error() {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "x");
-        let e: AudioError = io_err.into();
-        assert!(matches!(e, AudioError::Io(_)));
+        let e: MediaError = io_err.into();
+        assert!(matches!(e, MediaError::Io(_)));
     }
 }

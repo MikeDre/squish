@@ -3281,8 +3281,8 @@ name = "squish-audio"
 version = "0.3.1"
 dependencies = [
  "squish-core",
+ "squish-media",
  "tempfile",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3323,6 +3323,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "squish-media"
+version = "0.3.1"
+dependencies = [
+ "tempfile",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "squish-media-cli"
 version = "0.3.1"
 dependencies = [
@@ -3346,8 +3354,8 @@ name = "squish-video"
 version = "0.3.1"
 dependencies = [
  "squish-core",
+ "squish-media",
  "tempfile",
- "thiserror 1.0.69",
 ]
 
 [[package]]
