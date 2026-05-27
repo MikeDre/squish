@@ -227,16 +227,16 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
 
     if cfg.dry_run {
         for p in &image_files {
-            println!("would squish (image): {}", p.display());
+            println!("{}", dry_run_action(cfg.overwrite, "image", p));
         }
         for p in &video_files {
-            println!("would squish (video): {}", p.display());
+            println!("{}", dry_run_action(cfg.overwrite, "video", p));
         }
         for p in &audio_files {
-            println!("would squish (audio): {}", p.display());
+            println!("{}", dry_run_action(cfg.overwrite, "audio", p));
         }
         for p in &code_files {
-            println!("would squish (code): {}", p.display());
+            println!("{}", dry_run_action(cfg.overwrite, "code", p));
         }
         for p in &skipped_unknown {
             println!("would skip (unrecognized): {}", p.display());
@@ -469,6 +469,15 @@ fn fast_override_note(fast: bool, format_in: VideoFormat, format_out: VideoForma
         ))
     } else {
         None
+    }
+}
+
+/// Dry-run line for a planned file action, reflecting overwrite mode.
+fn dry_run_action(overwrite: bool, kind: &str, path: &std::path::Path) -> String {
+    if overwrite {
+        format!("would overwrite in place ({kind}): {}", path.display())
+    } else {
+        format!("would squish ({kind}): {}", path.display())
     }
 }
 
@@ -719,6 +728,25 @@ mod source_map_validation_tests {
     fn source_map_on_with_mixed_html_and_js_passes() {
         let files = vec![PathBuf::from("page.html"), PathBuf::from("a.js")];
         assert!(validate_source_map(true, &files).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod dry_run_tests {
+    use super::*;
+
+    #[test]
+    fn dry_run_action_reflects_overwrite() {
+        use std::path::Path;
+        let p = Path::new("/dir/a.mp4");
+        assert_eq!(
+            dry_run_action(false, "video", p),
+            "would squish (video): /dir/a.mp4"
+        );
+        assert_eq!(
+            dry_run_action(true, "video", p),
+            "would overwrite in place (video): /dir/a.mp4"
+        );
     }
 }
 
