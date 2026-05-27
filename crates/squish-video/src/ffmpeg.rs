@@ -7,9 +7,9 @@ use std::path::Path;
 
 /// Build the codec-specific portion of an ffmpeg argv. Returns the full argv
 /// after `ffmpeg -y -i <input>` and before `<output>`.
-pub fn build_codec_args(out_ext: &str, opts: &VideoOptions) -> Vec<OsString> {
+pub fn build_codec_args(out_ext: &str, opts: &VideoOptions, force_reencode: bool) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
-    let codec = opts.effective_codec_for_ext(out_ext);
+    let codec = opts.effective_codec_for_ext_reencode(out_ext, force_reencode);
 
     if codec == VideoCodec::Copy {
         args.push("-c".into());
@@ -64,12 +64,13 @@ pub fn run_ffmpeg(
     input: &Path,
     output: &Path,
     opts: &VideoOptions,
+    force_reencode: bool,
 ) -> Result<(), VideoError> {
     let out_ext = output
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("");
-    let args = build_codec_args(out_ext, opts);
+    let args = build_codec_args(out_ext, opts, force_reencode);
     squish_media::run_ffmpeg(input, output, &args)
 }
 
@@ -79,10 +80,22 @@ mod tests {
     use crate::options::{VideoCodec, VideoOptions};
 
     fn args(out_ext: &str, opts: VideoOptions) -> Vec<String> {
-        build_codec_args(out_ext, &opts)
+        build_codec_args(out_ext, &opts, false)
             .into_iter()
             .map(|o| o.into_string().unwrap())
             .collect()
+    }
+
+    #[test]
+    fn force_reencode_replaces_fast_copy() {
+        let opts = VideoOptions { fast: true, ..Default::default() };
+        let a: Vec<String> = build_codec_args("mp4", &opts, true)
+            .into_iter()
+            .map(|o| o.into_string().unwrap())
+            .collect();
+        assert!(a.contains(&"-c:v".to_string()));
+        assert!(a.contains(&"libx265".to_string()));
+        assert!(!a.windows(2).any(|w| w == ["-c", "copy"]));
     }
 
     #[test]

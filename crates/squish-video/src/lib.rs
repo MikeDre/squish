@@ -14,6 +14,22 @@ use squish_core::derive_output_path_with_suffix;
 use std::path::Path;
 use std::time::Instant;
 
+/// Choose the output file extension. When the output format equals the input
+/// (the common case), preserve the caller's exact extension (e.g. `m4v` stays
+/// `m4v`). For transcode-only inputs (output format differs, e.g. DV→MP4), use
+/// the target format's canonical extension.
+fn resolve_output_ext(input: &Path, format_in: VideoFormat, format_out: VideoFormat) -> String {
+    if format_out == format_in {
+        input
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|s| s.to_ascii_lowercase())
+            .unwrap_or_else(|| format_out.extension().to_string())
+    } else {
+        format_out.extension().to_string()
+    }
+}
+
 /// Compress a single video file. Shells out to system ffmpeg.
 ///
 /// On error, any partial output file is cleaned up.
@@ -31,18 +47,14 @@ pub fn squish_video(
         reason: "could not identify video format from extension or magic bytes".into(),
     })?;
 
-    let format_out = format_in;
-
-    let ext = input
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|s| s.to_ascii_lowercase())
-        .unwrap_or_else(|| format_out.extension().to_string());
+    let format_out = format_in.output_format();
+    let ext = resolve_output_ext(input, format_in, format_out);
 
     let suffix = opts.suffix.as_deref().unwrap_or("squished");
     let output_path = derive_output_path_with_suffix(input, &ext, opts.force_overwrite, suffix);
 
-    ffmpeg::run_ffmpeg(input, &output_path, opts)?;
+    let force_reencode = format_out != format_in;
+    ffmpeg::run_ffmpeg(input, &output_path, opts, force_reencode)?;
 
     let output_bytes = std::fs::metadata(&output_path)?.len();
 
@@ -88,5 +100,18 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, VideoError::Io(_) | VideoError::MissingDependency { .. }));
+    }
+
+    #[test]
+    fn output_ext_preserves_input_when_no_remap() {
+        // m4v parses to Mp4 but the caller's exact extension is preserved.
+        let p = Path::new("clip.m4v");
+        assert_eq!(resolve_output_ext(p, VideoFormat::Mp4, VideoFormat::Mp4), "m4v");
+    }
+
+    #[test]
+    fn output_ext_uses_target_when_remapped() {
+        let p = Path::new("clip.dv");
+        assert_eq!(resolve_output_ext(p, VideoFormat::Dv, VideoFormat::Mp4), "mp4");
     }
 }

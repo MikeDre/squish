@@ -44,6 +44,15 @@ impl VideoCodec {
     }
 }
 
+/// Default codec for a container when no explicit codec is chosen.
+/// WebM only allows VP8/VP9/AV1; everything else defaults to H.265.
+fn container_default_codec(ext: &str) -> VideoCodec {
+    match ext.to_ascii_lowercase().as_str() {
+        "webm" => VideoCodec::Vp9,
+        _ => VideoCodec::H265,
+    }
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct VideoOptions {
     pub quality: Option<u8>,
@@ -71,10 +80,19 @@ impl VideoOptions {
         if let Some(c) = self.codec {
             return c;
         }
-        match ext.to_ascii_lowercase().as_str() {
-            "webm" => VideoCodec::Vp9,
-            _ => VideoCodec::H265,
+        container_default_codec(ext)
+    }
+
+    /// Like `effective_codec_for_ext`, but when the input must be transcoded
+    /// (`force_reencode`), a `Copy` selection is invalid — the source stream
+    /// cannot be muxed into the target container — so fall back to the
+    /// container default codec instead.
+    pub fn effective_codec_for_ext_reencode(&self, ext: &str, force_reencode: bool) -> VideoCodec {
+        let codec = self.effective_codec_for_ext(ext);
+        if force_reencode && codec == VideoCodec::Copy {
+            return container_default_codec(ext);
         }
+        codec
     }
 
     pub fn effective_crf(&self) -> Option<u8> {
@@ -210,5 +228,32 @@ mod tests {
         assert_eq!(VideoCodec::AV1.ffmpeg_encoder(), "libsvtav1");
         assert_eq!(VideoCodec::Vp9.ffmpeg_encoder(), "libvpx-vp9");
         assert_eq!(VideoCodec::Copy.ffmpeg_encoder(), "copy");
+    }
+
+    #[test]
+    fn reencode_overrides_fast_copy_to_default() {
+        // --fast normally forces Copy; for a forced re-encode that's invalid.
+        let o = VideoOptions { fast: true, ..Default::default() };
+        assert_eq!(o.effective_codec_for_ext(""), VideoCodec::Copy);
+        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::H265);
+        assert_eq!(o.effective_codec_for_ext_reencode("webm", true), VideoCodec::Vp9);
+    }
+
+    #[test]
+    fn reencode_overrides_explicit_copy() {
+        let o = VideoOptions { codec: Some(VideoCodec::Copy), ..Default::default() };
+        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::H265);
+    }
+
+    #[test]
+    fn reencode_false_preserves_normal_selection() {
+        let o = VideoOptions { fast: true, ..Default::default() };
+        assert_eq!(o.effective_codec_for_ext_reencode("mp4", false), VideoCodec::Copy);
+    }
+
+    #[test]
+    fn reencode_does_not_override_real_codec() {
+        let o = VideoOptions { codec: Some(VideoCodec::AV1), ..Default::default() };
+        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::AV1);
     }
 }

@@ -8,6 +8,7 @@ pub enum VideoFormat {
     Avi,
     Mkv,
     Flv,
+    Dv,
 }
 
 impl VideoFormat {
@@ -19,6 +20,7 @@ impl VideoFormat {
             VideoFormat::Avi => "avi",
             VideoFormat::Mkv => "mkv",
             VideoFormat::Flv => "flv",
+            VideoFormat::Dv => "dv",
         }
     }
 
@@ -30,7 +32,18 @@ impl VideoFormat {
             "avi" => Some(VideoFormat::Avi),
             "mkv" => Some(VideoFormat::Mkv),
             "flv" => Some(VideoFormat::Flv),
+            "dv" | "dif" => Some(VideoFormat::Dv),
             _ => None,
+        }
+    }
+
+    /// The container/format squish actually writes for this input.
+    /// For most formats this is the format itself (output == input). DV is a
+    /// legacy, fixed-bitrate format and is transcode-only: it always targets MP4.
+    pub fn output_format(&self) -> VideoFormat {
+        match self {
+            VideoFormat::Dv => VideoFormat::Mp4,
+            other => *other,
         }
     }
 }
@@ -65,6 +78,9 @@ fn read_head(path: &Path) -> Option<Vec<u8>> {
     Some(head)
 }
 
+// Note: raw DV (.dv/.dif) is detected by extension only — its DIF-block header
+// is too weak a signature to match safely here. DV inside AVI/MOV is covered by
+// the RIFF/ftyp branches below.
 fn detect_video_by_magic(head: &[u8]) -> Option<VideoFormat> {
     if head.len() >= 8 && &head[4..8] == b"ftyp" {
         if head.len() >= 12 {
@@ -156,5 +172,44 @@ mod tests {
     #[test]
     fn detect_returns_none_for_unknown() {
         assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), b"random bytes"), None);
+    }
+
+    #[test]
+    fn parse_accepts_dv_extensions() {
+        assert_eq!(VideoFormat::parse("dv"), Some(VideoFormat::Dv));
+        assert_eq!(VideoFormat::parse("DV"), Some(VideoFormat::Dv));
+        assert_eq!(VideoFormat::parse("dif"), Some(VideoFormat::Dv));
+    }
+
+    #[test]
+    fn dv_canonical_extension() {
+        assert_eq!(VideoFormat::Dv.extension(), "dv");
+    }
+
+    #[test]
+    fn dv_output_target_is_mp4() {
+        assert_eq!(VideoFormat::Dv.output_format(), VideoFormat::Mp4);
+    }
+
+    #[test]
+    fn non_dv_output_target_is_self() {
+        for f in [
+            VideoFormat::Mp4,
+            VideoFormat::Webm,
+            VideoFormat::Mov,
+            VideoFormat::Avi,
+            VideoFormat::Mkv,
+            VideoFormat::Flv,
+        ] {
+            assert_eq!(f.output_format(), f);
+        }
+    }
+
+    #[test]
+    fn detect_dv_from_extension() {
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("clip.dv"), &[]),
+            Some(VideoFormat::Dv)
+        );
     }
 }

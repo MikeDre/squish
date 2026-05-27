@@ -7,7 +7,7 @@ use squish_audio::{self, AudioOptions, AudioResult};
 use squish_code::{self, CodeError, CodeOptions, CodeResult};
 use squish_core::{squish_file, Format, SquishError, SquishOptions, SquishResult};
 use squish_video::VideoCodec;
-use squish_video::{self, VideoError, VideoOptions, VideoResult};
+use squish_video::{self, VideoError, VideoFormat, VideoOptions, VideoResult};
 use std::io::{BufRead, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -320,6 +320,13 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 Err(e) => eprintln!("[{n}/{total}] {}: ERROR {e}", path.display()),
             }
         }
+        if !cfg.quiet {
+            if let Ok(r) = &res {
+                if let Some(note) = fast_override_note(cfg.video_opts.fast, r.format_in, r.format_out) {
+                    eprintln!("  note: {note}");
+                }
+            }
+        }
         if let Some(pb) = &progress {
             pb.set_message(display_filename(path));
             pb.inc(1);
@@ -448,6 +455,20 @@ fn display_filename(path: &Path) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or("")
         .to_string()
+}
+
+/// A user-facing note when `--fast` was silently overridden because the input
+/// format is transcode-only (output container differs from the input).
+fn fast_override_note(fast: bool, format_in: VideoFormat, format_out: VideoFormat) -> Option<String> {
+    if fast && format_in != format_out {
+        Some(format!(
+            "--fast ignored for .{} input; re-encoded to .{}",
+            format_in.extension(),
+            format_out.extension()
+        ))
+    } else {
+        None
+    }
 }
 
 fn peek_image_format(path: &Path) -> std::io::Result<Option<Format>> {
@@ -697,5 +718,22 @@ mod source_map_validation_tests {
     fn source_map_on_with_mixed_html_and_js_passes() {
         let files = vec![PathBuf::from("page.html"), PathBuf::from("a.js")];
         assert!(validate_source_map(true, &files).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod fast_override_tests {
+    use super::*;
+
+    #[test]
+    fn fast_override_note_only_when_remapped_and_fast() {
+        use squish_video::VideoFormat;
+        // fast + DV→MP4 remap → note present
+        let note = fast_override_note(true, VideoFormat::Dv, VideoFormat::Mp4);
+        assert!(note.unwrap().contains("dv"));
+        // not fast → no note
+        assert!(fast_override_note(false, VideoFormat::Dv, VideoFormat::Mp4).is_none());
+        // no remap → no note
+        assert!(fast_override_note(true, VideoFormat::Mp4, VideoFormat::Mp4).is_none());
     }
 }
