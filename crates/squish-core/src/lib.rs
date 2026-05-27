@@ -11,6 +11,7 @@ pub use error::SquishError;
 pub use format::{detect_format, Format};
 pub use naming::{
     derive_output_path, derive_output_path_with_suffix, derive_output_path_with_suffix_sep,
+    in_place_target, in_place_temp_path,
 };
 pub use options::SquishOptions;
 pub use result::SquishResult;
