@@ -216,6 +216,8 @@ SVG continues to be handled as an image (better structural compaction via `usvg`
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
   -r, --recursive            Recurse into directories
       --force                Overwrite existing _squished files
+  -o, --overwrite            Replace each input file in place (skips files whose
+                             squish would change the extension, e.g. .dv→.mp4)
       --suffix <NAME>        Custom output filename suffix (default: squished)
       --dry-run              Show what would happen; don't write
   -j, --jobs <N>             Parallelism (default: num CPUs)
