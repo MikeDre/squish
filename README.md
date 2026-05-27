@@ -131,7 +131,9 @@ Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TI
 
 ### Video
 
-Supported containers: MP4, WebM, MOV, AVI, MKV, FLV. Requires system `ffmpeg`.
+Supported containers: MP4, WebM, MOV, AVI, MKV, FLV, DV (→ mp4). Requires system `ffmpeg`.
+
+`.dv`/`.dif` is a transcode-only input: it is always re-encoded to an `.mp4` (H.265 by default), and `--fast` (copy) is ignored for DV sources.
 
 | Codec | Flag | Notes |
 |---|---|---|
