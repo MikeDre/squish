@@ -11,7 +11,7 @@ pub use format::{detect_audio_format, detect_audio_from_bytes, AudioFormat};
 pub use options::{AudioCodec, AudioOptions};
 pub use result::AudioResult;
 
-use squish_core::derive_output_path_with_suffix;
+use squish_core::{derive_output_path_with_suffix, in_place_target, in_place_temp_path};
 use std::path::Path;
 use std::time::Instant;
 
@@ -59,13 +59,48 @@ pub fn squish_audio(input: &Path, opts: &AudioOptions) -> Result<AudioResult, Au
     let output_ext = resolve_output_extension(input_codec, codec, &input_ext);
     let format_out = AudioFormat::parse(&output_ext).unwrap_or(format_in);
 
-    let suffix = opts.suffix.as_deref().unwrap_or("squished");
-    let output_path =
-        derive_output_path_with_suffix(input, &output_ext, opts.force_overwrite, suffix);
+    let (encode_path, rename_to) = if opts.overwrite {
+        match in_place_target(input, &output_ext) {
+            Some(target) => {
+                // ffmpeg infers the output muxer from the file extension, so the
+                // temp path must end in the real extension (the bare `.sq-…tmp`
+                // name from in_place_temp_path leaves ffmpeg unable to choose a
+                // muxer). Append the target extension; `.sq-` is still present so
+                // stray temps remain identifiable.
+                let base = in_place_temp_path(&target);
+                let tmp = base.with_extension(format!(
+                    "{}.{output_ext}",
+                    base.extension().and_then(|e| e.to_str()).unwrap_or("tmp")
+                ));
+                (tmp, Some(target))
+            }
+            None => {
+                return Err(AudioError::InPlaceFormatChange {
+                    path: input.to_path_buf(),
+                    from: input_ext.clone(),
+                    to: output_ext.clone(),
+                });
+            }
+        }
+    } else {
+        let suffix = opts.suffix.as_deref().unwrap_or("squished");
+        (
+            derive_output_path_with_suffix(input, &output_ext, opts.force_overwrite, suffix),
+            None,
+        )
+    };
 
     let has_art = ffmpeg::ffprobe_has_attached_picture(input).unwrap_or(false);
 
-    ffmpeg::run_ffmpeg(input, &output_path, opts, codec, has_art)?;
+    ffmpeg::run_ffmpeg(input, &encode_path, opts, codec, has_art)?;
+
+    let output_path = match rename_to {
+        Some(target) => {
+            std::fs::rename(&encode_path, &target)?;
+            target
+        }
+        None => encode_path,
+    };
 
     let output_bytes = std::fs::metadata(&output_path)?.len();
 
