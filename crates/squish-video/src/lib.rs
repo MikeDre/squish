@@ -10,7 +10,7 @@ pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
 pub use result::VideoResult;
 
-use squish_core::derive_output_path_with_suffix;
+use squish_core::{derive_output_path_with_suffix, in_place_target, in_place_temp_path};
 use std::path::Path;
 use std::time::Instant;
 
@@ -50,11 +50,43 @@ pub fn squish_video(
     let format_out = format_in.output_format();
     let ext = resolve_output_ext(input, format_in, format_out);
 
-    let suffix = opts.suffix.as_deref().unwrap_or("squished");
-    let output_path = derive_output_path_with_suffix(input, &ext, opts.force_overwrite, suffix);
-
     let force_reencode = format_out != format_in;
-    ffmpeg::run_ffmpeg(input, &output_path, opts, force_reencode)?;
+
+    let (encode_path, rename_to) = if opts.overwrite {
+        match in_place_target(input, &ext) {
+            Some(target) => {
+                let tmp = in_place_temp_path(&target);
+                (tmp, Some(target))
+            }
+            None => {
+                return Err(VideoError::InPlaceFormatChange {
+                    path: input.to_path_buf(),
+                    from: input
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase(),
+                    to: ext.clone(),
+                });
+            }
+        }
+    } else {
+        let suffix = opts.suffix.as_deref().unwrap_or("squished");
+        (
+            derive_output_path_with_suffix(input, &ext, opts.force_overwrite, suffix),
+            None,
+        )
+    };
+
+    ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode)?;
+
+    let output_path = match rename_to {
+        Some(target) => {
+            std::fs::rename(&encode_path, &target)?;
+            target
+        }
+        None => encode_path,
+    };
 
     let output_bytes = std::fs::metadata(&output_path)?.len();
 

@@ -49,6 +49,11 @@ pub struct Args {
     #[arg(long)]
     pub suffix: Option<String>,
 
+    /// Replace each input file in place with its squished version.
+    /// Skips any file whose squish would change the extension.
+    #[arg(short = 'o', long, conflicts_with = "suffix")]
+    pub overwrite: bool,
+
     /// Maximum output width in pixels (scales down proportionally).
     #[arg(long)]
     pub max_width: Option<u32>,

@@ -20,6 +20,9 @@ pub enum MediaError {
 
     #[error("not an audio file (video stream present): {path}")]
     NotAudio { path: PathBuf },
+
+    #[error("cannot overwrite {path} in place: output format .{to} differs from input .{from}")]
+    InPlaceFormatChange { path: PathBuf, from: String, to: String },
 }
 
 #[cfg(test)]
@@ -83,5 +86,18 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "x");
         let e: MediaError = io_err.into();
         assert!(matches!(e, MediaError::Io(_)));
+    }
+
+    #[test]
+    fn display_in_place_format_change() {
+        let e = MediaError::InPlaceFormatChange {
+            path: PathBuf::from("/clip.dv"),
+            from: "dv".into(),
+            to: "mp4".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("/clip.dv"));
+        assert!(s.contains("dv"));
+        assert!(s.contains("mp4"));
     }
 }
