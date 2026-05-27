@@ -21,6 +21,9 @@ pub enum CodeError {
 
     #[error("invalid option: {reason}")]
     InvalidOption { reason: String },
+
+    #[error("cannot overwrite {path} in place: output format .{to} differs from input .{from}")]
+    InPlaceFormatChange { path: PathBuf, from: String, to: String },
 }
 
 #[cfg(test)]
@@ -89,5 +92,18 @@ mod tests {
         let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "x");
         let e: CodeError = io_err.into();
         assert!(matches!(e, CodeError::Io(_)));
+    }
+
+    #[test]
+    fn display_in_place_format_change() {
+        let e = CodeError::InPlaceFormatChange {
+            path: PathBuf::from("/app.ts"),
+            from: "ts".into(),
+            to: "js".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("/app.ts"));
+        assert!(s.contains("ts"));
+        assert!(s.contains("js"));
     }
 }

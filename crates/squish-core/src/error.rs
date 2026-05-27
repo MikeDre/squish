@@ -25,6 +25,9 @@ pub enum SquishError {
 
     #[error("missing required dependency: {name}. {install_hint}")]
     MissingDependency { name: String, install_hint: String },
+
+    #[error("cannot overwrite {path} in place: output format .{to} differs from input .{from}")]
+    InPlaceFormatChange { path: PathBuf, from: String, to: String },
 }
 
 #[cfg(test)]
@@ -50,5 +53,18 @@ mod tests {
         };
         assert!(format!("{e}").contains("gifsicle"));
         assert!(format!("{e}").contains("brew install"));
+    }
+
+    #[test]
+    fn display_in_place_format_change() {
+        let e = SquishError::InPlaceFormatChange {
+            path: PathBuf::from("/photo.png"),
+            from: "png".into(),
+            to: "webp".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("/photo.png"));
+        assert!(s.contains("png"));
+        assert!(s.contains("webp"));
     }
 }
