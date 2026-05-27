@@ -11,7 +11,7 @@ pub use format::{detect_code_format, CodeFormat};
 pub use options::CodeOptions;
 pub use result::CodeResult;
 
-use squish_core::derive_output_path_with_suffix_sep;
+use squish_core::{derive_output_path_with_suffix_sep, in_place_target};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -46,9 +46,25 @@ pub fn squish_code(input: &Path, opts: &CodeOptions) -> Result<CodeResult, CodeE
     };
 
     let output_ext = output_extension(format, input);
-    let suffix = opts.suffix.as_deref().unwrap_or("min");
-    let output_path =
-        derive_output_path_with_suffix_sep(input, &output_ext, opts.force_overwrite, suffix, '.');
+    let output_path = if opts.overwrite {
+        match in_place_target(input, &output_ext) {
+            Some(target) => target,
+            None => {
+                return Err(CodeError::InPlaceFormatChange {
+                    path: input.to_path_buf(),
+                    from: input
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase(),
+                    to: output_ext.clone(),
+                });
+            }
+        }
+    } else {
+        let suffix = opts.suffix.as_deref().unwrap_or("min");
+        derive_output_path_with_suffix_sep(input, &output_ext, opts.force_overwrite, suffix, '.')
+    };
 
     fs::write(&output_path, minified.code.as_bytes())?;
 
@@ -187,5 +203,31 @@ mod tests {
         assert!(map_path.exists());
         let map = fs::read_to_string(&map_path).unwrap();
         assert!(map.contains("\"version\""));
+    }
+
+    #[test]
+    fn overwrite_replaces_js_in_place() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("app.js");
+        fs::write(&input, b"const   x   =   1 ;\n\n\n").unwrap();
+
+        let opts = CodeOptions { overwrite: true, ..Default::default() };
+        let r = squish_code(&input, &opts).unwrap();
+
+        assert_eq!(r.output_path, input);
+        assert!(!tmp.path().join("app.min.js").exists());
+    }
+
+    #[test]
+    fn overwrite_refuses_when_ts_becomes_js() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("app.ts");
+        fs::write(&input, b"const x: number = 1;\n").unwrap();
+
+        let opts = CodeOptions { overwrite: true, ..Default::default() };
+        let err = squish_code(&input, &opts).unwrap_err();
+        assert!(matches!(err, CodeError::InPlaceFormatChange { .. }));
+        assert!(input.exists());
+        assert!(!tmp.path().join("app.js").exists());
     }
 }

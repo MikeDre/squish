@@ -72,9 +72,25 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
         format_out.extension().to_string()
     };
 
-    let suffix = opts.suffix.as_deref().unwrap_or("squished");
-    let output_path =
-        derive_output_path_with_suffix(input, &target_ext, opts.force_overwrite, suffix);
+    let output_path = if opts.overwrite {
+        match in_place_target(input, &target_ext) {
+            Some(target) => target,
+            None => {
+                return Err(SquishError::InPlaceFormatChange {
+                    path: input.to_path_buf(),
+                    from: input
+                        .extension()
+                        .and_then(|e| e.to_str())
+                        .unwrap_or("")
+                        .to_ascii_lowercase(),
+                    to: target_ext.clone(),
+                });
+            }
+        }
+    } else {
+        let suffix = opts.suffix.as_deref().unwrap_or("squished");
+        derive_output_path_with_suffix(input, &target_ext, opts.force_overwrite, suffix)
+    };
     fs::write(&output_path, &output_bytes)?;
 
     Ok(SquishResult {
@@ -264,5 +280,38 @@ mod tests {
         )
         .unwrap_err();
         assert!(matches!(err, SquishError::Io(_)));
+    }
+
+    #[test]
+    fn overwrite_replaces_png_in_place() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let input = tmp.path().join("dot.png");
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([255, 255, 255]));
+        img.save(&input).unwrap();
+
+        let opts = SquishOptions { overwrite: true, ..Default::default() };
+        let r = squish_file(&input, &opts).unwrap();
+
+        assert_eq!(r.output_path, input, "output must be the input path itself");
+        assert!(input.exists());
+        assert!(!tmp.path().join("dot_squished.png").exists());
+    }
+
+    #[test]
+    fn overwrite_refuses_on_format_change() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let input = tmp.path().join("dot.png");
+        let img = image::RgbImage::from_pixel(8, 8, image::Rgb([255, 255, 255]));
+        img.save(&input).unwrap();
+
+        let opts = SquishOptions {
+            overwrite: true,
+            output_format: Some(Format::Webp),
+            ..Default::default()
+        };
+        let err = squish_file(&input, &opts).unwrap_err();
+        assert!(matches!(err, SquishError::InPlaceFormatChange { .. }));
+        assert!(input.exists());
+        assert!(!tmp.path().join("dot.webp").exists());
     }
 }
