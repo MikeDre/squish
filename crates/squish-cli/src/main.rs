@@ -85,6 +85,7 @@ fn real_main() -> Result<u8> {
         max_width: args.max_width,
         max_height: args.max_height,
         suffix: args.suffix.clone(),
+        overwrite: args.overwrite,
     };
 
     let video_opts = VideoOptions {
@@ -93,6 +94,7 @@ fn real_main() -> Result<u8> {
         fast: args.fast,
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
+        overwrite: args.overwrite,
     };
 
     let audio_opts = AudioOptions {
@@ -102,6 +104,7 @@ fn real_main() -> Result<u8> {
         strip_tags: args.strip_tags,
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
+        overwrite: args.overwrite,
     };
 
     let code_opts = CodeOptions {
@@ -109,6 +112,7 @@ fn real_main() -> Result<u8> {
         source_map: args.source_map,
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
+        overwrite: args.overwrite,
     };
 
     let cfg = runner::RunConfig {
@@ -119,6 +123,7 @@ fn real_main() -> Result<u8> {
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
+        overwrite: args.overwrite,
     };
     let report = runner::run(&worklist, &cfg)?;
     Ok(report.exit_code())

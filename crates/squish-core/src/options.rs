@@ -28,6 +28,9 @@ pub struct SquishOptions {
     /// Custom output suffix. `None` means "squished" (e.g., `dog_squished.png`).
     /// Set to e.g. "min" to produce `dog_min.png`.
     pub suffix: Option<String>,
+
+    /// Replace the input file in place instead of writing a `_squished` copy.
+    pub overwrite: bool,
 }
 
 impl SquishOptions {

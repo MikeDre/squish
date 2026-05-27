@@ -62,6 +62,9 @@ pub struct AudioOptions {
     pub strip_tags: bool,
     pub force_overwrite: bool,
     pub suffix: Option<String>,
+
+    /// Replace the input file in place instead of writing a `_squished` copy.
+    pub overwrite: bool,
 }
 
 pub fn default_audio_quality() -> u8 {

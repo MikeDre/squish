@@ -21,6 +21,7 @@ pub struct RunConfig {
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
+    pub overwrite: bool,
 }
 
 pub struct RunReport {

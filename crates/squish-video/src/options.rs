@@ -61,6 +61,9 @@ pub struct VideoOptions {
     pub force_overwrite: bool,
     /// Custom output suffix. `None` means "squished".
     pub suffix: Option<String>,
+
+    /// Replace the input file in place instead of writing a `_squished` copy.
+    pub overwrite: bool,
 }
 
 impl VideoOptions {
