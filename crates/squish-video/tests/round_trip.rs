@@ -1,4 +1,4 @@
-use squish_video::{squish_video, VideoCodec, VideoOptions};
+use squish_video::{squish_video, VideoCodec, VideoFormat, VideoOptions};
 use std::fs;
 use std::path::PathBuf;
 use tempfile::TempDir;
@@ -95,6 +95,98 @@ fn h264_codec_override() {
         ..Default::default()
     };
     let result = squish_video(&input, &opts).unwrap();
+    assert!(result.output_path.exists());
+    assert!(result.output_bytes > 0);
+}
+
+/// Generate a real NTSC DV fixture with ffmpeg. Returns false if generation
+/// fails or produces an empty file (e.g. the build lacks the dvvideo encoder),
+/// so the caller can skip gracefully rather than fail.
+fn generate_dv_fixture(path: &std::path::Path) -> bool {
+    // Preferred: -target ntsc-dv sets up the correct DV profile in one shot.
+    let target = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=720x480:rate=30000/1001:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-target",
+            "ntsc-dv",
+        ])
+        .arg(path)
+        .output();
+
+    if matches!(target, Ok(ref o) if o.status.success())
+        && fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false)
+    {
+        return true;
+    }
+
+    // Fallback: explicit dvvideo parameters.
+    let explicit = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=720x480:rate=30000/1001:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-c:v",
+            "dvvideo",
+            "-s",
+            "720x480",
+            "-r",
+            "30000/1001",
+            "-pix_fmt",
+            "yuv411p",
+            "-c:a",
+            "pcm_s16le",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+        ])
+        .arg(path)
+        .output();
+
+    matches!(explicit, Ok(ref o) if o.status.success())
+        && fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false)
+}
+
+#[test]
+fn dv_transcodes_to_mp4() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not found");
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.dv");
+
+    if !generate_dv_fixture(&input) {
+        eprintln!("skipping: could not generate a valid .dv fixture with this ffmpeg build");
+        return;
+    }
+
+    let result = squish_video(&input, &VideoOptions::default()).unwrap();
+
+    assert_eq!(result.format_in, VideoFormat::Dv);
+    assert_eq!(result.format_out, VideoFormat::Mp4);
+    assert_eq!(
+        result.output_path.extension().and_then(|e| e.to_str()),
+        Some("mp4")
+    );
     assert!(result.output_path.exists());
     assert!(result.output_bytes > 0);
 }
