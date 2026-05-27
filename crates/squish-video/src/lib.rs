@@ -42,7 +42,7 @@ pub fn squish_video(
     let suffix = opts.suffix.as_deref().unwrap_or("squished");
     let output_path = derive_output_path_with_suffix(input, &ext, opts.force_overwrite, suffix);
 
-    ffmpeg::run_ffmpeg(input, &output_path, opts)?;
+    ffmpeg::run_ffmpeg(input, &output_path, opts, false)?;
 
     let output_bytes = std::fs::metadata(&output_path)?.len();
 
