@@ -62,16 +62,7 @@ pub fn squish_audio(input: &Path, opts: &AudioOptions) -> Result<AudioResult, Au
     let (encode_path, rename_to) = if opts.overwrite {
         match in_place_target(input, &output_ext) {
             Some(target) => {
-                // ffmpeg infers the output muxer from the file extension, so the
-                // temp path must end in the real extension (the bare `.sq-…tmp`
-                // name from in_place_temp_path leaves ffmpeg unable to choose a
-                // muxer). Append the target extension; `.sq-` is still present so
-                // stray temps remain identifiable.
-                let base = in_place_temp_path(&target);
-                let tmp = base.with_extension(format!(
-                    "{}.{output_ext}",
-                    base.extension().and_then(|e| e.to_str()).unwrap_or("tmp")
-                ));
+                let tmp = in_place_temp_path(&target);
                 (tmp, Some(target))
             }
             None => {

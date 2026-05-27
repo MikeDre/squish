@@ -76,7 +76,11 @@ pub fn in_place_target(input: &Path, output_ext: &str) -> Option<PathBuf> {
 }
 
 /// A unique sibling temp path next to `target`, in the same directory so a
-/// later `rename` onto `target` is atomic. Encodes pid + nanos for uniqueness.
+/// later `rename` onto `target` is atomic. The temp name **keeps the target's
+/// extension last** (`.stem.sq-<pid>-<nanos>.ext`) so extension-driven tools
+/// like ffmpeg can still infer the output muxer; the leading dot hides it and
+/// the `.sq-` infix keeps stray temps identifiable. Encodes pid + nanos for
+/// uniqueness.
 pub fn in_place_temp_path(target: &Path) -> PathBuf {
     let parent = target.parent().unwrap_or_else(|| Path::new(""));
     let stem = target.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
@@ -86,7 +90,11 @@ pub fn in_place_temp_path(target: &Path) -> PathBuf {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     let pid = std::process::id();
-    parent.join(format!(".{stem}.{ext}.sq-{pid}-{nanos}.tmp"))
+    if ext.is_empty() {
+        parent.join(format!(".{stem}.sq-{pid}-{nanos}"))
+    } else {
+        parent.join(format!(".{stem}.sq-{pid}-{nanos}.{ext}"))
+    }
 }
 
 #[cfg(test)]
@@ -235,6 +243,19 @@ mod tests {
         let tmp = in_place_temp_path(target);
         assert_eq!(tmp.parent(), target.parent());
         assert_ne!(tmp, target.to_path_buf());
-        assert_eq!(tmp.extension().and_then(|e| e.to_str()), Some("tmp"));
+        // Keeps the target extension last so ffmpeg can infer the muxer.
+        assert_eq!(tmp.extension().and_then(|e| e.to_str()), Some("mp4"));
+        // Stays identifiable as a squish temp.
+        assert!(tmp.file_name().unwrap().to_string_lossy().contains(".sq-"));
+    }
+
+    #[test]
+    fn in_place_temp_path_handles_no_extension() {
+        let target = Path::new("/dir/clip");
+        let tmp = in_place_temp_path(target);
+        assert_eq!(tmp.parent(), target.parent());
+        assert!(tmp.file_name().unwrap().to_string_lossy().contains(".sq-"));
+        // No trailing dot when the target has no extension.
+        assert!(!tmp.to_string_lossy().ends_with('.'));
     }
 }
