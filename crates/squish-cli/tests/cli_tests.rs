@@ -12,8 +12,14 @@ fn core_fixture(name: &str) -> PathBuf {
     p
 }
 
+/// Always use this helper to spawn the squish binary from tests. It sets
+/// `SQUISH_NO_STATS=1` so test runs never pollute the developer's real usage
+/// ledger at `~/Library/Application Support/squish/usage.jsonl`. The
+/// `no_direct_cargo_bin_calls_in_this_file` test enforces the discipline.
 fn bin() -> Command {
-    Command::cargo_bin("squish").unwrap()
+    let mut cmd = Command::cargo_bin("squish").unwrap();
+    cmd.env("SQUISH_NO_STATS", "1");
+    cmd
 }
 
 fn video_fixture(name: &str) -> PathBuf {
@@ -327,7 +333,7 @@ fn cli_compresses_mp3() {
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg(&input).assert().success();
 
     assert!(tmp.path().join("sine_squished.mp3").exists());
@@ -342,7 +348,7 @@ fn cli_lossless_non_tty_defaults_to_opus() {
     let input = tmp.path().join("sine.wav");
     make_sine(&input, &[]);
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     // assert_cmd does not allocate a TTY, so std::io::stdin().is_terminal() is false.
     cmd.arg(&input).assert().success();
 
@@ -358,7 +364,7 @@ fn cli_codec_validation_rejects_video_codec_with_audio_only_batch() {
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd.args(["--codec", "h265"]).arg(&input).assert().failure();
     let output = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
     assert!(output.contains("video codec"));
@@ -373,7 +379,7 @@ fn cli_bitrate_rejected_with_flac() {
     let input = tmp.path().join("sine.flac");
     make_sine(&input, &["-c:a", "flac"]);
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.args(["--codec", "flac", "--bitrate", "128k"])
         .arg(&input)
         .assert()
@@ -404,7 +410,7 @@ fn cli_strip_tags_removes_title() {
         .unwrap();
     assert!(status.status.success());
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg("--strip-tags").arg(&input).assert().success();
 
     let probe = std::process::Command::new("ffprobe")
@@ -435,7 +441,7 @@ fn cli_dry_run_lists_audio() {
     let input = tmp.path().join("sine.mp3");
     make_sine(&input, &["-c:a", "libmp3lame"]);
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let out = cmd.args(["--dry-run"]).arg(&input).assert().success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
     assert!(stdout.contains("would squish (audio)"));
@@ -456,7 +462,7 @@ fn cli_mixed_batch_summary_shows_three_kinds() {
     let img = tmp.path().join("dot.png");
     std::fs::copy(core_fixture("sample.png"), &img).unwrap();
 
-    let mut cmd = Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let out = cmd.arg(&audio).arg(&img).assert().success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
     assert!(stdout.contains("audio"));
@@ -475,7 +481,7 @@ fn cli_minifies_js() {
     )
     .unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg(&input).assert().success();
 
     let output = tmp.path().join("app.min.js");
@@ -491,7 +497,7 @@ fn cli_default_suffix_is_min_with_dot_separator() {
     let input = tmp.path().join("app.js");
     std::fs::write(&input, b"console.log('x');").unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg(&input).assert().success();
 
     assert!(tmp.path().join("app.min.js").exists());
@@ -504,7 +510,7 @@ fn cli_custom_suffix_for_code_uses_dot_separator() {
     let input = tmp.path().join("app.js");
     std::fs::write(&input, b"console.log('x');").unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.args(["--suffix", "tiny"])
         .arg(&input)
         .assert()
@@ -519,7 +525,7 @@ fn cli_source_map_emits_map_file() {
     let input = tmp.path().join("app.js");
     std::fs::write(&input, b"console.log('hello world');").unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg("--source-map").arg(&input).assert().success();
 
     assert!(tmp.path().join("app.min.js").exists());
@@ -532,7 +538,7 @@ fn cli_source_map_errors_on_json_only_batch() {
     let input = tmp.path().join("data.json");
     std::fs::write(&input, br#"{"a":1}"#).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd.arg("--source-map").arg(&input).assert().failure();
     let output = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
     assert!(output.contains("source-map"));
@@ -546,7 +552,7 @@ fn cli_source_map_with_mixed_js_and_json_succeeds() {
     std::fs::write(&js_input, b"console.log('x');").unwrap();
     std::fs::write(&json_input, br#"{"a":1}"#).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     cmd.arg("--source-map")
         .arg(&js_input)
         .arg(&json_input)
@@ -563,7 +569,7 @@ fn cli_dry_run_lists_code() {
     let input = tmp.path().join("app.js");
     std::fs::write(&input, b"console.log('x');").unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let out = cmd.args(["--dry-run"]).arg(&input).assert().success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
     assert!(stdout.contains("would squish (code)"));
@@ -576,7 +582,7 @@ fn cli_summary_includes_code_count() {
     let input = tmp.path().join("app.js");
     std::fs::write(&input, b"console.log('x');").unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let out = cmd.arg(&input).assert().success();
     let stdout = String::from_utf8_lossy(&out.get_output().stdout).to_string();
     assert!(stdout.contains("Squished"));
@@ -597,7 +603,7 @@ fn cli_animated_webp_with_resize_prints_warning_in_verbose() {
     let input = tmp.path().join("anim.webp");
     std::fs::copy(core_fixture_anim(), &input).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd
         .args(["--verbose", "--max-width", "100"])
         .arg(&input)
@@ -616,7 +622,7 @@ fn cli_animated_webp_quiet_no_warning_output() {
     let input = tmp.path().join("anim.webp");
     std::fs::copy(core_fixture_anim(), &input).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd
         .args(["--quiet", "--max-width", "100"])
         .arg(&input)
@@ -635,7 +641,7 @@ fn cli_animated_webp_default_mode_shows_warning() {
     let input = tmp.path().join("anim.webp");
     std::fs::copy(core_fixture_anim(), &input).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd
         .args(["--max-width", "100"])
         .arg(&input)
@@ -651,7 +657,7 @@ fn cli_animated_webp_no_resize_no_warning() {
     let input = tmp.path().join("anim.webp");
     std::fs::copy(core_fixture_anim(), &input).unwrap();
 
-    let mut cmd = assert_cmd::Command::cargo_bin("squish").unwrap();
+    let mut cmd = bin();
     let assert = cmd.arg(&input).assert().success();
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
     assert!(
@@ -665,4 +671,21 @@ fn cli_animated_webp_no_resize_no_warning() {
     let input_bytes = std::fs::read(&input).unwrap();
     let output_bytes = std::fs::read(&output).unwrap();
     assert_eq!(output_bytes, input_bytes);
+}
+
+/// Regression: every squish-binary invocation in this file must go through
+/// the `bin()` helper, which sets the no-stats env var. If anyone reintroduces
+/// a direct binary-spawn call, this test fails — preventing future test runs
+/// from polluting the developer's real usage ledger.
+#[test]
+fn no_direct_cargo_bin_calls_in_this_file() {
+    let src = include_str!("./cli_tests.rs");
+    // The only allowed occurrence of this literal is the one inside `fn bin()`.
+    let needle = concat!("cargo_", "bin(\"squish\")");
+    let count = src.matches(needle).count();
+    assert_eq!(
+        count, 1,
+        "all squish-binary invocations in cli_tests.rs must go through bin() \
+         (got {count} direct binary-spawn occurrences; only the one inside fn bin() is allowed)"
+    );
 }
