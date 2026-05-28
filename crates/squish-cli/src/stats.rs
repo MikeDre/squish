@@ -37,6 +37,7 @@ impl Record {
 
     /// Sum of (bytes_in - bytes_out) across all kinds. Signed: negative when
     /// the output grew (rare, honest).
+    #[allow(dead_code)]
     pub fn saved_bytes(&self) -> i64 {
         self.by_kind
             .values()
@@ -45,6 +46,7 @@ impl Record {
     }
 
     /// Total files across all kinds.
+    #[allow(dead_code)]
     pub fn file_count(&self) -> u64 {
         self.by_kind.values().map(|k| k.n).sum()
     }
@@ -228,6 +230,80 @@ fn format_bytes(b: i64) -> String {
         v /= 1024.0;
     }
     unreachable!()
+}
+
+use crate::runner::RunReport;
+
+/// Pure gate predicate. All callers pass the three booleans explicitly; the
+/// env-var read is done once in `append_batch`.
+pub fn should_record(dry_run: bool, no_stats_flag: bool, env_no_stats: bool) -> bool {
+    !dry_run && !no_stats_flag && !env_no_stats
+}
+
+/// Build a `Record` from a finished `RunReport`. Sums per-kind input/output
+/// bytes and file counts. `is_empty()` will be true if no successes occurred.
+pub fn build_record(report: &RunReport) -> Record {
+    let mut by_kind: BTreeMap<String, KindStats> = BTreeMap::new();
+
+    let mut accumulate = |kind: &str, n: u64, in_: u64, out_: u64| {
+        if n == 0 {
+            return;
+        }
+        let e = by_kind.entry(kind.to_string()).or_default();
+        e.n += n;
+        e.bytes_in += in_;
+        e.bytes_out += out_;
+    };
+
+    let img_n = report.results.len() as u64;
+    let img_in: u64 = report.results.iter().map(|r| r.input_bytes).sum();
+    let img_out: u64 = report.results.iter().map(|r| r.output_bytes).sum();
+    accumulate("image", img_n, img_in, img_out);
+
+    let vid_n = report.video_results.len() as u64;
+    let vid_in: u64 = report.video_results.iter().map(|r| r.input_bytes).sum();
+    let vid_out: u64 = report.video_results.iter().map(|r| r.output_bytes).sum();
+    accumulate("video", vid_n, vid_in, vid_out);
+
+    let aud_n = report.audio_results.len() as u64;
+    let aud_in: u64 = report.audio_results.iter().map(|r| r.input_bytes).sum();
+    let aud_out: u64 = report.audio_results.iter().map(|r| r.output_bytes).sum();
+    accumulate("audio", aud_n, aud_in, aud_out);
+
+    let cod_n = report.code_results.len() as u64;
+    let cod_in: u64 = report.code_results.iter().map(|r| r.input_bytes).sum();
+    let cod_out: u64 = report.code_results.iter().map(|r| r.output_bytes).sum();
+    accumulate("code", cod_n, cod_in, cod_out);
+
+    Record {
+        v: 1,
+        ts: Utc::now(),
+        by_kind,
+    }
+}
+
+/// Read the `SQUISH_NO_STATS` env var. Non-empty value = opt out.
+pub fn env_no_stats() -> bool {
+    std::env::var_os("SQUISH_NO_STATS")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+}
+
+/// Production wrapper: append one batch's record to the default data file
+/// if all gates are open and the batch had at least one successful squish.
+/// Silently no-ops on any io/path failure — stats must never fail squish.
+pub fn append_batch(report: &RunReport, dry_run: bool, no_stats_flag: bool) {
+    if !should_record(dry_run, no_stats_flag, env_no_stats()) {
+        return;
+    }
+    let record = build_record(report);
+    if record.is_empty() {
+        return;
+    }
+    let Some(path) = default_data_file() else {
+        return;
+    };
+    let _ = append_record(&path, &record);
 }
 
 #[cfg(test)]
@@ -433,5 +509,30 @@ mod tests {
             kind_rows.iter().all(|l| l.contains("audio")),
             "only audio rows expected, got: {kind_rows:?}"
         );
+    }
+
+    use std::time::Duration;
+
+    #[test]
+    fn should_record_only_when_all_gates_open() {
+        assert!(should_record(false, false, false));
+        assert!(!should_record(true, false, false), "dry-run blocks");
+        assert!(!should_record(false, true, false), "--no-stats blocks");
+        assert!(!should_record(false, false, true), "env opt-out blocks");
+    }
+
+    #[test]
+    fn build_record_from_empty_report_is_empty() {
+        let report = RunReport {
+            results: Vec::new(),
+            video_results: Vec::new(),
+            audio_results: Vec::new(),
+            code_results: Vec::new(),
+            errors: Vec::new(),
+            skipped_unknown: Vec::new(),
+            total_wall: Duration::from_millis(0),
+        };
+        let rec = build_record(&report);
+        assert!(rec.is_empty(), "no successes → record must be empty");
     }
 }

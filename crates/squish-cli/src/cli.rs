@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[command(name = "squish", version, about)]
 pub struct Args {
     /// Files or directories to compress.
-    #[arg(required = true)]
+    #[arg(required_unless_present = "stats")]
     pub paths: Vec<PathBuf>,
 
     /// Quality override, 0-100 (format-dependent default when omitted).
@@ -85,4 +85,13 @@ pub struct Args {
     /// Code: emit a .map file alongside minified output (JS/TS/CSS only).
     #[arg(long = "source-map")]
     pub source_map: bool,
+
+    /// Print usage report (files squished, bytes saved this month and all-time) and exit.
+    #[arg(long)]
+    pub stats: bool,
+
+    /// Don't record this run in the local usage ledger.
+    /// Also respected via SQUISH_NO_STATS env var.
+    #[arg(long = "no-stats")]
+    pub no_stats: bool,
 }
