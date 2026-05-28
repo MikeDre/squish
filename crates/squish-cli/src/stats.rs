@@ -50,6 +50,60 @@ impl Record {
     }
 }
 
+use std::fs;
+use std::io::{BufRead, BufReader, Write};
+use std::path::{Path, PathBuf};
+
+/// Append one record to `path` as a single JSON Lines entry. Creates the
+/// parent directory if needed. Opens the file with O_APPEND so concurrent
+/// writers can safely interleave (each record is a single short line).
+pub fn append_record(path: &Path, record: &Record) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
+    }
+    let mut line = serde_json::to_string(record)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    line.push('\n');
+    let mut f = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
+    f.write_all(line.as_bytes())
+}
+
+/// Load all records from a JSONL file. Missing file → empty Vec.
+/// Malformed lines are silently skipped (so future-version records we can't
+/// parse don't break the report).
+pub fn load_records(path: &Path) -> std::io::Result<Vec<Record>> {
+    let f = match fs::File::open(path) {
+        Ok(f) => f,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e),
+    };
+    let reader = BufReader::new(f);
+    let mut out = Vec::new();
+    for line in reader.lines() {
+        let line = line?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Ok(rec) = serde_json::from_str::<Record>(trimmed) {
+            out.push(rec);
+        }
+    }
+    Ok(out)
+}
+
+/// Default data-file path. `None` if the platform data dir cannot be resolved
+/// (broken HOME / unsupported platform). Production callers check for None
+/// and silently skip recording in that case.
+pub fn default_data_file() -> Option<PathBuf> {
+    dirs::data_dir().map(|d| d.join("squish").join("usage.jsonl"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,5 +169,64 @@ mod tests {
         };
         assert!(r.is_empty());
         assert_eq!(r.file_count(), 0);
+    }
+
+    #[test]
+    fn append_then_load_one_record() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("usage.jsonl");
+        let r = sample_record();
+        append_record(&path, &r).expect("append");
+        let loaded = load_records(&path).expect("load");
+        assert_eq!(loaded, vec![r]);
+    }
+
+    #[test]
+    fn append_creates_parent_dir_lazily() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("nested/deeper/usage.jsonl");
+        assert!(!path.parent().unwrap().exists());
+        append_record(&path, &sample_record()).expect("append should mkdir -p");
+        assert!(path.exists());
+    }
+
+    #[test]
+    fn load_missing_file_returns_empty() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("does-not-exist.jsonl");
+        let loaded = load_records(&path).expect("missing file → Ok(empty)");
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn load_skips_malformed_lines() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("usage.jsonl");
+        std::fs::write(
+            &path,
+            b"{this is not json}\n\
+              {\"v\":1,\"ts\":\"2026-05-28T12:34:56Z\",\"by_kind\":{}}\n\
+              \n\
+              not-json-either\n",
+        )
+        .unwrap();
+        let loaded = load_records(&path).expect("load");
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0].v, 1);
+    }
+
+    #[test]
+    fn append_uses_o_append_so_lines_concat() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("usage.jsonl");
+        let mut r1 = sample_record();
+        let mut r2 = sample_record();
+        r2.ts = Utc.with_ymd_and_hms(2026, 5, 29, 0, 0, 0).unwrap();
+        r1.by_kind.get_mut("image").unwrap().n = 1;
+        r2.by_kind.get_mut("image").unwrap().n = 2;
+        append_record(&path, &r1).unwrap();
+        append_record(&path, &r2).unwrap();
+        let loaded = load_records(&path).expect("load");
+        assert_eq!(loaded, vec![r1, r2]);
     }
 }
