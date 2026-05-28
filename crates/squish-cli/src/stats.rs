@@ -1,7 +1,7 @@
 //! Local usage ledger: records bytes saved & files squished per squish batch,
 //! and renders a small report on demand. No data ever leaves the machine.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Local, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -102,6 +102,132 @@ pub fn load_records(path: &Path) -> std::io::Result<Vec<Record>> {
 /// and silently skip recording in that case.
 pub fn default_data_file() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join("squish").join("usage.jsonl"))
+}
+
+const KINDS: &[&str] = &["image", "video", "audio", "code"];
+
+/// A per-window aggregate, ready to render.
+#[derive(Debug, Clone, Default)]
+struct WindowTotals {
+    files: u64,
+    bytes_in: u64,
+    bytes_out: u64,
+    by_kind: BTreeMap<String, KindStats>,
+}
+
+impl WindowTotals {
+    fn accumulate(&mut self, rec: &Record) {
+        for (kind, k) in &rec.by_kind {
+            if k.n == 0 {
+                continue;
+            }
+            self.files += k.n;
+            self.bytes_in += k.bytes_in;
+            self.bytes_out += k.bytes_out;
+            let entry = self.by_kind.entry(kind.clone()).or_default();
+            entry.n += k.n;
+            entry.bytes_in += k.bytes_in;
+            entry.bytes_out += k.bytes_out;
+        }
+    }
+
+    fn saved_bytes(&self) -> i64 {
+        self.bytes_in as i64 - self.bytes_out as i64
+    }
+
+    fn saved_percent(&self) -> f64 {
+        if self.bytes_in == 0 {
+            0.0
+        } else {
+            (self.bytes_in as f64 - self.bytes_out as f64) / self.bytes_in as f64 * 100.0
+        }
+    }
+}
+
+/// First moment of the calendar month of `now`, in local time, as a UTC
+/// instant suitable for comparing with record `ts` fields.
+fn month_start_utc(now: DateTime<Local>) -> DateTime<Utc> {
+    let local = Local
+        .with_ymd_and_hms(now.year(), now.month(), 1, 0, 0, 0)
+        .single()
+        .expect("first-of-month is unambiguous local time");
+    local.with_timezone(&Utc)
+}
+
+/// Render the usage report. `now` is injected for testability (production
+/// callers pass `Local::now()`).
+pub fn render_report(records: &[Record], now: DateTime<Local>) -> String {
+    if records.is_empty() {
+        return "no usage recorded yet — squish some files and try again.\n".to_string();
+    }
+
+    let month_pivot = month_start_utc(now);
+    let mut this_month = WindowTotals::default();
+    let mut all_time = WindowTotals::default();
+    for r in records {
+        all_time.accumulate(r);
+        if r.ts >= month_pivot {
+            this_month.accumulate(r);
+        }
+    }
+
+    let earliest = records.iter().map(|r| r.ts).min().expect("non-empty");
+    let earliest_local = earliest.with_timezone(&Local).format("%Y-%m-%d");
+    let month_label = now.format("%B %Y");
+
+    let mut out = String::new();
+    out.push_str(&format!("This month ({month_label})\n"));
+    write_window(&mut out, &this_month);
+    out.push('\n');
+    out.push_str(&format!("All time (since {earliest_local})\n"));
+    write_window(&mut out, &all_time);
+    out
+}
+
+fn write_window(out: &mut String, w: &WindowTotals) {
+    out.push_str(&format!("  Files squished:    {}\n", w.files));
+    out.push_str(&format!(
+        "  Total saved:       {} ({:.1}%)\n",
+        format_bytes(w.saved_bytes()),
+        w.saved_percent()
+    ));
+    for kind in KINDS {
+        if let Some(ks) = w.by_kind.get(*kind) {
+            if ks.n == 0 {
+                continue;
+            }
+            let saved = ks.bytes_in as i64 - ks.bytes_out as i64;
+            let pct = if ks.bytes_in == 0 {
+                0.0
+            } else {
+                (ks.bytes_in as f64 - ks.bytes_out as f64) / ks.bytes_in as f64 * 100.0
+            };
+            out.push_str(&format!(
+                "    {:<5}  {:>6} files   {} saved ({:.1}%)\n",
+                kind,
+                ks.n,
+                format_bytes(saved),
+                pct
+            ));
+        }
+    }
+}
+
+/// Human-readable signed byte count: "1.2 GB", "-340 KB", "12 B".
+fn format_bytes(b: i64) -> String {
+    let sign = if b < 0 { "-" } else { "" };
+    let mut v = b.unsigned_abs() as f64;
+    for unit in ["B", "KB", "MB", "GB", "TB"] {
+        if v < 1024.0 || unit == "TB" {
+            return if unit == "B" {
+                format!("{sign}{} {unit}", v as u64)
+            } else {
+                format!("{sign}{:.1} {unit}", v)
+            };
+        }
+        v /= 1024.0;
+    }
+    unreachable!()
 }
 
 #[cfg(test)]
@@ -228,5 +354,84 @@ mod tests {
         append_record(&path, &r2).unwrap();
         let loaded = load_records(&path).expect("load");
         assert_eq!(loaded, vec![r1, r2]);
+    }
+
+    use chrono::Local;
+
+    fn dt(y: i32, m: u32, d: u32) -> DateTime<Utc> {
+        Utc.with_ymd_and_hms(y, m, d, 12, 0, 0).unwrap()
+    }
+
+    fn rec_with(ts: DateTime<Utc>, kind: &str, n: u64, in_: u64, out_: u64) -> Record {
+        let mut by_kind = BTreeMap::new();
+        by_kind.insert(kind.to_string(), KindStats { n, bytes_in: in_, bytes_out: out_ });
+        Record { v: 1, ts, by_kind }
+    }
+
+    #[test]
+    fn report_zero_state_when_no_records() {
+        let now = Local
+            .with_ymd_and_hms(2026, 5, 28, 12, 0, 0)
+            .unwrap();
+        let s = render_report(&[], now);
+        assert!(
+            s.contains("no usage recorded yet"),
+            "zero-state line missing: {s}"
+        );
+    }
+
+    #[test]
+    fn report_mentions_both_windows_and_kinds() {
+        let last_month = dt(2026, 4, 15);
+        let this_month = dt(2026, 5, 27);
+        let recs = vec![
+            rec_with(last_month, "image", 10, 10_000_000, 5_000_000),
+            rec_with(this_month, "video", 2, 800_000_000, 400_000_000),
+        ];
+        let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
+        let s = render_report(&recs, now);
+        assert!(s.contains("This month"), "missing 'This month' header in {s}");
+        assert!(s.contains("All time"), "missing 'All time' header in {s}");
+        let this_month_section = s.split("All time").next().unwrap();
+        assert!(this_month_section.contains("video"));
+        assert!(
+            !this_month_section.contains("image"),
+            "this-month must not include the April record"
+        );
+        let all_time_section = s.split("All time").nth(1).unwrap();
+        assert!(all_time_section.contains("image"));
+        assert!(all_time_section.contains("video"));
+    }
+
+    #[test]
+    fn report_includes_file_counts_and_saved_bytes() {
+        let recs = vec![rec_with(dt(2026, 5, 28), "image", 3, 1_048_576, 524_288)];
+        let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
+        let s = render_report(&recs, now);
+        assert!(s.contains("Files squished:"), "missing 'Files squished:' label in {s}");
+        assert!(s.contains("image"));
+    }
+
+    #[test]
+    fn report_omits_kinds_with_no_files_in_window() {
+        let recs = vec![rec_with(dt(2026, 5, 28), "audio", 1, 100, 50)];
+        let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
+        let s = render_report(&recs, now);
+        let lines: Vec<&str> = s.lines().collect();
+        let kind_rows: Vec<&&str> = lines
+            .iter()
+            .filter(|l| l.starts_with("    "))
+            .filter(|l| {
+                let t = l.trim_start();
+                t.starts_with("image ")
+                    || t.starts_with("video ")
+                    || t.starts_with("audio ")
+                    || t.starts_with("code ")
+            })
+            .collect();
+        assert!(
+            kind_rows.iter().all(|l| l.contains("audio")),
+            "only audio rows expected, got: {kind_rows:?}"
+        );
     }
 }
