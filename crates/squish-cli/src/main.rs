@@ -1,5 +1,6 @@
 mod cli;
 mod runner;
+mod stats;
 mod walker;
 
 use anyhow::{Context, Result};
@@ -21,6 +22,15 @@ fn main() -> std::process::ExitCode {
 
 fn real_main() -> Result<u8> {
     let args = cli::Args::parse();
+
+    if args.stats {
+        let now = chrono::Local::now();
+        let records = stats::default_data_file()
+            .and_then(|p| stats::load_records(&p).ok())
+            .unwrap_or_default();
+        print!("{}", stats::render_report(&records, now));
+        return Ok(0);
+    }
 
     for p in &args.paths {
         if !p.exists() {
@@ -126,5 +136,6 @@ fn real_main() -> Result<u8> {
         overwrite: args.overwrite,
     };
     let report = runner::run(&worklist, &cfg)?;
+    stats::append_batch(&report, args.dry_run, args.no_stats);
     Ok(report.exit_code())
 }

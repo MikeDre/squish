@@ -220,6 +220,8 @@ SVG continues to be handled as an image (better structural compaction via `usvg`
                              squish would change the extension, e.g. .dv→.mp4)
       --suffix <NAME>        Custom output filename suffix (default: squished)
       --dry-run              Show what would happen; don't write
+      --stats                Print usage report (this month + all-time) and exit
+      --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
   -j, --jobs <N>             Parallelism (default: num CPUs)
   -v, --verbose              Per-file output
       --quiet                Errors only
