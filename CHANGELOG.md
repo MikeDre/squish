@@ -4,6 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-05-28
+
+### Added
+- **`--stats` usage report.** A new local-only usage ledger records each
+  `squish` batch (files squished + input/output bytes, broken down by image /
+  video / audio / code). Running `squish --stats` prints a small report with
+  two windows: **this month** and **all time**, each showing total files
+  squished, bytes saved, and a per-kind breakdown. Nothing leaves the machine.
+- **Opt-out.** Recording is on by default. Use `--no-stats` to skip a single
+  run, or set `SQUISH_NO_STATS=1` to disable globally. Stats are also skipped
+  for `--dry-run` and for batches that produced no successful squishes.
+- The usage ledger lives at the platform data dir
+  (`~/Library/Application Support/squish/usage.jsonl` on macOS, the equivalent
+  XDG path on Linux, `%APPDATA%\squish\usage.jsonl` on Windows). One JSON
+  Lines record per batch; ~200 bytes/record. Atomic `O_APPEND` writes; future
+  schema changes detected via a `v` field on each record.
+
+[0.3.4]: https://github.com/MikeDre/squish/compare/v0.3.3...v0.3.4
+
 ## [0.3.3] - 2026-05-28
 
 ### Fixed
