@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-05-28
+
+### Fixed
+- **Integration tests no longer pollute the local usage ledger.** Before this
+  fix, `cargo test --workspace` (and `cargo test -p squish-media-cli`) ran the
+  `squish` binary against audio/image/video/code fixtures via `assert_cmd`,
+  and those invocations appended records to the developer's real
+  `~/Library/Application Support/squish/usage.jsonl`. The integration tests
+  now route all binary invocations through a `bin()` helper that sets
+  `SQUISH_NO_STATS=1`, and a meta-test prevents any future direct
+  `cargo_bin("squish")` call from being reintroduced. Only the squish
+  maintainer/contributor workflow was affected; regular users installing via
+  `cargo install` were not.
+
+[0.3.5]: https://github.com/MikeDre/squish/compare/v0.3.4...v0.3.5
+
 ## [0.3.4] - 2026-05-28
 
 ### Added
