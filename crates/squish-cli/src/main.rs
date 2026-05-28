@@ -1,5 +1,6 @@
 mod cli;
 mod runner;
+mod stats;
 mod walker;
 
 use anyhow::{Context, Result};
