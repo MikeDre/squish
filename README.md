@@ -1,6 +1,6 @@
 # squish
 
-Super fast local image & media compression on your machine. Takes files or directories, writes `*_squished.*` siblings alongside the originals. Non-destructive — originals are never touched.
+Super fast local file optimisation. Compresses images, video, and audio; minifies JS, TS, CSS, HTML, and JSON — all from one CLI, no servers, no uploads. Takes files or directories, writes `*_squished.*` siblings alongside the originals (or replaces in place with `-o`). Non-destructive by default — originals are never touched unless you ask.
 
 ## Install
 
@@ -104,12 +104,52 @@ squish video.mp4
 # Use H.264 instead
 squish video.mp4 --codec h264
 
-# Fast mode — optimize without re-encoding
+# Fast mode — optimise without re-encoding
 squish video.mp4 --fast
 
 # Mixed batch — images and videos together
 squish ./media/ -r
 # → Squished 8 files (5 images, 3 videos) · 120.3 MB → 34.1 MB (-71.7%)
+```
+
+### Audio
+
+```bash
+# Single file — re-encode at the same codec with sensible quality
+squish track.mp3
+
+# Convert a lossless file to Opus (~50% size reduction)
+squish --codec opus song.flac
+
+# Pick a specific bitrate
+squish --bitrate 192k podcast.mp3
+
+# Strip ID3 tags and album art
+squish --strip-tags album/*.mp3
+```
+
+### Code
+
+```bash
+# Minify everything in dist/ recursively
+squish dist/ -r
+# → app.js → app.min.js, style.css → style.min.css, …
+
+# Safe mode — whitespace-only, no identifier mangling
+squish --safe app.js
+
+# Emit a source map alongside the minified output
+squish --source-map app.js style.css
+```
+
+### Usage report
+
+```bash
+# How much have I saved this month + all-time?
+squish --stats
+
+# Skip recording this run (also: SQUISH_NO_STATS=1)
+squish photos/ -r --no-stats
 ```
 
 ## Formats
@@ -121,10 +161,10 @@ Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TI
 | Format | Library |
 |---|---|
 | PNG | `oxipng` + `imagequant` |
-| JPEG | `mozjpeg` (progressive, optimized Huffman) |
+| JPEG | `mozjpeg` (progressive, optimised Huffman) |
 | WebP | `libwebp` (static); animated WebP copies through unchanged |
 | AVIF | `ravif` (encode) + `dav1d` (decode) |
-| SVG | `usvg` (compact serialization) |
+| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) |
 | GIF (static + animated) | `gifsicle -O3` |
 | HEIC | `libheif-rs` |
 | TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output |
@@ -226,7 +266,7 @@ SVG continues to be handled as an image (better structural compaction via `usvg`
   -v, --verbose              Per-file output
       --quiet                Errors only
       --codec <CODEC>        Codec: video=h264|h265|av1|vp9, audio=mp3|aac|opus|vorbis|flac|alac
-      --fast                 Video: optimize without re-encoding
+      --fast                 Video: optimise without re-encoding
       --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
       --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
       --safe                 Code: skip mangling and DCE (whitespace-only minification)
@@ -241,7 +281,7 @@ If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `
 
 ```bash
 cargo test              # run all tests
-cargo build --release   # optimized binary
+cargo build --release   # optimised binary
 ```
 
 Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/squish-video/tests/fixtures/` (videos). See the README in each for sources.
