@@ -9,7 +9,7 @@ homepage.workspace = true
 readme.workspace = true
 keywords.workspace = true
 categories.workspace = true
-description = "Local media compression & conversion CLI"
+description = "Local CLI to compress images, video, audio, and minify code"
 
 [[bin]]
 name = "squish"

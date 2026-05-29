@@ -66,7 +66,7 @@ pub struct Args {
     #[arg(long)]
     pub codec: Option<String>,
 
-    /// Video fast mode: optimize without re-encoding.
+    /// Video fast mode: optimise without re-encoding.
     #[arg(long)]
     pub fast: bool,
 
