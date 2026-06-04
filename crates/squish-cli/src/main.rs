@@ -1,4 +1,5 @@
 mod cli;
+mod format_request;
 mod runner;
 mod stats;
 mod walker;
