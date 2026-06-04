@@ -225,6 +225,17 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
     }
 
+    if let Err(msg) = validate_format_kinds_present(
+        cfg.opts.output_format.is_some(),
+        cfg.video_opts.output_format.is_some(),
+        cfg.audio_opts.output_format.is_some(),
+        !image_files.is_empty(),
+        !video_files.is_empty(),
+        !audio_files.is_empty(),
+    ) {
+        return Err(anyhow::anyhow!(msg));
+    }
+
     if cfg.dry_run {
         for p in &image_files {
             println!("{}", dry_run_action(cfg.overwrite, "image", p));
@@ -470,6 +481,44 @@ fn fast_override_note(fast: bool, format_in: VideoFormat, format_out: VideoForma
     } else {
         None
     }
+}
+
+/// After per-input classification, ensure every kind that was requested via
+/// `--format` matches at least one input. `--format webm` parses as both
+/// video and audio, so the intersection of `requested` and `present` must be
+/// non-empty (not "all requested kinds must be present").
+fn validate_format_kinds_present(
+    img_requested: bool,
+    vid_requested: bool,
+    aud_requested: bool,
+    img_present: bool,
+    vid_present: bool,
+    aud_present: bool,
+) -> Result<(), String> {
+    let any_requested = img_requested || vid_requested || aud_requested;
+    if !any_requested {
+        return Ok(());
+    }
+    let any_matches = (img_requested && img_present)
+        || (vid_requested && vid_present)
+        || (aud_requested && aud_present);
+    if any_matches {
+        return Ok(());
+    }
+    let requested_kinds: Vec<&str> = [
+        ("image", img_requested),
+        ("video", vid_requested),
+        ("audio", aud_requested),
+    ]
+    .iter()
+    .filter(|(_, r)| *r)
+    .map(|(n, _)| *n)
+    .collect();
+    Err(format!(
+        "--format specifies a {} format, but no {} files were provided",
+        requested_kinds.join("/"),
+        requested_kinds.join("/")
+    ))
 }
 
 /// Dry-run line for a planned file action, reflecting overwrite mode.
@@ -764,5 +813,51 @@ mod fast_override_tests {
         assert!(fast_override_note(false, VideoFormat::Dv, VideoFormat::Mp4).is_none());
         // no remap → no note
         assert!(fast_override_note(true, VideoFormat::Mp4, VideoFormat::Mp4).is_none());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cross_kind_format_check_passes_when_kind_present() {
+        // image format requested, image files present → OK.
+        let r = validate_format_kinds_present(
+            true, false, false, // requested: image-yes, video-no, audio-no
+            true, false, false, // present: image-yes
+        );
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn cross_kind_format_check_fails_when_kind_missing() {
+        // video format requested but worklist has only images → error.
+        let r = validate_format_kinds_present(
+            false, true, false, // requested: video only
+            true, false, false, // present: image only
+        );
+        let msg = r.unwrap_err();
+        assert!(msg.contains("video"), "msg should mention video: {msg}");
+    }
+
+    #[test]
+    fn cross_kind_format_check_passes_when_at_least_one_matches() {
+        // webm: both video AND audio requested; only video files present → OK.
+        let r = validate_format_kinds_present(
+            false, true, true,  // requested: video + audio (webm)
+            false, true, false, // present: video only
+        );
+        assert!(r.is_ok());
+    }
+
+    #[test]
+    fn cross_kind_format_check_passes_when_nothing_requested() {
+        // No --format → no validation to do.
+        let r = validate_format_kinds_present(
+            false, false, false,
+            true, false, false,
+        );
+        assert!(r.is_ok());
     }
 }
