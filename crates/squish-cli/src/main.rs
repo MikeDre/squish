@@ -4,11 +4,11 @@ mod runner;
 mod stats;
 mod walker;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Parser;
-use squish_audio::AudioOptions;
+use squish_audio::{AudioFormat, AudioOptions};
 use squish_code::CodeOptions;
-use squish_core::{Format, SquishOptions};
+use squish_core::SquishOptions;
 use squish_video::VideoOptions;
 
 fn main() -> std::process::ExitCode {
@@ -46,8 +46,19 @@ fn real_main() -> Result<u8> {
             .ok();
     }
 
-    let output_format = if let Some(f) = &args.format {
-        Some(Format::parse(f).context(format!("unknown --format value: {f}"))?)
+    let requested_format = if let Some(f) = &args.format {
+        let req = format_request::RequestedFormat::parse(f)
+            .ok_or_else(|| anyhow::anyhow!("unknown --format value: {f}"))?;
+        // Audio sanity: reject wav/aiff up front (no PCM codec yet) only
+        // when audio is the SOLE matching kind — otherwise non-audio inputs
+        // can still use the requested format and audio inputs (if any) will
+        // be caught later per-file.
+        if let Err(msg) = req.validate_audio_output() {
+            if req.image.is_none() && req.video.is_none() {
+                anyhow::bail!("{msg}");
+            }
+        }
+        Some(req)
     } else {
         None
     };
@@ -85,13 +96,27 @@ fn real_main() -> Result<u8> {
         }
     }
 
-    let (video_codec_override, audio_codec_override) =
+    let (video_codec_override, mut audio_codec_override) =
         runner::validate_codec_string(args.codec.as_deref(), has_video, has_audio)?;
+
+    // If --format implies an audio codec (and is compatible with any
+    // explicit --codec), apply it so the audio pipeline uses the right codec
+    // and the lossless-input prompt sees codec=Some and skips.
+    if let Some(req) = &requested_format {
+        if let Some(audio_target) = req.audio {
+            if !matches!(audio_target, AudioFormat::Wav | AudioFormat::Aiff) {
+                let resolved =
+                    format_request::resolve_audio_codec(audio_target, audio_codec_override)
+                        .map_err(|e| anyhow::anyhow!(e))?;
+                audio_codec_override = Some(resolved);
+            }
+        }
+    }
 
     let opts = SquishOptions {
         quality: args.quality,
         lossless: args.lossless,
-        output_format,
+        output_format: requested_format.as_ref().and_then(|r| r.image),
         force_overwrite: args.force,
         max_width: args.max_width,
         max_height: args.max_height,
@@ -106,7 +131,7 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
-        output_format: None,
+        output_format: requested_format.as_ref().and_then(|r| r.video),
     };
 
     let audio_opts = AudioOptions {
@@ -117,7 +142,7 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
-        output_format: None,
+        output_format: requested_format.as_ref().and_then(|r| r.audio),
     };
 
     let code_opts = CodeOptions {
