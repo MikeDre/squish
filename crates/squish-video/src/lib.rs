@@ -47,7 +47,9 @@ pub fn squish_video(
         reason: "could not identify video format from extension or magic bytes".into(),
     })?;
 
-    let format_out = format_in.output_format();
+    let format_out = opts
+        .output_format
+        .unwrap_or_else(|| format_in.output_format());
     let ext = resolve_output_ext(input, format_in, format_out);
 
     let force_reencode = format_out != format_in;
@@ -145,5 +147,35 @@ mod tests {
     fn output_ext_uses_target_when_remapped() {
         let p = Path::new("clip.dv");
         assert_eq!(resolve_output_ext(p, VideoFormat::Dv, VideoFormat::Mp4), "mp4");
+    }
+
+    #[test]
+    fn output_format_override_replaces_default() {
+        // No file IO — pure path/format logic via resolve_output_ext.
+        let input = Path::new("clip.mov");
+        let format_in = VideoFormat::Mov;
+        let opts = VideoOptions {
+            output_format: Some(VideoFormat::Mp4),
+            ..Default::default()
+        };
+        // The new selection logic Task 2 introduces:
+        let format_out = opts.output_format.unwrap_or_else(|| format_in.output_format());
+        assert_eq!(format_out, VideoFormat::Mp4);
+        let ext = resolve_output_ext(input, format_in, format_out);
+        assert_eq!(ext, "mp4");
+        // Force-reencode is true because output container differs from input.
+        assert!(format_out != format_in);
+    }
+
+    #[test]
+    fn output_format_none_preserves_input_default() {
+        // Regression guard: with no override, behaviour is exactly as today.
+        let input = Path::new("clip.mov");
+        let format_in = VideoFormat::Mov;
+        let opts = VideoOptions::default();
+        let format_out = opts.output_format.unwrap_or_else(|| format_in.output_format());
+        assert_eq!(format_out, VideoFormat::Mov);
+        let ext = resolve_output_ext(input, format_in, format_out);
+        assert_eq!(ext, "mov");
     }
 }
