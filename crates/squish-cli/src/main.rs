@@ -105,6 +105,7 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
+        output_format: None,
     };
 
     let audio_opts = AudioOptions {
@@ -115,6 +116,7 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
+        output_format: None,
     };
 
     let code_opts = CodeOptions {
