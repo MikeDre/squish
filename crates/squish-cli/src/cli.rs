@@ -17,7 +17,9 @@ pub struct Args {
     #[arg(long)]
     pub lossless: bool,
 
-    /// Output format: png, jpg/jpeg, webp, avif, svg, gif, heic, tiff.
+    /// Output format. Image: png, jpg/jpeg, webp, avif, svg, gif, heic, tiff.
+    /// Video: mp4, webm, mov, avi, mkv, flv. Audio: mp3, m4a, opus, ogg, flac, webm.
+    /// Applied per input kind; other kinds use their defaults.
     #[arg(short = 'f', long)]
     pub format: Option<String>,
 

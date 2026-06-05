@@ -64,6 +64,11 @@ pub struct VideoOptions {
 
     /// Replace the input file in place instead of writing a `_squished` copy.
     pub overwrite: bool,
+
+    /// Explicit output container override (set via CLI `--format`). When
+    /// `None`, the pipeline falls back to `format_in.output_format()` (which
+    /// handles the DV → MP4 transcode-only rule).
+    pub output_format: Option<crate::format::VideoFormat>,
 }
 
 impl VideoOptions {

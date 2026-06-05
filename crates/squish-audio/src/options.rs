@@ -65,6 +65,11 @@ pub struct AudioOptions {
 
     /// Replace the input file in place instead of writing a `_squished` copy.
     pub overwrite: bool,
+
+    /// Explicit output container override (set via CLI `--format`). When
+    /// `None`, the pipeline picks an extension based on the chosen codec
+    /// (existing behaviour).
+    pub output_format: Option<crate::format::AudioFormat>,
 }
 
 pub fn default_audio_quality() -> u8 {

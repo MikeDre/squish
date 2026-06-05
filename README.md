@@ -110,6 +110,10 @@ squish video.mp4 --fast
 # Mixed batch — images and videos together
 squish ./media/ -r
 # → Squished 8 files (5 images, 3 videos) · 120.3 MB → 34.1 MB (-71.7%)
+
+# Convert a .mov to .mp4 (re-encodes with the container default codec)
+squish trailer.mov --format mp4
+# → trailer_squished.mp4
 ```
 
 ### Audio
@@ -126,6 +130,10 @@ squish --bitrate 192k podcast.mp3
 
 # Strip ID3 tags and album art
 squish --strip-tags album/*.mp3
+
+# Convert lossless to a specific container/codec
+squish song.flac --format opus
+# → song_squished.opus
 ```
 
 ### Code
@@ -251,7 +259,7 @@ SVG continues to be handled as an image (better structural compaction via `usvg`
 ```
   -q, --quality <0-100>      Quality override (default: format-specific)
       --lossless             Lossless compression (overrides --quality)
-  -f, --format <FORMAT>      Output format; default preserves input format
+  -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
   -r, --recursive            Recurse into directories

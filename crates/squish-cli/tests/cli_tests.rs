@@ -673,6 +673,94 @@ fn cli_animated_webp_no_resize_no_warning() {
     assert_eq!(output_bytes, input_bytes);
 }
 
+#[test]
+fn format_unknown_value_errors() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("dot.png");
+    // Tiny 1x1 PNG so the path-existence check passes.
+    std::fs::write(
+        &input,
+        [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0x99, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x5B, 0xD0, 0x3F,
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ],
+    )
+    .unwrap();
+
+    bin()
+        .arg(&input)
+        .arg("--format")
+        .arg("zzz")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown --format value: zzz"));
+}
+
+#[test]
+fn format_cross_kind_mismatch_errors() {
+    // --format mp4 with only an image input → cross-kind validation fires.
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("dot.png");
+    std::fs::write(
+        &input,
+        [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48,
+            0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x02, 0x00, 0x00,
+            0x00, 0x90, 0x77, 0x53, 0xDE, 0x00, 0x00, 0x00, 0x0C, 0x49, 0x44, 0x41, 0x54, 0x08,
+            0x99, 0x63, 0xF8, 0xCF, 0xC0, 0x00, 0x00, 0x00, 0x03, 0x00, 0x01, 0x5B, 0xD0, 0x3F,
+            0x80, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+        ],
+    )
+    .unwrap();
+
+    bin()
+        .arg(&input)
+        .arg("--format")
+        .arg("mp4")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "--format specifies a video/audio format, but no video/audio files were provided",
+        ));
+}
+
+#[test]
+fn format_mov_to_mp4_round_trip() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mov");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y", "-f", "lavfi", "-i",
+            "testsrc=size=128x128:rate=15:duration=1",
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+
+    bin()
+        .arg(&input)
+        .arg("--format")
+        .arg("mp4")
+        .assert()
+        .success();
+
+    let output = tmp.path().join("clip_squished.mp4");
+    assert!(output.exists(), "expected output at {}", output.display());
+    assert!(std::fs::metadata(&output).unwrap().len() > 0);
+    // The .mov input must NOT have a sibling .mov output (proves --format
+    // changed the container).
+    assert!(!tmp.path().join("clip_squished.mov").exists());
+}
+
 /// Regression: every squish-binary invocation in this file must go through
 /// the `bin()` helper, which sets the no-stats env var. If anyone reintroduces
 /// a direct binary-spawn call, this test fails — preventing future test runs

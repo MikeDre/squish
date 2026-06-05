@@ -56,7 +56,8 @@ pub fn squish_audio(input: &Path, opts: &AudioOptions) -> Result<AudioResult, Au
         .and_then(|e| e.to_str())
         .map(|s| s.to_ascii_lowercase())
         .unwrap_or_default();
-    let output_ext = resolve_output_extension(input_codec, codec, &input_ext);
+    let output_ext =
+        resolve_output_ext_for_audio(opts.output_format, input_codec, codec, &input_ext);
     let format_out = AudioFormat::parse(&output_ext).unwrap_or(format_in);
 
     let (encode_path, rename_to) = if opts.overwrite {
@@ -115,6 +116,21 @@ pub fn resolve_output_codec(opts: &AudioOptions, input_codec: Option<AudioCodec>
     match input_codec {
         Some(c) if !c.is_lossless() => c,
         Some(_) | None => AudioCodec::Opus,
+    }
+}
+
+/// Pick the output extension for an audio batch. When an explicit
+/// `output_format` is set (via CLI `--format`), its canonical extension wins.
+/// Otherwise, fall back to the codec-derived extension (existing behaviour).
+pub fn resolve_output_ext_for_audio(
+    output_format: Option<AudioFormat>,
+    input_codec: Option<AudioCodec>,
+    codec: AudioCodec,
+    input_ext: &str,
+) -> String {
+    match output_format {
+        Some(target) => target.extension().to_string(),
+        None => resolve_output_extension(input_codec, codec, input_ext),
     }
 }
 
@@ -263,5 +279,41 @@ mod tests {
             resolve_output_extension(None, AudioCodec::Opus, "wav"),
             "opus"
         );
+    }
+
+    #[test]
+    fn output_ext_with_explicit_format_uses_format_extension() {
+        let ext = resolve_output_ext_for_audio(
+            Some(AudioFormat::Opus),
+            Some(AudioCodec::Mp3),
+            AudioCodec::Opus,
+            "mp3",
+        );
+        assert_eq!(ext, "opus");
+    }
+
+    #[test]
+    fn output_ext_without_format_uses_codec_derived_extension() {
+        // No --format set → existing behaviour.
+        let ext = resolve_output_ext_for_audio(
+            None,
+            Some(AudioCodec::Opus),
+            AudioCodec::Opus,
+            "opus",
+        );
+        // resolve_output_extension preserves input ext when codec matches.
+        assert_eq!(ext, "opus");
+    }
+
+    #[test]
+    fn output_ext_with_format_overrides_codec_inference() {
+        // User says --format flac on what would otherwise be auto-Opus.
+        let ext = resolve_output_ext_for_audio(
+            Some(AudioFormat::Flac),
+            Some(AudioCodec::Mp3),
+            AudioCodec::Flac,
+            "mp3",
+        );
+        assert_eq!(ext, "flac");
     }
 }
