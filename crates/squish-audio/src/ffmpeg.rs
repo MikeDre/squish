@@ -233,6 +233,45 @@ pub fn run_ffmpeg(
     squish_media::run_ffmpeg(input, output, &args)
 }
 
+/// Probe the container duration in seconds. Returns `Ok(None)` when ffprobe
+/// can't determine it (streams without a duration, broken files).
+pub fn ffprobe_duration_secs(path: &Path) -> Result<Option<f64>, AudioError> {
+    let output = Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(path)
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                AudioError::MissingDependency {
+                    name: "ffprobe".into(),
+                    install_hint:
+                        "ffprobe ships with ffmpeg; brew install ffmpeg or apt install ffmpeg"
+                            .into(),
+                }
+            } else {
+                AudioError::Io(e)
+            }
+        })?;
+
+    if !output.status.success() {
+        return Ok(None);
+    }
+
+    let duration = String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|d| d.is_finite() && *d > 0.0);
+    Ok(duration)
+}
+
 /// Detect whether the file has an attached picture (album art) stream.
 pub fn ffprobe_has_attached_picture(path: &Path) -> Result<bool, AudioError> {
     let output = Command::new("ffprobe")
@@ -396,6 +435,44 @@ mod tests {
             ProbeKind::AudioOnly => {}
             other => panic!("expected AudioOnly for attached-picture MP3, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn ffprobe_duration_of_generated_clip() {
+        if !ProcCommand::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("sine.wav");
+        let gen = ProcCommand::new("ffmpeg")
+            .args([
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=2.0",
+                "-ac",
+                "1",
+            ])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert!(gen.status.success(), "ffmpeg failed to generate fixture");
+
+        let d = ffprobe_duration_secs(&path).unwrap().expect("duration");
+        assert!((d - 2.0).abs() < 0.2, "expected ~2.0s, got {d}");
+    }
+
+    #[test]
+    fn ffprobe_duration_none_for_missing_file() {
+        let d = ffprobe_duration_secs(&PathBuf::from("/definitely/missing.mp3")).unwrap();
+        assert_eq!(d, None);
     }
 
     #[test]

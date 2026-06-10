@@ -50,6 +50,29 @@ pub fn squish_audio(input: &Path, opts: &AudioOptions) -> Result<AudioResult, Au
         });
     }
 
+    // A size budget needs a bitrate-controllable encode: compute the bitrate
+    // from the probed duration and carry it via `bitrate_kbps`.
+    let mut effective_opts = opts.clone();
+    if let Some(target) = opts.target_size {
+        if codec.is_lossless() || codec == AudioCodec::Copy {
+            return Err(AudioError::InvalidOption {
+                reason: format!(
+                    "--target-size is not valid for codec {codec:?} (cannot control output size)"
+                ),
+            });
+        }
+        let kbps = ffmpeg::ffprobe_duration_secs(input)?
+            .and_then(|d| options::target_bitrate_kbps(target, d))
+            .ok_or_else(|| AudioError::InvalidOption {
+                reason: format!(
+                    "cannot honour --target-size: could not determine duration of {}",
+                    input.display()
+                ),
+            })?;
+        effective_opts.bitrate_kbps = Some(kbps);
+    }
+    let opts = &effective_opts;
+
     // Resolve output extension.
     let input_ext = input
         .extension()

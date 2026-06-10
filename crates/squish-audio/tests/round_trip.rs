@@ -281,3 +281,73 @@ fn strip_tags_removes_title() {
         "title should be stripped: {title}"
     );
 }
+
+fn generate_sine_with_duration(path: &Path, seconds: f64, codec_args: &[&str]) {
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args([
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        &format!("sine=frequency=440:duration={seconds}"),
+        "-ac",
+        "2",
+    ]);
+    for a in codec_args {
+        cmd.arg(a);
+    }
+    cmd.arg(path);
+    let out = cmd.output().expect("ffmpeg invocation failed");
+    assert!(
+        out.status.success(),
+        "ffmpeg failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+#[test]
+fn mp3_respects_target_size() {
+    if !has_ffmpeg() {
+        eprintln!("skip: no ffmpeg");
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    // 5 s at CBR 320k ≈ 200 kB input.
+    generate_sine_with_duration(&input, 5.0, &["-c:a", "libmp3lame", "-b:a", "320k"]);
+
+    let opts = AudioOptions {
+        target_size: Some(40_000),
+        ..Default::default()
+    };
+    let result = squish_audio(&input, &opts).unwrap();
+    assert!(
+        result.output_bytes <= 40_000,
+        "output {} exceeds target 40000",
+        result.output_bytes
+    );
+    // Sanity: a real encode, not a truncated file.
+    assert!(result.output_bytes > 8_000, "suspiciously small output");
+}
+
+#[test]
+fn target_size_with_lossless_codec_errors() {
+    if !has_ffmpeg() {
+        eprintln!("skip: no ffmpeg");
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.flac");
+    generate_sine(&input, &["-c:a", "flac"]);
+
+    let opts = AudioOptions {
+        codec: Some(AudioCodec::Flac),
+        target_size: Some(40_000),
+        ..Default::default()
+    };
+    let err = squish_audio(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("target-size"),
+        "expected target-size error, got: {err}"
+    );
+}

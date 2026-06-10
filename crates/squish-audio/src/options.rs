@@ -70,6 +70,23 @@ pub struct AudioOptions {
     /// `None`, the pipeline picks an extension based on the chosen codec
     /// (existing behaviour).
     pub output_format: Option<crate::format::AudioFormat>,
+
+    /// Target output size in bytes. When set, the encode bitrate is computed
+    /// from the input's duration so the output fits the budget. Requires a
+    /// bitrate-controllable (lossy) codec; takes precedence over `quality`.
+    pub target_size: Option<u64>,
+}
+
+/// Compute the audio bitrate (kbps) that fits `target_bytes` into
+/// `duration_secs`, leaving headroom for container overhead and metadata.
+/// Returns `None` when the duration is unknown or non-positive. Clamped to
+/// 8..=320 kbps (the envelope every supported lossy encoder accepts).
+pub fn target_bitrate_kbps(target_bytes: u64, duration_secs: f64) -> Option<u32> {
+    if !duration_secs.is_finite() || duration_secs <= 0.0 {
+        return None;
+    }
+    let kbps = (target_bytes as f64 * 8.0 * 0.95) / 1000.0 / duration_secs;
+    Some((kbps.floor() as u32).clamp(8, 320))
 }
 
 pub fn default_audio_quality() -> u8 {
@@ -216,5 +233,29 @@ mod tests {
         assert_eq!(quality_to_opus_bitrate(0), 32);
         assert_eq!(quality_to_opus_bitrate(80), 96);
         assert_eq!(quality_to_opus_bitrate(100), 160);
+    }
+
+    #[test]
+    fn target_bitrate_basic_math_with_overhead() {
+        // 1 MB over 100 s: 8000 kbit / 100 s = 80 kbps, minus 5% overhead → 76.
+        assert_eq!(target_bitrate_kbps(1_000_000, 100.0), Some(76));
+    }
+
+    #[test]
+    fn target_bitrate_clamps_to_floor() {
+        // 10 kB over 60 s computes ~1 kbps; encoders won't go that low.
+        assert_eq!(target_bitrate_kbps(10_000, 60.0), Some(8));
+    }
+
+    #[test]
+    fn target_bitrate_clamps_to_ceiling() {
+        assert_eq!(target_bitrate_kbps(1_000_000_000, 1.0), Some(320));
+    }
+
+    #[test]
+    fn target_bitrate_rejects_unknown_duration() {
+        assert_eq!(target_bitrate_kbps(1_000_000, 0.0), None);
+        assert_eq!(target_bitrate_kbps(1_000_000, -1.0), None);
+        assert_eq!(target_bitrate_kbps(1_000_000, f64::NAN), None);
     }
 }

@@ -54,6 +54,35 @@ pub fn squish_video(
 
     let force_reencode = format_out != format_in;
 
+    // A size budget needs a bitrate-controlled re-encode: compute the video
+    // bitrate from the probed duration, reserving room for copied audio.
+    let video_bitrate_kbps = match opts.target_size {
+        None => None,
+        Some(target) => {
+            let ext = resolve_output_ext(input, format_in, format_out);
+            let codec = opts.effective_codec_for_ext_reencode(&ext, force_reencode);
+            if codec == VideoCodec::Copy {
+                return Err(VideoError::InvalidOption {
+                    reason: "--target-size requires re-encoding and cannot be combined with \
+                             --fast / --codec copy"
+                        .into(),
+                });
+            }
+            let duration = ffmpeg::ffprobe_duration_secs(input)?;
+            let audio_kbps = ffmpeg::ffprobe_audio_bitrate_kbps(input)?;
+            let kbps = duration
+                .and_then(|d| options::target_video_bitrate_kbps(target, d, audio_kbps))
+                .ok_or_else(|| VideoError::InvalidOption {
+                    reason: format!(
+                        "cannot honour --target-size {target} bytes for {}: duration unknown \
+                         or budget too small for this length of video",
+                        input.display()
+                    ),
+                })?;
+            Some(kbps)
+        }
+    };
+
     let (encode_path, rename_to) = if opts.overwrite {
         match in_place_target(input, &ext) {
             Some(target) => {
@@ -80,7 +109,23 @@ pub fn squish_video(
         )
     };
 
-    ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode)?;
+    match (video_bitrate_kbps, opts.target_size) {
+        (Some(initial_kbps), Some(target)) => {
+            // Single-pass ABR overshoots on short clips; re-encode with the
+            // bitrate scaled by the observed overshoot until the output fits.
+            let mut kbps = initial_kbps;
+            for attempt in 1..=3 {
+                ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, Some(kbps))?;
+                let size = std::fs::metadata(&encode_path)?.len();
+                if size <= target || attempt == 3 {
+                    break;
+                }
+                let ratio = target as f64 / size as f64;
+                kbps = ((kbps as f64 * ratio * 0.98) as u32).max(20);
+            }
+        }
+        _ => ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, None)?,
+    }
 
     let output_path = match rename_to {
         Some(target) => {

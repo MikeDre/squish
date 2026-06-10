@@ -76,6 +76,15 @@ pub struct Args {
     #[arg(long)]
     pub bitrate: Option<String>,
 
+    /// Target output size per file, e.g. 500k, 1.5M, 2g (decimal units).
+    /// Images search for the best quality that fits; video/audio compute a
+    /// bitrate from the input's duration. Not applicable to code files.
+    #[arg(
+        long = "target-size",
+        conflicts_with_all = ["quality", "lossless", "bitrate", "fast"]
+    )]
+    pub target_size: Option<String>,
+
     /// Strip audio metadata (ID3 tags, album art). Default: preserved.
     #[arg(long = "strip-tags")]
     pub strip_tags: bool,
