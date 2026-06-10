@@ -31,6 +31,13 @@ pub struct SquishOptions {
 
     /// Replace the input file in place instead of writing a `_squished` copy.
     pub overwrite: bool,
+
+    /// Target output size in bytes. When set, formats with a quality dial
+    /// binary-search for the highest quality whose output fits the budget;
+    /// takes precedence over `quality`. If the budget is unreachable even at
+    /// minimum quality, the smallest attempt is written and a warning is
+    /// attached to the result.
+    pub target_size: Option<u64>,
 }
 
 impl SquishOptions {

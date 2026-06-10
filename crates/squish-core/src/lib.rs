@@ -43,24 +43,27 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
         (f, None) => f,
     };
 
-    // If resize is requested and format supports it, decode → resize → encode.
-    // SVG is skipped (vector). Animated WebP is also skipped — the webp codec
-    // cannot resize animations; webp::compress emits a warning and passes through.
-    // For same-format paths that normally skip decode, resize forces the
-    // decode → resize → encode path.
     let is_animated_webp =
         format_in == Format::Webp && formats::webp::is_animated_webp(&input_bytes_vec);
-    let (output_bytes, warnings) =
-        if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
-            let mut img = decode_to_dynamic_image(format_in, &input_bytes_vec, input)?;
-            if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
-                img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
-            }
-            let bytes = dispatch_encode_raster(format_out, &img, opts, input)?;
-            (bytes, Vec::new())
-        } else {
-            dispatch_compress_with_conversion(format_in, format_out, &input_bytes_vec, opts, input)?
-        };
+    let (output_bytes, warnings) = match opts.target_size {
+        Some(target) => compress_to_target(
+            format_in,
+            format_out,
+            &input_bytes_vec,
+            opts,
+            input,
+            is_animated_webp,
+            target,
+        )?,
+        None => encode_once(
+            format_in,
+            format_out,
+            &input_bytes_vec,
+            opts,
+            input,
+            is_animated_webp,
+        )?,
+    };
 
     let target_ext = if format_in == format_out {
         input
@@ -103,6 +106,130 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
         duration: start.elapsed(),
         warnings,
     })
+}
+
+/// One full encode pass at the quality carried in `opts`.
+///
+/// If resize is requested and format supports it, decode → resize → encode.
+/// SVG is skipped (vector). Animated WebP is also skipped — the webp codec
+/// cannot resize animations; webp::compress emits a warning and passes through.
+/// For same-format paths that normally skip decode, resize forces the
+/// decode → resize → encode path.
+fn encode_once(
+    format_in: Format,
+    format_out: Format,
+    input_bytes: &[u8],
+    opts: &SquishOptions,
+    path: &Path,
+    is_animated_webp: bool,
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
+    if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
+        let mut img = decode_to_dynamic_image(format_in, input_bytes, path)?;
+        if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
+            img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
+        }
+        let bytes = dispatch_encode_raster(format_out, &img, opts, path)?;
+        Ok((bytes, Vec::new()))
+    } else {
+        dispatch_compress_with_conversion(format_in, format_out, input_bytes, opts, path)
+    }
+}
+
+/// Whether an output format has a quality dial the target-size search can turn.
+/// SVG is vector-lossless; TIFF output re-encodes losslessly.
+fn has_quality_dial(format_out: Format) -> bool {
+    !matches!(format_out, Format::Svg | Format::Tiff)
+}
+
+/// Find the highest quality whose output fits `target` bytes, via binary
+/// search over the 1..=100 quality range (~7 encode passes). For formats
+/// without a quality dial, encodes once and warns if the budget is missed.
+/// An unreachable budget yields the smallest attempt plus a warning.
+fn compress_to_target(
+    format_in: Format,
+    format_out: Format,
+    input_bytes: &[u8],
+    opts: &SquishOptions,
+    path: &Path,
+    is_animated_webp: bool,
+    target: u64,
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
+    let over_budget_warning = |size: u64, detail: &str| {
+        format!(
+            "{}: could not reach target size {target} bytes ({detail}); output is {size} bytes",
+            path.display()
+        )
+    };
+
+    if !has_quality_dial(format_out) || opts.lossless || is_animated_webp {
+        let (bytes, mut warnings) = encode_once(
+            format_in,
+            format_out,
+            input_bytes,
+            opts,
+            path,
+            is_animated_webp,
+        )?;
+        if bytes.len() as u64 > target {
+            let detail = format!(
+                "{} output has no quality dial to adjust",
+                format_out.extension()
+            );
+            warnings.push(over_budget_warning(bytes.len() as u64, &detail));
+        }
+        return Ok((bytes, warnings));
+    }
+
+    let mut lo: u8 = 1;
+    let mut hi: u8 = 100;
+    let mut best: Option<(Vec<u8>, Vec<String>)> = None;
+    let mut smallest: Option<(Vec<u8>, Vec<String>)> = None;
+
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let attempt_opts = SquishOptions {
+            quality: Some(mid),
+            target_size: None,
+            ..opts.clone()
+        };
+        let (bytes, warnings) = encode_once(
+            format_in,
+            format_out,
+            input_bytes,
+            &attempt_opts,
+            path,
+            is_animated_webp,
+        )?;
+        if smallest
+            .as_ref()
+            .map(|(b, _)| bytes.len() < b.len())
+            .unwrap_or(true)
+        {
+            smallest = Some((bytes.clone(), warnings.clone()));
+        }
+        if bytes.len() as u64 <= target {
+            best = Some((bytes, warnings));
+            lo = mid + 1;
+        } else {
+            if mid == 1 {
+                break;
+            }
+            hi = mid - 1;
+        }
+    }
+
+    match best {
+        Some(found) => Ok(found),
+        None => {
+            let (bytes, mut warnings) =
+                smallest.expect("search always evaluates at least one quality");
+            warnings.push(over_budget_warning(
+                bytes.len() as u64,
+                "even at minimum quality",
+            ));
+            Ok((bytes, warnings))
+        }
+    }
 }
 
 fn dispatch_compress_with_conversion(

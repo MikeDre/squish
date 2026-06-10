@@ -2,6 +2,7 @@ mod cli;
 mod format_request;
 mod runner;
 mod stats;
+mod target_size;
 mod walker;
 
 use anyhow::Result;

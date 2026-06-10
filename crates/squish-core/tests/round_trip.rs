@@ -334,3 +334,108 @@ fn animated_webp_with_resize_produces_warning() {
     assert_eq!(result.warnings.len(), 1);
     assert!(result.warnings[0].contains("cannot be resized"));
 }
+
+#[test]
+fn jpeg_respects_target_size() {
+    let (_tmp, input) = copy_fixture("sample.jpg");
+    // Default-quality squish of this fixture lands well above 12 KB, so the
+    // search must lower quality to fit the budget.
+    let opts = SquishOptions {
+        target_size: Some(12_000),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 12_000,
+        "output {} exceeds target 12000",
+        r.output_bytes
+    );
+    assert!(r.warnings.is_empty(), "unexpected warnings: {:?}", r.warnings);
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Jpeg)
+    );
+}
+
+#[test]
+fn target_size_uses_budget_for_quality() {
+    // A generous budget should produce a *larger* (higher-quality) output than
+    // a tight one — the search picks the highest quality that fits.
+    let (_tmp1, input1) = copy_fixture("sample.jpg");
+    let generous = squish_file(
+        &input1,
+        &SquishOptions { target_size: Some(40_000), ..Default::default() },
+    )
+    .unwrap();
+    let (_tmp2, input2) = copy_fixture("sample.jpg");
+    let tight = squish_file(
+        &input2,
+        &SquishOptions { target_size: Some(8_000), ..Default::default() },
+    )
+    .unwrap();
+    assert!(generous.output_bytes <= 40_000);
+    assert!(tight.output_bytes <= 8_000);
+    assert!(
+        generous.output_bytes > tight.output_bytes,
+        "generous {} should beat tight {}",
+        generous.output_bytes,
+        tight.output_bytes
+    );
+}
+
+#[test]
+fn target_size_unreachable_warns_and_writes_best_effort() {
+    let (_tmp, input) = copy_fixture("sample.jpg");
+    // 200 bytes is impossible for this image even at quality 1.
+    let opts = SquishOptions {
+        target_size: Some(200),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(r.output_path.exists());
+    assert!(r.output_bytes > 200, "200 bytes should be unreachable");
+    assert!(
+        r.warnings.iter().any(|w| w.contains("target")),
+        "expected a target-size warning, got: {:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn target_size_no_dial_format_warns_when_over() {
+    // SVG has no quality dial; an impossible target must warn, not loop.
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        target_size: Some(10),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(r.output_bytes > 10);
+    assert!(
+        r.warnings.iter().any(|w| w.contains("target")),
+        "expected a target-size warning, got: {:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn target_size_applies_to_cross_format_conversion() {
+    let (_tmp, input) = copy_fixture("sample.png");
+    let opts = SquishOptions {
+        target_size: Some(15_000),
+        output_format: Some(squish_core::Format::Webp),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 15_000,
+        "output {} exceeds target 15000",
+        r.output_bytes
+    );
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Webp)
+    );
+}
