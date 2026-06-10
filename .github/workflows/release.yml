@@ -40,7 +40,7 @@ jobs:
             target: aarch64-apple-darwin
           - os: macos-13
             target: x86_64-apple-darwin
-          - os: ubuntu-22.04
+          - os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
@@ -55,7 +55,14 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libheif-dev libdav1d-dev nasm pkg-config
+          sudo apt-get install -y libdav1d-dev nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev
+          # Ubuntu's libheif-dev (1.17.x) is older than libheif-sys's >=1.18
+          # requirement, so build libheif from source.
+          git clone --depth 1 --branch v1.23.0 https://github.com/strukturag/libheif.git /tmp/libheif
+          cmake -S /tmp/libheif -B /tmp/libheif/build -DCMAKE_BUILD_TYPE=Release -DWITH_EXAMPLES=OFF -DBUILD_TESTING=OFF
+          cmake --build /tmp/libheif/build -j"$(nproc)"
+          sudo cmake --install /tmp/libheif/build
+          sudo ldconfig
 
       - uses: dtolnay/rust-toolchain@stable
 
