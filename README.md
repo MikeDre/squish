@@ -24,7 +24,7 @@ curl --proto '=https' --tlsv1.2 -sSf https://rustup.rs | sh
 
 Once the installer finishes, open a **new terminal** (or run `source ~/.cargo/env`) so that `cargo` is available on your PATH.
 
-> **Note:** the workspace pins a nightly toolchain via `rust-toolchain.toml` because `oxc_transformer` (used for TypeScript minification) depends on the unstable `if_let_guard` feature. `rustup` will auto-install the required nightly the first time you build — no manual action needed, but the first build is slower while the toolchain downloads. Once `if_let_guard` stabilizes in stable Rust we'll drop the pin.
+> **Note:** squish builds on stable Rust (1.95 or newer). If your toolchain is older, run `rustup update` first.
 
 **2. Install system deps and build:**
 

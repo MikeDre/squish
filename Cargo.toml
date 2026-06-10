@@ -12,7 +12,7 @@ members = [
 [workspace.package]
 version = "0.3.5"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.95"
 license = "MIT"
 description = "Local CLI to compress images, video, audio, and minify code"
 homepage = "https://github.com/MikeDre/squish"
