@@ -225,6 +225,14 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
     }
 
+    if let Err(msg) = validate_target_size_applicable(
+        cfg.opts.target_size.is_some(),
+        !image_files.is_empty() || !video_files.is_empty() || !audio_files.is_empty(),
+        !code_files.is_empty(),
+    ) {
+        return Err(anyhow::anyhow!(msg));
+    }
+
     if let Err(msg) = validate_format_kinds_present(
         cfg.opts.output_format.is_some(),
         cfg.video_opts.output_format.is_some(),
@@ -481,6 +489,22 @@ fn fast_override_note(fast: bool, format_in: VideoFormat, format_out: VideoForma
     } else {
         None
     }
+}
+
+/// `--target-size` only makes sense for media: minified code has no quality
+/// dial. Reject a batch that is code-only; in mixed batches the code files
+/// simply minify as usual.
+fn validate_target_size_applicable(
+    target_requested: bool,
+    has_media: bool,
+    has_code: bool,
+) -> Result<(), String> {
+    if target_requested && !has_media && has_code {
+        return Err(
+            "--target-size does not apply to code files (only images, video, audio)".into(),
+        );
+    }
+    Ok(())
 }
 
 /// After per-input classification, ensure every kind that was requested via
@@ -813,6 +837,35 @@ mod fast_override_tests {
         assert!(fast_override_note(false, VideoFormat::Dv, VideoFormat::Mp4).is_none());
         // no remap → no note
         assert!(fast_override_note(true, VideoFormat::Mp4, VideoFormat::Mp4).is_none());
+    }
+}
+
+#[cfg(test)]
+mod target_size_validation_tests {
+    use super::*;
+
+    #[test]
+    fn no_target_size_always_passes() {
+        assert!(validate_target_size_applicable(false, false, true).is_ok());
+        assert!(validate_target_size_applicable(false, true, false).is_ok());
+    }
+
+    #[test]
+    fn target_size_with_media_passes() {
+        assert!(validate_target_size_applicable(true, true, false).is_ok());
+        assert!(validate_target_size_applicable(true, true, true).is_ok());
+    }
+
+    #[test]
+    fn target_size_code_only_errors() {
+        let msg = validate_target_size_applicable(true, false, true).unwrap_err();
+        assert!(msg.contains("code"), "msg should mention code: {msg}");
+    }
+
+    #[test]
+    fn target_size_empty_batch_passes() {
+        // Nothing matched at all — the empty-batch handling elsewhere applies.
+        assert!(validate_target_size_applicable(true, false, false).is_ok());
     }
 }
 

@@ -90,6 +90,9 @@ squish photos/ -r --max-width 2000
 # Fit within a box
 squish hero.jpg --max-width 1920 --max-height 1080
 
+# Compress to a size budget (highest quality that fits)
+squish hero.jpg --target-size 500k
+
 # Preview without writing
 squish ./big-folder/ -r --dry-run
 ```
@@ -106,6 +109,9 @@ squish video.mp4 --codec h264
 
 # Fast mode — optimise without re-encoding
 squish video.mp4 --fast
+
+# Fit a clip under an upload limit (bitrate computed from duration)
+squish clip.mp4 --target-size 8M
 
 # Mixed batch — images and videos together
 squish ./media/ -r
@@ -130,6 +136,9 @@ squish --bitrate 192k podcast.mp3
 
 # Strip ID3 tags and album art
 squish --strip-tags album/*.mp3
+
+# Fit a podcast under a size budget (bitrate computed from duration)
+squish episode.mp3 --target-size 25M
 
 # Convert lossless to a specific container/codec
 squish song.flac --format opus
@@ -262,6 +271,11 @@ SVG continues to be handled as an image (better structural compaction via `usvg`
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
+      --target-size <SIZE>   Per-file output size budget, e.g. 500k, 1.5M, 2g (decimal
+                             units). Images pick the highest quality that fits; video/
+                             audio compute a bitrate from the input's duration. Conflicts
+                             with --quality/--lossless/--bitrate/--fast; not applicable
+                             to code files or lossless audio codecs
   -r, --recursive            Recurse into directories
       --force                Overwrite existing _squished files
   -o, --overwrite            Replace each input file in place (skips files whose

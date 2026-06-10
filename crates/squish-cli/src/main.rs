@@ -64,6 +64,15 @@ fn real_main() -> Result<u8> {
         None
     };
 
+    let target_size = match args.target_size.as_deref() {
+        None => None,
+        Some(s) => Some(target_size::parse_target_size(s).ok_or_else(|| {
+            anyhow::anyhow!(
+                "--target-size must be a positive size like 500k, 1.5M, or 800000 (got: {s})"
+            )
+        })?),
+    };
+
     let bitrate_kbps = match args.bitrate.as_deref() {
         None => None,
         Some(s) => {
@@ -123,6 +132,7 @@ fn real_main() -> Result<u8> {
         max_height: args.max_height,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
+        target_size,
     };
 
     let video_opts = VideoOptions {
@@ -133,6 +143,7 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         output_format: requested_format.as_ref().and_then(|r| r.video),
+        target_size,
     };
 
     let audio_opts = AudioOptions {
@@ -144,6 +155,7 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         output_format: requested_format.as_ref().and_then(|r| r.audio),
+        target_size,
     };
 
     let code_opts = CodeOptions {

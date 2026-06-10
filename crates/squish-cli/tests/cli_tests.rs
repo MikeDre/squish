@@ -777,3 +777,65 @@ fn no_direct_cargo_bin_calls_in_this_file() {
          (got {count} direct binary-spawn occurrences; only the one inside fn bin() is allowed)"
     );
 }
+
+#[test]
+fn target_size_flag_fits_image_under_budget() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.jpg");
+    fs::copy(core_fixture("sample.jpg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--target-size", "12k"])
+        .assert()
+        .success();
+
+    let out = tmp.path().join("sample_squished.jpg");
+    assert!(out.exists());
+    assert!(
+        fs::metadata(&out).unwrap().len() <= 12_000,
+        "output exceeds 12k budget"
+    );
+}
+
+#[test]
+fn target_size_conflicts_with_quality() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.jpg");
+    fs::copy(core_fixture("sample.jpg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--target-size", "12k", "--quality", "50"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn target_size_rejects_invalid_value() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.jpg");
+    fs::copy(core_fixture("sample.jpg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--target-size", "abc"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("target-size"));
+}
+
+#[test]
+fn target_size_code_only_batch_errors() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("app.js");
+    fs::write(&input, "const x = 1;\nconsole.log(x);\n").unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--target-size", "1k"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("code"));
+}
