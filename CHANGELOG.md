@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-06-10
+
+### Added
+- **`--target-size` — compress to a size budget.** `squish clip.mp4
+  --target-size 8M` fits each file under a per-file byte budget (decimal
+  units: `500k`, `1.5M`, `2g`). Images binary-search the quality dial for the
+  highest quality that fits (SVG/TIFF outputs have no dial and warn when over
+  budget; unreachable budgets write the smallest attempt plus a warning).
+  Video computes an ABR bitrate from the probed duration (copied audio
+  subtracted, VBV-constrained, with up to three shrink-and-retry passes on
+  overshoot). Audio computes a bitrate from duration with 5% container
+  headroom. Conflicts with `--quality`/`--lossless`/`--bitrate`/`--fast`;
+  rejected for code-only batches and lossless audio codecs.
+- **Universal `--format`.** The `--format` flag now accepts image, video, and
+  audio formats and applies each to the matching input kind (e.g.
+  `squish media/ -r --format webp` converts images while videos and audio use
+  their defaults; `squish trailer.mov --format mp4` re-encodes the container).
+  Cross-kind validation rejects a `--format` whose kind has no matching files
+  in the batch.
+
+### Changed
+- **squish now builds on stable Rust (MSRV 1.95).** The `if_let_guard`
+  feature that forced a nightly toolchain pin stabilised in Rust 1.95.0, so
+  `rust-toolchain.toml` tracks `stable` and the workspace `rust-version` is
+  1.95. `cargo install squish-media-cli` no longer needs nightly.
+- **Prebuilt binaries.** Version tags now build release binaries for
+  macOS (arm64/x64) and Linux (x64/arm64) via GitHub Actions and attach them
+  to the GitHub release.
+
+[0.4.0]: https://github.com/MikeDre/squish/compare/v0.3.5...v0.4.0
+
 ## [0.3.5] - 2026-05-28
 
 ### Fixed

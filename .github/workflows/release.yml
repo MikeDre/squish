@@ -1,0 +1,75 @@
+name: Release
+
+# Builds prebuilt `squish` binaries for every supported platform when a
+# version tag (v*) is pushed, and attaches them to the GitHub release.
+#
+# Note: binaries dynamically link libheif and dav1d (HEIC/AVIF support).
+# macOS users get them via the Homebrew formula's dependencies; Linux users
+# need `apt install libheif1 libdav1d-dev`-equivalents at runtime. gifsicle
+# and ffmpeg remain runtime subprocess dependencies as documented in the
+# README.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || \
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
+
+  build:
+    name: Build ${{ matrix.target }}
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libheif dav1d nasm pkg-config
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libheif-dev libdav1d-dev nasm pkg-config
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release -p squish-media-cli
+
+      - name: Package
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          archive="squish-v${version}-${{ matrix.target }}.tar.gz"
+          tar -czf "$archive" -C target/release squish
+          shasum -a 256 "$archive" > "$archive.sha256"
+
+      - name: Upload artifacts to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" squish-v*.tar.gz squish-v*.tar.gz.sha256 --clobber
