@@ -7,7 +7,15 @@ use std::path::Path;
 
 /// Build the codec-specific portion of an ffmpeg argv. Returns the full argv
 /// after `ffmpeg -y -i <input>` and before `<output>`.
-pub fn build_codec_args(out_ext: &str, opts: &VideoOptions, force_reencode: bool) -> Vec<OsString> {
+///
+/// `video_bitrate_kbps` switches rate control from CRF to average-bitrate
+/// (used by `--target-size`).
+pub fn build_codec_args(
+    out_ext: &str,
+    opts: &VideoOptions,
+    force_reencode: bool,
+    video_bitrate_kbps: Option<u32>,
+) -> Vec<OsString> {
     let mut args: Vec<OsString> = Vec::new();
     let codec = opts.effective_codec_for_ext_reencode(out_ext, force_reencode);
 
@@ -18,7 +26,15 @@ pub fn build_codec_args(out_ext: &str, opts: &VideoOptions, force_reencode: bool
         args.push("-c:v".into());
         args.push(codec.ffmpeg_encoder().into());
 
-        if let Some(crf) = opts.effective_crf_for_codec(codec) {
+        if let Some(kbps) = video_bitrate_kbps {
+            args.push("-b:v".into());
+            args.push(format!("{kbps}k").into());
+            // VBV-constrain the encode so ABR can't overshoot the budget.
+            args.push("-maxrate".into());
+            args.push(format!("{kbps}k").into());
+            args.push("-bufsize".into());
+            args.push(format!("{}k", kbps * 2).into());
+        } else if let Some(crf) = opts.effective_crf_for_codec(codec) {
             args.push("-crf".into());
             args.push(crf.to_string().into());
         }
@@ -33,8 +49,12 @@ pub fn build_codec_args(out_ext: &str, opts: &VideoOptions, force_reencode: bool
                 args.push("6".into());
             }
             VideoCodec::Vp9 => {
-                args.push("-b:v".into());
-                args.push("0".into());
+                // CRF-mode VP9 needs `-b:v 0` to mean "pure constant quality";
+                // in target-bitrate mode the real -b:v was emitted above.
+                if video_bitrate_kbps.is_none() {
+                    args.push("-b:v".into());
+                    args.push("0".into());
+                }
             }
             VideoCodec::Copy => unreachable!(),
         }
@@ -65,13 +85,72 @@ pub fn run_ffmpeg(
     output: &Path,
     opts: &VideoOptions,
     force_reencode: bool,
+    video_bitrate_kbps: Option<u32>,
 ) -> Result<(), VideoError> {
     let out_ext = output
         .extension()
         .and_then(|e| e.to_str())
         .unwrap_or("");
-    let args = build_codec_args(out_ext, opts, force_reencode);
+    let args = build_codec_args(out_ext, opts, force_reencode, video_bitrate_kbps);
     squish_media::run_ffmpeg(input, output, &args)
+}
+
+fn ffprobe_csv(path: &Path, entries: &str, select: Option<&str>) -> Result<Option<String>, VideoError> {
+    let mut cmd = std::process::Command::new("ffprobe");
+    cmd.args(["-v", "error"]);
+    if let Some(streams) = select {
+        cmd.args(["-select_streams", streams]);
+    }
+    cmd.args(["-show_entries", entries, "-of", "csv=p=0"]).arg(path);
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            VideoError::MissingDependency {
+                name: "ffprobe".into(),
+                install_hint: "ffprobe ships with ffmpeg; brew install ffmpeg or apt install ffmpeg"
+                    .into(),
+            }
+        } else {
+            VideoError::Io(e)
+        }
+    })?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    Ok(Some(String::from_utf8_lossy(&output.stdout).into_owned()))
+}
+
+/// Probe the container duration in seconds. Returns `Ok(None)` when ffprobe
+/// can't determine it.
+pub fn ffprobe_duration_secs(path: &Path) -> Result<Option<f64>, VideoError> {
+    let Some(stdout) = ffprobe_csv(path, "format=duration", None)? else {
+        return Ok(None);
+    };
+    Ok(stdout
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|d| d.is_finite() && *d > 0.0))
+}
+
+/// Sum the bitrates of all audio streams in kbps (audio is copied as-is, so
+/// it eats into a `--target-size` budget). Streams whose bitrate ffprobe
+/// reports as unknown are assumed to be 128 kbps. No audio → 0.
+pub fn ffprobe_audio_bitrate_kbps(path: &Path) -> Result<u32, VideoError> {
+    let Some(stdout) = ffprobe_csv(path, "stream=bit_rate", Some("a"))? else {
+        return Ok(0);
+    };
+    let mut total_kbps: u32 = 0;
+    for line in stdout.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        total_kbps += match line.parse::<u64>() {
+            Ok(bps) => (bps / 1000) as u32,
+            Err(_) => 128, // "N/A" — assume a typical stereo lossy stream
+        };
+    }
+    Ok(total_kbps)
 }
 
 #[cfg(test)]
@@ -80,16 +159,86 @@ mod tests {
     use crate::options::{VideoCodec, VideoOptions};
 
     fn args(out_ext: &str, opts: VideoOptions) -> Vec<String> {
-        build_codec_args(out_ext, &opts, false)
+        build_codec_args(out_ext, &opts, false, None)
+            .into_iter()
+            .map(|o| o.into_string().unwrap())
+            .collect()
+    }
+
+    fn args_with_bitrate(out_ext: &str, opts: VideoOptions, kbps: u32) -> Vec<String> {
+        build_codec_args(out_ext, &opts, false, Some(kbps))
             .into_iter()
             .map(|o| o.into_string().unwrap())
             .collect()
     }
 
     #[test]
+    fn target_bitrate_emits_b_v_instead_of_crf() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::H265),
+            ..Default::default()
+        };
+        let a = args_with_bitrate("mp4", opts, 1200);
+        let pos = a.iter().position(|s| s == "-b:v").expect("expected -b:v");
+        assert_eq!(a[pos + 1], "1200k");
+        assert!(!a.contains(&"-crf".to_string()));
+    }
+
+    #[test]
+    fn target_bitrate_vp9_replaces_b_v_zero() {
+        let opts = VideoOptions {
+            codec: Some(VideoCodec::Vp9),
+            ..Default::default()
+        };
+        let a = args_with_bitrate("webm", opts, 900);
+        let positions: Vec<usize> = a
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| *s == "-b:v")
+            .map(|(i, _)| i)
+            .collect();
+        assert_eq!(positions.len(), 1, "exactly one -b:v expected: {a:?}");
+        assert_eq!(a[positions[0] + 1], "900k");
+        assert!(!a.contains(&"-crf".to_string()));
+    }
+
+    #[test]
+    fn ffprobe_duration_of_sample_fixture() {
+        if !std::process::Command::new("ffprobe")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            eprintln!("skipping: ffprobe not present");
+            return;
+        }
+        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("tests/fixtures/sample.mp4");
+        let d = ffprobe_duration_secs(&p).unwrap().expect("duration");
+        assert!((d - 2.0).abs() < 0.2, "expected ~2.0s, got {d}");
+    }
+
+    #[test]
+    fn ffprobe_audio_bitrate_zero_for_silent_fixture() {
+        if !std::process::Command::new("ffprobe")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            eprintln!("skipping: ffprobe not present");
+            return;
+        }
+        let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("tests/fixtures/sample.mp4");
+        assert_eq!(ffprobe_audio_bitrate_kbps(&p).unwrap(), 0);
+    }
+
+    #[test]
     fn force_reencode_replaces_fast_copy() {
         let opts = VideoOptions { fast: true, ..Default::default() };
-        let a: Vec<String> = build_codec_args("mp4", &opts, true)
+        let a: Vec<String> = build_codec_args("mp4", &opts, true, None)
             .into_iter()
             .map(|o| o.into_string().unwrap())
             .collect();

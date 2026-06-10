@@ -69,6 +69,33 @@ pub struct VideoOptions {
     /// `None`, the pipeline falls back to `format_in.output_format()` (which
     /// handles the DV → MP4 transcode-only rule).
     pub output_format: Option<crate::format::VideoFormat>,
+
+    /// Target output size in bytes. When set, the video bitrate is computed
+    /// from the input's duration (minus copied audio streams) so the output
+    /// fits the budget; takes precedence over `quality`. Incompatible with
+    /// `--fast`/copy (no re-encode means no size control).
+    pub target_size: Option<u64>,
+}
+
+/// Compute the video bitrate (kbps) that fits `target_bytes` into
+/// `duration_secs` after reserving room for copied audio streams
+/// (`audio_kbps`) and 5% container overhead. Returns `None` when the duration
+/// is unknown/non-positive or the leftover video budget is below 20 kbps
+/// (too small to produce usable video).
+pub fn target_video_bitrate_kbps(
+    target_bytes: u64,
+    duration_secs: f64,
+    audio_kbps: u32,
+) -> Option<u32> {
+    if !duration_secs.is_finite() || duration_secs <= 0.0 {
+        return None;
+    }
+    let total_kbps = ((target_bytes as f64 * 8.0 * 0.95) / 1000.0 / duration_secs).floor();
+    let video_kbps = total_kbps - audio_kbps as f64;
+    if video_kbps < 20.0 {
+        return None;
+    }
+    Some(video_kbps as u32)
 }
 
 impl VideoOptions {
@@ -263,5 +290,34 @@ mod tests {
     fn reencode_does_not_override_real_codec() {
         let o = VideoOptions { codec: Some(VideoCodec::AV1), ..Default::default() };
         assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::AV1);
+    }
+
+    #[test]
+    fn target_video_bitrate_subtracts_audio_and_overhead() {
+        // 10 MB over 60 s: 80 000 kbit × 0.95 / 60 s = 1266 kbps total,
+        // minus 128 kbps audio → 1138 kbps for video.
+        assert_eq!(
+            target_video_bitrate_kbps(10_000_000, 60.0, 128),
+            Some(1138)
+        );
+    }
+
+    #[test]
+    fn target_video_bitrate_no_audio() {
+        // 1 MB over 10 s: 8000 × 0.95 / 10 = 760 kbps, all for video.
+        assert_eq!(target_video_bitrate_kbps(1_000_000, 10.0, 0), Some(760));
+    }
+
+    #[test]
+    fn target_video_bitrate_too_small_returns_none() {
+        // 1 MB over 10 min leaves ~12 kbps before audio — unusable.
+        assert_eq!(target_video_bitrate_kbps(1_000_000, 600.0, 128), None);
+    }
+
+    #[test]
+    fn target_video_bitrate_rejects_unknown_duration() {
+        assert_eq!(target_video_bitrate_kbps(1_000_000, 0.0, 0), None);
+        assert_eq!(target_video_bitrate_kbps(1_000_000, -1.0, 0), None);
+        assert_eq!(target_video_bitrate_kbps(1_000_000, f64::NAN, 0), None);
     }
 }

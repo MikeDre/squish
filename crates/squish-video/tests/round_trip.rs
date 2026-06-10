@@ -270,3 +270,70 @@ fn force_overwrite_works() {
     let r2 = squish_video(&input, &opts).unwrap();
     assert_eq!(r1.output_path, r2.output_path);
 }
+
+#[test]
+fn mp4_respects_target_size() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    // 3 s of random noise — incompressible, so the input is guaranteed to be
+    // far larger than the budget and rate control has real work to do.
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "nullsrc=s=320x240:d=3:r=30",
+            "-vf",
+            "geq=random(1)*255:128:128",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "18",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+    let input_size = std::fs::metadata(&input).unwrap().len();
+    assert!(input_size > 200_000, "fixture too small: {input_size}");
+
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::H264),
+        target_size: Some(50_000),
+        ..Default::default()
+    };
+    let r = squish_video::squish_video(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 50_000,
+        "output {} exceeds target 50000",
+        r.output_bytes
+    );
+    assert!(r.output_bytes > 5_000, "suspiciously small output");
+}
+
+#[test]
+fn target_size_with_fast_copy_errors() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    std::fs::copy(fixture("sample.mp4"), &input).unwrap();
+
+    let opts = squish_video::VideoOptions {
+        fast: true,
+        target_size: Some(50_000),
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("target-size"),
+        "expected target-size error, got: {err}"
+    );
+}
