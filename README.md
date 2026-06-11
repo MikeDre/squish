@@ -323,6 +323,30 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --source-map           Code: emit a .map file alongside output (JS/TS/CSS only)
 ```
 
+## Config file
+
+squish reads defaults from the nearest `squish.toml` (walking up from the current directory) and from a global config at `~/Library/Application Support/squish/config.toml` (macOS) or `~/.config/squish/config.toml` (Linux). Precedence: **CLI flags > project `squish.toml` > global config**. Pass `--no-config` to ignore both. Keys mirror the CLI flag names:
+
+```toml
+# squish.toml
+quality = 75
+format = "webp"
+recursive = true
+max-width = 2000
+
+[video]
+codec = "h264"
+
+[audio]
+codec = "opus"
+strip-tags = true
+
+[code]
+safe = true
+```
+
+Rate control is all-or-nothing: passing any of `--quality`/`--lossless`/`--bitrate`/`--fast`/`--target-size` on the command line disables all of those keys from config for that run, so a config `target-size` can never override an explicit `--quality`. Unknown keys are an error — typos fail loudly.
+
 ## Collision behavior
 
 If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `_3`, etc. Pass `--force` to overwrite instead.

@@ -105,4 +105,8 @@ pub struct Args {
     /// Also respected via SQUISH_NO_STATS env var.
     #[arg(long = "no-stats")]
     pub no_stats: bool,
+
+    /// Ignore squish.toml config files for this run.
+    #[arg(long = "no-config")]
+    pub no_config: bool,
 }
