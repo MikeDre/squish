@@ -1,4 +1,5 @@
 mod cli;
+mod config;
 mod format_request;
 mod runner;
 mod stats;
@@ -23,7 +24,7 @@ fn main() -> std::process::ExitCode {
 }
 
 fn real_main() -> Result<u8> {
-    let args = cli::Args::parse();
+    let mut args = cli::Args::parse();
 
     if args.stats {
         let now = chrono::Local::now();
@@ -33,6 +34,14 @@ fn real_main() -> Result<u8> {
         print!("{}", stats::render_report(&records, now));
         return Ok(0);
     }
+
+    let file_cfg = if args.no_config {
+        config::FileConfig::default()
+    } else {
+        load_file_config()?
+    };
+    apply_file_config(&mut args, &file_cfg);
+    let args = args;
 
     for p in &args.paths {
         if !p.exists() {
@@ -106,8 +115,28 @@ fn real_main() -> Result<u8> {
         }
     }
 
-    let (video_codec_override, mut audio_codec_override) =
+    let (mut video_codec_override, mut audio_codec_override) =
         runner::validate_codec_string(args.codec.as_deref(), has_video, has_audio)?;
+
+    // Config-supplied codecs are ambient per-kind defaults: they fill in only
+    // when --codec didn't, and are not validated against the batch contents
+    // (a project config's video codec must not error on an image-only run).
+    if video_codec_override.is_none() {
+        if let Some(s) = &file_cfg.video.codec {
+            video_codec_override = Some(
+                squish_video::VideoCodec::parse(s)
+                    .ok_or_else(|| anyhow::anyhow!("squish.toml: unknown video codec: {s}"))?,
+            );
+        }
+    }
+    if audio_codec_override.is_none() {
+        if let Some(s) = &file_cfg.audio.codec {
+            audio_codec_override = Some(
+                squish_audio::AudioCodec::parse(s)
+                    .ok_or_else(|| anyhow::anyhow!("squish.toml: unknown audio codec: {s}"))?,
+            );
+        }
+    }
 
     // If --format implies an audio codec (and is compatible with any
     // explicit --codec), apply it so the audio pipeline uses the right codec
@@ -179,4 +208,82 @@ fn real_main() -> Result<u8> {
     let report = runner::run(&worklist, &cfg)?;
     stats::append_batch(&report, args.dry_run, args.no_stats);
     Ok(report.exit_code())
+}
+
+/// Load and merge config files: the global config (overridable via the
+/// SQUISH_GLOBAL_CONFIG env var, mainly for tests) under the nearest
+/// project-level squish.toml found from the current directory upward.
+fn load_file_config() -> Result<config::FileConfig> {
+    let mut cfg = config::FileConfig::default();
+
+    let global_path = std::env::var_os("SQUISH_GLOBAL_CONFIG")
+        .map(std::path::PathBuf::from)
+        .or_else(|| dirs::config_dir().map(|d| d.join("squish/config.toml")));
+    if let Some(p) = global_path {
+        if p.is_file() {
+            let text = std::fs::read_to_string(&p)?;
+            cfg =
+                config::parse_config(&text).map_err(|e| anyhow::anyhow!("{}: {e}", p.display()))?;
+        }
+    }
+
+    if let Ok(cwd) = std::env::current_dir() {
+        if let Some(p) = config::find_project_config(&cwd) {
+            let text = std::fs::read_to_string(&p)?;
+            let project =
+                config::parse_config(&text).map_err(|e| anyhow::anyhow!("{}: {e}", p.display()))?;
+            cfg = config::merge(cfg, project);
+        }
+    }
+
+    Ok(cfg)
+}
+
+/// Fill unset CLI args from the merged config. CLI flags always win. Rate
+/// control is all-or-nothing: passing any of --quality/--lossless/--bitrate/
+/// --fast/--target-size on the CLI disables every config rate-control key, so
+/// a config target-size can't sneak past an explicit --quality (clap's
+/// conflict rules only see real CLI flags).
+fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
+    let cli_rate_control = args.quality.is_some()
+        || args.lossless
+        || args.bitrate.is_some()
+        || args.fast
+        || args.target_size.is_some();
+    if !cli_rate_control {
+        args.quality = cfg.quality;
+        args.lossless = cfg.lossless.unwrap_or(false);
+        args.target_size = cfg.target_size.clone();
+        args.bitrate = cfg.audio.bitrate.clone();
+        args.fast = cfg.video.fast.unwrap_or(false);
+    }
+
+    if args.format.is_none() {
+        args.format = cfg.format.clone();
+    }
+    if !args.recursive {
+        args.recursive = cfg.recursive.unwrap_or(false);
+    }
+    // --overwrite conflicts with --suffix on the CLI; respect that here too.
+    if args.suffix.is_none() && !args.overwrite {
+        args.suffix = cfg.suffix.clone();
+    }
+    if args.jobs.is_none() {
+        args.jobs = cfg.jobs;
+    }
+    if args.max_width.is_none() {
+        args.max_width = cfg.max_width;
+    }
+    if args.max_height.is_none() {
+        args.max_height = cfg.max_height;
+    }
+    if !args.strip_tags {
+        args.strip_tags = cfg.audio.strip_tags.unwrap_or(false);
+    }
+    if !args.safe {
+        args.safe = cfg.code.safe.unwrap_or(false);
+    }
+    if !args.source_map {
+        args.source_map = cfg.code.source_map.unwrap_or(false);
+    }
 }

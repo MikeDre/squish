@@ -19,6 +19,8 @@ fn core_fixture(name: &str) -> PathBuf {
 fn bin() -> Command {
     let mut cmd = Command::cargo_bin("squish").unwrap();
     cmd.env("SQUISH_NO_STATS", "1");
+    // Hermetic: never read the developer's real global config in tests.
+    cmd.env("SQUISH_GLOBAL_CONFIG", "/nonexistent/squish-config.toml");
     cmd
 }
 
@@ -844,4 +846,103 @@ fn target_size_code_only_batch_errors() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("code"));
+}
+
+#[test]
+fn config_file_supplies_defaults() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "suffix = \"tiny\"\n").unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .arg("sample.png")
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_tiny.png").exists());
+    assert!(!tmp.path().join("sample_squished.png").exists());
+}
+
+#[test]
+fn cli_flag_overrides_config_file() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "suffix = \"tiny\"\n").unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .args(["sample.png", "--suffix", "mini"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_mini.png").exists());
+    assert!(!tmp.path().join("sample_tiny.png").exists());
+}
+
+#[test]
+fn config_file_found_in_parent_directory() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "suffix = \"tiny\"\n").unwrap();
+    let sub = tmp.path().join("assets");
+    fs::create_dir(&sub).unwrap();
+    fs::copy(core_fixture("sample.png"), sub.join("sample.png")).unwrap();
+
+    bin().current_dir(&sub).arg("sample.png").assert().success();
+
+    assert!(sub.join("sample_tiny.png").exists());
+}
+
+#[test]
+fn invalid_config_key_is_fatal_and_names_the_file() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "qualty = 80\n").unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .arg("sample.png")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("squish.toml"));
+}
+
+#[test]
+fn no_config_flag_ignores_config_file() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "suffix = \"tiny\"\n").unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .args(["sample.png", "--no-config"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_squished.png").exists());
+    assert!(!tmp.path().join("sample_tiny.png").exists());
+}
+
+#[test]
+fn global_config_applies_under_project_config() {
+    let tmp = TempDir::new().unwrap();
+    let global = tmp.path().join("global.toml");
+    // Global sets quality AND suffix; project overrides only the suffix.
+    fs::write(&global, "suffix = \"glob\"\nquality = 10\n").unwrap();
+    fs::write(tmp.path().join("squish.toml"), "suffix = \"proj\"\n").unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .env("SQUISH_GLOBAL_CONFIG", &global)
+        .arg("sample.png")
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("sample_proj.png").exists());
 }
