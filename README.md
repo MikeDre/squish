@@ -270,7 +270,7 @@ squish --source-map app.js style.css
 squish --suffix tiny app.js   # → app.tiny.js
 ```
 
-SVG continues to be handled as an image (better structural compaction via `usvg`).
+SVG continues to be handled as an image (structural compaction via `oxvg_optimiser`, an SVGO-equivalent).
 
 **Known limitations:**
 - IE conditional comments (`<!--[if IE]>...<![endif]-->`) are stripped along with regular comments. Pass `--source-map` if you need to preserve comments in JS/CSS for debugging.
