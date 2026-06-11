@@ -4,9 +4,21 @@ Super fast local file optimisation. Compresses images, video, and audio; minifie
 
 ## Install
 
-### Install via cargo (recommended)
+### Homebrew (macOS — recommended)
 
-If you have Rust installed (see step 1 below), the fastest path is:
+```bash
+brew install mikedre/tap/squish
+```
+
+Installs a prebuilt binary plus every system dependency (ffmpeg, gifsicle, libheif, dav1d). Nothing else to do.
+
+### Prebuilt binaries
+
+Each release ships binaries for macOS (arm64/x64) and Linux (x64/arm64) on the [releases page](https://github.com/MikeDre/squish/releases). Unpack and put `squish` on your PATH. Linux binaries need `libheif` (≥ 1.18) and `dav1d` (≥ 1.3) present at runtime, plus the subprocess dependencies below for full format coverage.
+
+### Install via cargo
+
+If you have Rust installed (see step 1 below):
 
 ```bash
 cargo install squish-media-cli
