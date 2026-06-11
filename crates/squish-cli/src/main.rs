@@ -5,6 +5,7 @@ mod runner;
 mod stats;
 mod target_size;
 mod walker;
+mod watch;
 
 use anyhow::Result;
 use clap::Parser;
@@ -205,6 +206,11 @@ fn real_main() -> Result<u8> {
         dry_run: args.dry_run,
         overwrite: args.overwrite,
     };
+    if args.watch {
+        watch::run_watch(&args.paths, &cfg, args.recursive, args.no_stats)?;
+        return Ok(0);
+    }
+
     let report = runner::run(&worklist, &cfg)?;
     stats::append_batch(&report, args.dry_run, args.no_stats);
     Ok(report.exit_code())

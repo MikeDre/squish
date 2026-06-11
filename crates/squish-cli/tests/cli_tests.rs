@@ -946,3 +946,84 @@ fn global_config_applies_under_project_config() {
 
     assert!(tmp.path().join("sample_proj.png").exists());
 }
+
+/// Spawn the squish binary directly (long-running watch process — assert_cmd's
+/// blocking model doesn't fit). Mirrors bin()'s env hygiene.
+fn spawn_watch(dir: &std::path::Path, extra: &[&str]) -> std::process::Child {
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_squish"));
+    cmd.env("SQUISH_NO_STATS", "1")
+        .env("SQUISH_GLOBAL_CONFIG", "/nonexistent/squish-config.toml")
+        .current_dir(dir)
+        .arg(dir)
+        .arg("--watch")
+        .args(extra)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    cmd.spawn().expect("failed to spawn squish --watch")
+}
+
+fn wait_for(path: &std::path::Path, timeout: std::time::Duration) -> bool {
+    let start = std::time::Instant::now();
+    while start.elapsed() < timeout {
+        if path.exists() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    false
+}
+
+#[test]
+fn watch_squishes_newly_added_file() {
+    let tmp = TempDir::new().unwrap();
+    let mut child = spawn_watch(tmp.path(), &[]);
+
+    // Give the watcher a moment to arm, then drop a file in.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    fs::copy(core_fixture("sample.png"), tmp.path().join("new.png")).unwrap();
+
+    let appeared = wait_for(
+        &tmp.path().join("new_squished.png"),
+        std::time::Duration::from_secs(15),
+    );
+
+    // Loop-prevention: wait out another debounce window; the output must not
+    // have been re-squished.
+    std::thread::sleep(std::time::Duration::from_millis(2500));
+    let resquished = tmp.path().join("new_squished_squished.png").exists()
+        || tmp.path().join("new_squished_2.png").exists();
+
+    child.kill().ok();
+    child.wait().ok();
+
+    assert!(appeared, "watch did not squish the new file within 15s");
+    assert!(!resquished, "watch re-squished its own output");
+}
+
+#[test]
+fn watch_runs_initial_pass_over_existing_files() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("pre.png")).unwrap();
+
+    let mut child = spawn_watch(tmp.path(), &[]);
+    let appeared = wait_for(
+        &tmp.path().join("pre_squished.png"),
+        std::time::Duration::from_secs(15),
+    );
+
+    child.kill().ok();
+    child.wait().ok();
+    assert!(
+        appeared,
+        "initial pass did not squish the pre-existing file"
+    );
+}
+
+#[test]
+fn watch_conflicts_with_dry_run() {
+    bin()
+        .args([".", "--watch", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("cannot be used with"));
+}

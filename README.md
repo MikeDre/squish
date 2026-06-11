@@ -123,6 +123,9 @@ squish hero.jpg --target-size 500k
 
 # Preview without writing
 squish ./big-folder/ -r --dry-run
+
+# Keep watching a folder, squishing files as they land
+squish ./assets/ -r --watch
 ```
 
 ### Video
@@ -310,6 +313,10 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
                              squish would change the extension, e.g. .dv→.mp4)
       --suffix <NAME>        Custom output filename suffix (default: squished)
       --dry-run              Show what would happen; don't write
+      --watch                Keep running: watch the given paths and squish files
+                             as they appear or change (Ctrl-C to stop). Never
+                             re-squishes its own outputs
+      --no-config            Ignore squish.toml config files for this run
       --stats                Print usage report (this month + all-time) and exit
       --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
   -j, --jobs <N>             Parallelism (default: num CPUs)
