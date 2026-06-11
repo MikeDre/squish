@@ -359,7 +359,7 @@ Rate control is all-or-nothing: passing any of `--quality`/`--lossless`/`--bitra
 Squish assets in CI with the bundled action — handy before deploys, or paired with a commit-back step:
 
 ```yaml
-- uses: MikeDre/squish@main   # pin to a release tag once v0.5.0 ships
+- uses: MikeDre/squish@v0.5.0
   with:
     paths: public/images
     args: "--recursive --overwrite --quality 75"

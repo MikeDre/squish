@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-11
+
+### Added
+- **`squish.toml` config files.** Defaults are read from the nearest
+  `squish.toml` (walking up from the current directory) merged over a global
+  config at the platform config dir. Precedence: CLI flags > project config >
+  global config; `--no-config` skips both. Keys mirror CLI flag names, with
+  `[video]`/`[audio]`/`[code]` tables for kind-specific options (including
+  separate per-kind codecs). Unknown keys are an error. Rate control is
+  all-or-nothing: any explicit rate flag on the CLI disables all config
+  rate-control keys for that run.
+- **`--watch` mode.** `squish ./assets/ -r --watch` runs an initial pass,
+  then keeps watching and squishes files as they appear or change (debounced).
+  Squish never re-squishes its own outputs: `_suffix`/`_suffix_N`, `.min.*`,
+  and `.map` names are filtered, and self-written paths (e.g. with
+  `--overwrite`) are skipped once.
+- **GitHub Action.** `uses: MikeDre/squish@v0.5.0` downloads the platform
+  binary, installs runtime dependencies (skippable), and squishes the given
+  paths on ubuntu/macos runners — handy for optimising assets in CI.
+
+[0.5.0]: https://github.com/MikeDre/squish/compare/v0.4.0...v0.5.0
+
 ## [0.4.0] - 2026-06-10
 
 ### Added

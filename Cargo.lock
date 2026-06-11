@@ -3699,7 +3699,7 @@ checksum = "b7c388c1b5e93756d0c740965c41e8822f866621d41acbdf6336a6a168f8840c"
 
 [[package]]
 name = "squish-audio"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "squish-core",
  "squish-media",
@@ -3708,7 +3708,7 @@ dependencies = [
 
 [[package]]
 name = "squish-code"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "lightningcss",
  "minify-html",
@@ -3729,7 +3729,7 @@ dependencies = [
 
 [[package]]
 name = "squish-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "image",
  "imagequant",
@@ -3748,7 +3748,7 @@ dependencies = [
 
 [[package]]
 name = "squish-media"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "tempfile",
  "thiserror 1.0.69",
@@ -3756,7 +3756,7 @@ dependencies = [
 
 [[package]]
 name = "squish-media-cli"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3782,7 +3782,7 @@ dependencies = [
 
 [[package]]
 name = "squish-video"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "squish-core",
  "squish-media",
