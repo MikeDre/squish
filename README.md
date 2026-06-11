@@ -354,6 +354,26 @@ safe = true
 
 Rate control is all-or-nothing: passing any of `--quality`/`--lossless`/`--bitrate`/`--fast`/`--target-size` on the command line disables all of those keys from config for that run, so a config `target-size` can never override an explicit `--quality`. Unknown keys are an error — typos fail loudly.
 
+## GitHub Action
+
+Squish assets in CI with the bundled action — handy before deploys, or paired with a commit-back step:
+
+```yaml
+- uses: MikeDre/squish@v0.4.0
+  with:
+    paths: public/images
+    args: "--recursive --overwrite --quality 75"
+```
+
+| Input | Default | Notes |
+|---|---|---|
+| `paths` | *(required)* | Files or directories, space-separated |
+| `args` | `""` | Any squish CLI flags |
+| `version` | `latest` | Release tag of the binary to download |
+| `install-deps` | `true` | apt/brew runtime deps (libheif, dav1d, ffmpeg, gifsicle) |
+
+Runs on `ubuntu` and `macos` runners (x64 + arm64).
+
 ## Collision behavior
 
 If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `_3`, etc. Pass `--force` to overwrite instead.
