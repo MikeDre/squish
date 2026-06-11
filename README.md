@@ -320,6 +320,12 @@ cargo build --release   # optimised binary
 
 Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/squish-video/tests/fixtures/` (videos). See the README in each for sources.
 
+### Cutting a release
+
+1. Bump the workspace version in `Cargo.toml`, add a `CHANGELOG.md` entry, commit, then tag and push: `git tag vX.Y.Z && git push origin main vX.Y.Z`. The Release workflow builds and attaches binaries for macOS (arm64/x64) and Linux (x64/arm64).
+2. Publish to crates.io in dependency order: `for p in squish-core squish-media squish-video squish-audio squish-code squish-media-cli; do cargo publish -p $p; done`
+3. Update the Homebrew tap: `./scripts/release-tap.sh vX.Y.Z` (expects a sibling clone of `MikeDre/homebrew-tap`).
+
 ## License
 
 MIT.
