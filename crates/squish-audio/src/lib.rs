@@ -5,11 +5,11 @@ pub mod format;
 pub mod options;
 pub mod result;
 
-pub use squish_media::MediaError as AudioError;
 pub use ffmpeg::ProbeKind;
 pub use format::{detect_audio_format, detect_audio_from_bytes, AudioFormat};
 pub use options::{AudioCodec, AudioOptions};
 pub use result::AudioResult;
+pub use squish_media::MediaError as AudioError;
 
 use squish_core::{derive_output_path_with_suffix, in_place_target, in_place_temp_path};
 use std::path::Path;
@@ -318,12 +318,8 @@ mod tests {
     #[test]
     fn output_ext_without_format_uses_codec_derived_extension() {
         // No --format set → existing behaviour.
-        let ext = resolve_output_ext_for_audio(
-            None,
-            Some(AudioCodec::Opus),
-            AudioCodec::Opus,
-            "opus",
-        );
+        let ext =
+            resolve_output_ext_for_audio(None, Some(AudioCodec::Opus), AudioCodec::Opus, "opus");
         // resolve_output_extension preserves input ext when codec matches.
         assert_eq!(ext, "opus");
     }

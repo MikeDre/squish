@@ -1,7 +1,7 @@
 //! ffmpeg/ffprobe binary detection, command building, and execution.
 
-use crate::AudioError;
 use crate::options::AudioCodec;
+use crate::AudioError;
 use std::path::Path;
 use std::process::Command;
 

@@ -25,11 +25,7 @@ use std::path::Path;
 /// Size guard: if the optimised output is not strictly smaller than the
 /// input, the input bytes are returned unchanged. This protects already-
 /// minified SVGs from ever being grown by squish.
-pub fn compress(
-    input: &[u8],
-    _opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+pub fn compress(input: &[u8], _opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     let source = std::str::from_utf8(input).map_err(|e| SquishError::DecodeFailed {
         path: path.to_path_buf(),
         source: Box::new(e),
@@ -135,10 +131,8 @@ mod tests {
     fn idempotent_size_when_rerun() {
         let input = synthetic_regression_svg();
         let opts = SquishOptions::default();
-        let once = compress(input.as_bytes(), &opts, &PathBuf::from("a.svg"))
-            .expect("first pass");
-        let twice = compress(&once, &opts, &PathBuf::from("b.svg"))
-            .expect("second pass");
+        let once = compress(input.as_bytes(), &opts, &PathBuf::from("a.svg")).expect("first pass");
+        let twice = compress(&once, &opts, &PathBuf::from("b.svg")).expect("second pass");
         assert!(
             twice.len() <= once.len(),
             "second pass grew the output: {} → {}",

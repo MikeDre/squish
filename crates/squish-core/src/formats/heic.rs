@@ -6,21 +6,19 @@ use libheif_rs::{
 };
 use std::path::Path;
 
-pub fn compress(
-    input: &[u8],
-    opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     let lib = LibHeif::new();
 
     let ctx = HeifContext::read_from_bytes(input).map_err(|e| SquishError::DecodeFailed {
         path: path.to_path_buf(),
         source: Box::new(e),
     })?;
-    let handle = ctx.primary_image_handle().map_err(|e| SquishError::DecodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })?;
+    let handle = ctx
+        .primary_image_handle()
+        .map_err(|e| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
     let image = lib
         .decode(&handle, ColorSpace::Rgb(RgbChroma::Rgba), None)
         .map_err(|e| SquishError::DecodeFailed {
@@ -40,11 +38,12 @@ pub fn encode_raster(
     let (w, h) = img.dimensions();
     let rgba = img.to_rgba8().into_raw();
 
-    let mut heif_image = Image::new(w, h, ColorSpace::Rgb(RgbChroma::Rgba))
-        .map_err(|e| SquishError::EncodeFailed {
+    let mut heif_image = Image::new(w, h, ColorSpace::Rgb(RgbChroma::Rgba)).map_err(|e| {
+        SquishError::EncodeFailed {
             path: path.to_path_buf(),
             source: Box::new(e),
-        })?;
+        }
+    })?;
     heif_image
         .create_plane(Channel::Interleaved, w, h, 8)
         .map_err(|e| SquishError::EncodeFailed {
@@ -54,10 +53,13 @@ pub fn encode_raster(
 
     {
         let mut planes = heif_image.planes_mut();
-        let plane = planes.interleaved.as_mut().ok_or_else(|| SquishError::EncodeFailed {
-            path: path.to_path_buf(),
-            source: "missing interleaved plane after create_plane".into(),
-        })?;
+        let plane = planes
+            .interleaved
+            .as_mut()
+            .ok_or_else(|| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: "missing interleaved plane after create_plane".into(),
+            })?;
         let stride = plane.stride;
         let row_bytes = (w as usize) * 4;
         for y in 0..(h as usize) {
@@ -94,11 +96,17 @@ fn encode_heif_image(
     if opts.lossless {
         encoder
             .set_quality(EncoderQuality::LossLess)
-            .map_err(|e| SquishError::EncodeFailed { path: path.to_path_buf(), source: Box::new(e) })?;
+            .map_err(|e| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            })?;
     } else {
         encoder
             .set_quality(EncoderQuality::Lossy(q))
-            .map_err(|e| SquishError::EncodeFailed { path: path.to_path_buf(), source: Box::new(e) })?;
+            .map_err(|e| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            })?;
     }
 
     out_ctx
@@ -108,8 +116,10 @@ fn encode_heif_image(
             source: Box::new(e),
         })?;
 
-    out_ctx.write_to_bytes().map_err(|e| SquishError::EncodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })
+    out_ctx
+        .write_to_bytes()
+        .map_err(|e| SquishError::EncodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })
 }

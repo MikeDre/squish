@@ -41,12 +41,10 @@ impl RequestedFormat {
     pub fn validate_audio_output(&self) -> Result<(), String> {
         match self.audio {
             Some(AudioFormat::Wav) => Err(
-                "audio --format wav requires a PCM codec which squish does not yet support"
-                    .into(),
+                "audio --format wav requires a PCM codec which squish does not yet support".into(),
             ),
             Some(AudioFormat::Aiff) => Err(
-                "audio --format aiff requires a PCM codec which squish does not yet support"
-                    .into(),
+                "audio --format aiff requires a PCM codec which squish does not yet support".into(),
             ),
             _ => Ok(()),
         }
@@ -184,20 +182,44 @@ mod tests {
 
     #[test]
     fn default_codec_table() {
-        assert_eq!(default_codec_for_audio_format(AudioFormat::Mp3), Some(AudioCodec::Mp3));
-        assert_eq!(default_codec_for_audio_format(AudioFormat::M4a), Some(AudioCodec::Aac));
-        assert_eq!(default_codec_for_audio_format(AudioFormat::Opus), Some(AudioCodec::Opus));
-        assert_eq!(default_codec_for_audio_format(AudioFormat::Ogg), Some(AudioCodec::Vorbis));
-        assert_eq!(default_codec_for_audio_format(AudioFormat::Flac), Some(AudioCodec::Flac));
-        assert_eq!(default_codec_for_audio_format(AudioFormat::Webm), Some(AudioCodec::Opus));
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::Mp3),
+            Some(AudioCodec::Mp3)
+        );
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::M4a),
+            Some(AudioCodec::Aac)
+        );
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::Opus),
+            Some(AudioCodec::Opus)
+        );
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::Ogg),
+            Some(AudioCodec::Vorbis)
+        );
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::Flac),
+            Some(AudioCodec::Flac)
+        );
+        assert_eq!(
+            default_codec_for_audio_format(AudioFormat::Webm),
+            Some(AudioCodec::Opus)
+        );
         assert_eq!(default_codec_for_audio_format(AudioFormat::Wav), None);
         assert_eq!(default_codec_for_audio_format(AudioFormat::Aiff), None);
     }
 
     #[test]
     fn resolve_audio_codec_implies_default_when_unset() {
-        assert_eq!(resolve_audio_codec(AudioFormat::Opus, None).unwrap(), AudioCodec::Opus);
-        assert_eq!(resolve_audio_codec(AudioFormat::Webm, None).unwrap(), AudioCodec::Opus);
+        assert_eq!(
+            resolve_audio_codec(AudioFormat::Opus, None).unwrap(),
+            AudioCodec::Opus
+        );
+        assert_eq!(
+            resolve_audio_codec(AudioFormat::Webm, None).unwrap(),
+            AudioCodec::Opus
+        );
     }
 
     #[test]

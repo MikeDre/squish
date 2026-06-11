@@ -737,9 +737,15 @@ fn format_mov_to_mp4_round_trip() {
     let input = tmp.path().join("clip.mov");
     let gen = std::process::Command::new("ffmpeg")
         .args([
-            "-y", "-f", "lavfi", "-i",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
             "testsrc=size=128x128:rate=15:duration=1",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
         ])
         .arg(&input)
         .output()

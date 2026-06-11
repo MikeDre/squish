@@ -342,7 +342,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         }
         if !cfg.quiet {
             if let Ok(r) = &res {
-                if let Some(note) = fast_override_note(cfg.video_opts.fast, r.format_in, r.format_out) {
+                if let Some(note) =
+                    fast_override_note(cfg.video_opts.fast, r.format_in, r.format_out)
+                {
                     eprintln!("  note: {note}");
                 }
             }
@@ -479,7 +481,11 @@ fn display_filename(path: &Path) -> String {
 
 /// A user-facing note when `--fast` was silently overridden because the input
 /// format is transcode-only (output container differs from the input).
-fn fast_override_note(fast: bool, format_in: VideoFormat, format_out: VideoFormat) -> Option<String> {
+fn fast_override_note(
+    fast: bool,
+    format_in: VideoFormat,
+    format_out: VideoFormat,
+) -> Option<String> {
     if fast && format_in != format_out {
         Some(format!(
             "--fast ignored for .{} input; re-encoded to .{}",
@@ -898,7 +904,7 @@ mod tests {
     fn cross_kind_format_check_passes_when_at_least_one_matches() {
         // webm: both video AND audio requested; only video files present → OK.
         let r = validate_format_kinds_present(
-            false, true, true,  // requested: video + audio (webm)
+            false, true, true, // requested: video + audio (webm)
             false, true, false, // present: video only
         );
         assert!(r.is_ok());
@@ -907,10 +913,7 @@ mod tests {
     #[test]
     fn cross_kind_format_check_passes_when_nothing_requested() {
         // No --format → no validation to do.
-        let r = validate_format_kinds_present(
-            false, false, false,
-            true, false, false,
-        );
+        let r = validate_format_kinds_present(false, false, false, true, false, false);
         assert!(r.is_ok());
     }
 }

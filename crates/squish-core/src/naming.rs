@@ -83,7 +83,10 @@ pub fn in_place_target(input: &Path, output_ext: &str) -> Option<PathBuf> {
 /// uniqueness.
 pub fn in_place_temp_path(target: &Path) -> PathBuf {
     let parent = target.parent().unwrap_or_else(|| Path::new(""));
-    let stem = target.file_stem().and_then(|s| s.to_str()).unwrap_or("output");
+    let stem = target
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("output");
     let ext = target.extension().and_then(|e| e.to_str()).unwrap_or("");
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -216,13 +219,19 @@ mod tests {
     #[test]
     fn in_place_target_matches_extension() {
         let p = Path::new("/dir/clip.mp4");
-        assert_eq!(in_place_target(p, "mp4"), Some(PathBuf::from("/dir/clip.mp4")));
+        assert_eq!(
+            in_place_target(p, "mp4"),
+            Some(PathBuf::from("/dir/clip.mp4"))
+        );
     }
 
     #[test]
     fn in_place_target_is_case_insensitive() {
         let p = Path::new("/dir/clip.MP4");
-        assert_eq!(in_place_target(p, "mp4"), Some(PathBuf::from("/dir/clip.MP4")));
+        assert_eq!(
+            in_place_target(p, "mp4"),
+            Some(PathBuf::from("/dir/clip.MP4"))
+        );
     }
 
     #[test]

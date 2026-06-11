@@ -9,17 +9,18 @@
 pub fn parse_target_size(s: &str) -> Option<u64> {
     let s = s.trim().to_ascii_lowercase();
 
-    let (number_part, multiplier) = if let Some(prefix) = s.strip_suffix("kb").or_else(|| s.strip_suffix('k')) {
-        (prefix, 1_000.0)
-    } else if let Some(prefix) = s.strip_suffix("mb").or_else(|| s.strip_suffix('m')) {
-        (prefix, 1_000_000.0)
-    } else if let Some(prefix) = s.strip_suffix("gb").or_else(|| s.strip_suffix('g')) {
-        (prefix, 1_000_000_000.0)
-    } else if let Some(prefix) = s.strip_suffix('b') {
-        (prefix, 1.0)
-    } else {
-        (s.as_str(), 1.0)
-    };
+    let (number_part, multiplier) =
+        if let Some(prefix) = s.strip_suffix("kb").or_else(|| s.strip_suffix('k')) {
+            (prefix, 1_000.0)
+        } else if let Some(prefix) = s.strip_suffix("mb").or_else(|| s.strip_suffix('m')) {
+            (prefix, 1_000_000.0)
+        } else if let Some(prefix) = s.strip_suffix("gb").or_else(|| s.strip_suffix('g')) {
+            (prefix, 1_000_000_000.0)
+        } else if let Some(prefix) = s.strip_suffix('b') {
+            (prefix, 1.0)
+        } else {
+            (s.as_str(), 1.0)
+        };
 
     if number_part.is_empty() || !number_part.starts_with(|c: char| c.is_ascii_digit()) {
         return None;

@@ -350,7 +350,11 @@ fn jpeg_respects_target_size() {
         "output {} exceeds target 12000",
         r.output_bytes
     );
-    assert!(r.warnings.is_empty(), "unexpected warnings: {:?}", r.warnings);
+    assert!(
+        r.warnings.is_empty(),
+        "unexpected warnings: {:?}",
+        r.warnings
+    );
     let bytes = fs::read(&r.output_path).unwrap();
     assert_eq!(
         squish_core::detect_format(&r.output_path, &bytes),
@@ -365,13 +369,19 @@ fn target_size_uses_budget_for_quality() {
     let (_tmp1, input1) = copy_fixture("sample.jpg");
     let generous = squish_file(
         &input1,
-        &SquishOptions { target_size: Some(40_000), ..Default::default() },
+        &SquishOptions {
+            target_size: Some(40_000),
+            ..Default::default()
+        },
     )
     .unwrap();
     let (_tmp2, input2) = copy_fixture("sample.jpg");
     let tight = squish_file(
         &input2,
-        &SquishOptions { target_size: Some(8_000), ..Default::default() },
+        &SquishOptions {
+            target_size: Some(8_000),
+            ..Default::default()
+        },
     )
     .unwrap();
     assert!(generous.output_bytes <= 40_000);

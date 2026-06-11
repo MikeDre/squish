@@ -22,7 +22,11 @@ pub enum MediaError {
     NotAudio { path: PathBuf },
 
     #[error("cannot overwrite {path} in place: output format .{to} differs from input .{from}")]
-    InPlaceFormatChange { path: PathBuf, from: String, to: String },
+    InPlaceFormatChange {
+        path: PathBuf,
+        from: String,
+        to: String,
+    },
 }
 
 #[cfg(test)]

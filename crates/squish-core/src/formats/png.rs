@@ -7,11 +7,7 @@ use std::path::Path;
 /// - Lossless: oxipng at max optimization.
 /// - Lossy: imagequant to quantize to <=256 colors at target quality,
 ///   then oxipng on the quantized output to strip chunks and finish zlib.
-pub fn compress(
-    input: &[u8],
-    opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     if opts.lossless {
         return oxipng_pass(input, path);
     }

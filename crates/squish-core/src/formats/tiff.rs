@@ -4,15 +4,13 @@ use image::DynamicImage;
 use std::path::Path;
 
 /// TIFF output. Rarely useful but supported for `--format tiff` override.
-pub fn compress(
-    input: &[u8],
-    opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
-    let img = image::load_from_memory_with_format(input, image::ImageFormat::Tiff)
-        .map_err(|e| SquishError::DecodeFailed {
-            path: path.to_path_buf(),
-            source: Box::new(e),
+pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
+    let img =
+        image::load_from_memory_with_format(input, image::ImageFormat::Tiff).map_err(|e| {
+            SquishError::DecodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            }
         })?;
     encode_raster(&img, opts, path)
 }
@@ -24,11 +22,14 @@ pub fn encode_raster(
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
     let mut out = Vec::new();
-    img.write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Tiff)
-        .map_err(|e| SquishError::EncodeFailed {
-            path: path.to_path_buf(),
-            source: Box::new(e),
-        })?;
+    img.write_to(
+        &mut std::io::Cursor::new(&mut out),
+        image::ImageFormat::Tiff,
+    )
+    .map_err(|e| SquishError::EncodeFailed {
+        path: path.to_path_buf(),
+        source: Box::new(e),
+    })?;
     Ok(out)
 }
 
@@ -39,10 +40,12 @@ pub fn compress_as_jpeg(
     opts: &SquishOptions,
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
-    let img = image::load_from_memory_with_format(input, image::ImageFormat::Tiff)
-        .map_err(|e| SquishError::DecodeFailed {
-            path: path.to_path_buf(),
-            source: Box::new(e),
+    let img =
+        image::load_from_memory_with_format(input, image::ImageFormat::Tiff).map_err(|e| {
+            SquishError::DecodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            }
         })?;
 
     let rgb = img.to_rgb8();

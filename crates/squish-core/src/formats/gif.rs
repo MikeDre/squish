@@ -7,11 +7,7 @@ use std::process::{Command, Stdio};
 
 /// Compress a GIF by shelling out to `gifsicle`. Handles both static and animated.
 /// Requires `gifsicle` on PATH — returns [`SquishError::MissingDependency`] otherwise.
-pub fn compress(
-    input: &[u8],
-    opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     if which_binary("gifsicle").is_none() {
         return Err(SquishError::MissingDependency {
             name: "gifsicle".into(),
@@ -34,12 +30,13 @@ pub fn encode_raster(
     let mut gif_bytes: Vec<u8> = Vec::new();
     {
         let mut encoder = image::codecs::gif::GifEncoder::new(&mut gif_bytes);
-        let frame = image::Frame::new(
-            image::ImageBuffer::from_raw(w, h, rgba).ok_or_else(|| SquishError::EncodeFailed {
-                path: path.to_path_buf(),
-                source: "failed to allocate GIF frame buffer".into(),
-            })?,
-        );
+        let frame =
+            image::Frame::new(image::ImageBuffer::from_raw(w, h, rgba).ok_or_else(|| {
+                SquishError::EncodeFailed {
+                    path: path.to_path_buf(),
+                    source: "failed to allocate GIF frame buffer".into(),
+                }
+            })?);
         encoder
             .encode_frame(frame)
             .map_err(|e| SquishError::EncodeFailed {

@@ -5,11 +5,7 @@ use std::path::Path;
 
 /// Compress a JPEG. Uses mozjpeg — its default settings are already a 15-25%
 /// improvement over libjpeg-turbo at the same visual quality.
-pub fn compress(
-    input: &[u8],
-    opts: &SquishOptions,
-    path: &Path,
-) -> Result<Vec<u8>, SquishError> {
+pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     let quality = opts.effective_quality(crate::format::Format::Jpeg);
 
     // Decode the input to RGB with mozjpeg's decoder.
@@ -68,14 +64,18 @@ pub fn encode_rgb_pixels(
     comp.set_progressive_mode();
     comp.set_optimize_coding(true);
 
-    let mut started = comp.start_compress(Vec::new()).map_err(|e| SquishError::EncodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })?;
-    started.write_scanlines(pixels).map_err(|e| SquishError::EncodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })?;
+    let mut started = comp
+        .start_compress(Vec::new())
+        .map_err(|e| SquishError::EncodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
+    started
+        .write_scanlines(pixels)
+        .map_err(|e| SquishError::EncodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
     let out = started.finish().map_err(|e| SquishError::EncodeFailed {
         path: path.to_path_buf(),
         source: Box::new(e),
