@@ -1,0 +1,50 @@
+name: Action self-test
+
+# Exercises the composite action in this repo (uses: ./) against the latest
+# released binaries, on both runner OSes.
+
+on:
+  push:
+    branches: [main]
+    paths: ["action.yml", ".github/workflows/action-test.yml"]
+  workflow_dispatch:
+
+jobs:
+  self-test:
+    name: Self-test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test assets
+        shell: bash
+        run: |
+          mkdir -p test-assets
+          cp crates/squish-core/tests/fixtures/sample.png test-assets/
+          cp crates/squish-core/tests/fixtures/sample.jpg test-assets/
+          printf 'const x = 1;\nconsole.log(x);\n' > test-assets/app.js
+
+      - name: Run the squish action
+        uses: ./
+        with:
+          paths: test-assets
+          args: "--recursive --target-size 100k"
+
+      - name: Assert outputs exist
+        shell: bash
+        run: |
+          ls -la test-assets/
+          test -f test-assets/sample_squished.png
+          test -f test-assets/sample_squished.jpg
+          test -f test-assets/app.min.js
+          for f in test-assets/sample_squished.*; do
+            size=$(wc -c < "$f")
+            if [ "$size" -gt 100000 ]; then
+              echo "$f is $size bytes — over the 100k target" >&2
+              exit 1
+            fi
+          done

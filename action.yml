@@ -1,0 +1,90 @@
+name: "squish"
+description: >-
+  Compress images, video, and audio, and minify JS/TS/CSS/HTML/JSON with
+  squish — locally on the runner, no uploads.
+author: "MikeDre"
+branding:
+  icon: "minimize-2"
+  color: "purple"
+
+inputs:
+  paths:
+    description: "Files or directories to squish (space-separated)."
+    required: true
+  args:
+    description: 'Extra squish CLI flags, e.g. "--recursive --quality 75 --overwrite".'
+    required: false
+    default: ""
+  version:
+    description: 'squish release tag to use (e.g. v0.4.0), or "latest".'
+    required: false
+    default: "latest"
+  install-deps:
+    description: >-
+      Install runtime dependencies (libheif/dav1d, ffmpeg, gifsicle) via
+      apt/brew. Set to "false" if your runner image already has them.
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install runtime dependencies
+      if: inputs.install-deps == 'true'
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Linux" ]; then
+          sudo apt-get update -q
+          sudo apt-get install -y -q libheif1 libdav1d7 ffmpeg gifsicle
+        elif [ "$RUNNER_OS" = "macOS" ]; then
+          brew install libheif dav1d ffmpeg gifsicle
+        else
+          echo "unsupported runner OS: $RUNNER_OS" >&2
+          exit 1
+        fi
+
+    - name: Download squish
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        repo="MikeDre/squish"
+
+        tag="$VERSION"
+        if [ "$tag" = "latest" ]; then
+          tag=$(curl -sI "https://github.com/$repo/releases/latest" \
+            | tr -d '\r' | awk -F/ 'tolower($0) ~ /^location:/ {print $NF}')
+        fi
+        if [ -z "$tag" ]; then
+          echo "could not resolve squish release tag" >&2
+          exit 1
+        fi
+
+        case "$RUNNER_OS-$RUNNER_ARCH" in
+          Linux-X64)    target="x86_64-unknown-linux-gnu" ;;
+          Linux-ARM64)  target="aarch64-unknown-linux-gnu" ;;
+          macOS-ARM64)  target="aarch64-apple-darwin" ;;
+          macOS-X64)    target="x86_64-apple-darwin" ;;
+          *) echo "unsupported platform: $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
+        esac
+
+        url="https://github.com/$repo/releases/download/$tag/squish-$tag-$target.tar.gz"
+        echo "downloading $url"
+        install_dir="$RUNNER_TEMP/squish-bin"
+        mkdir -p "$install_dir"
+        curl -sSfL "$url" | tar -xz -C "$install_dir"
+        chmod +x "$install_dir/squish"
+        echo "$install_dir" >> "$GITHUB_PATH"
+        "$install_dir/squish" --version
+
+    - name: Run squish
+      shell: bash
+      env:
+        SQUISH_NO_STATS: "1"
+        PATHS: ${{ inputs.paths }}
+        ARGS: ${{ inputs.args }}
+      run: |
+        # Word-splitting of $PATHS/$ARGS is intentional: both are
+        # space-separated lists supplied by the workflow author.
+        squish $PATHS $ARGS
