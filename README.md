@@ -2,6 +2,22 @@
 
 Super fast local file optimisation. Compresses images, video, and audio; minifies JS, TS, CSS, HTML, and JSON — all from one CLI, no servers, no uploads. Takes files or directories, writes `*_squished.*` siblings alongside the originals (or replaces in place with `-o`). Non-destructive by default — originals are never touched unless you ask.
 
+![squish demo](.github/demo.gif)
+
+### What to expect
+
+Measured on representative samples with default settings (your mileage varies with content):
+
+| Input | Saving |
+|---|---|
+| High-quality JPEG photo (4.4 MB) | −69% |
+| PNG screenshot/graphic | −77% |
+| WebP | −44% |
+| SVG | −54% |
+| TIFF (auto-converts to JPEG) | −97% |
+| MP4 with `--target-size 1M` (3.1 MB source) | −68%, under budget |
+| 320 kbps MP3 | −84% |
+
 ## Install
 
 ### Homebrew (macOS — recommended)
