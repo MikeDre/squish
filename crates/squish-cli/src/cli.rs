@@ -109,4 +109,9 @@ pub struct Args {
     /// Ignore squish.toml config files for this run.
     #[arg(long = "no-config")]
     pub no_config: bool,
+
+    /// Keep running: watch the given paths and squish files as they appear
+    /// or change. Stop with Ctrl-C.
+    #[arg(long, conflicts_with_all = ["dry_run", "stats"])]
+    pub watch: bool,
 }
