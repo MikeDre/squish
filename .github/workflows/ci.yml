@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libheif dav1d ffmpeg gifsicle nasm pkg-config
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdav1d-dev ffmpeg gifsicle nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev
+
+      - name: Cache source-built libheif (Linux)
+        if: runner.os == 'Linux'
+        id: libheif-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/libheif-install
+          key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build libheif from source (Linux)
+        if: runner.os == 'Linux' && steps.libheif-cache.outputs.cache-hit != 'true'
+        run: |
+          # Ubuntu's libheif-dev (1.17.x) is older than libheif-sys's >=1.18
+          # requirement, so build from source into a cacheable prefix.
+          git clone --depth 1 --branch v1.23.0 https://github.com/strukturag/libheif.git /tmp/libheif
+          cmake -S /tmp/libheif -B /tmp/libheif/build -DCMAKE_BUILD_TYPE=Release \
+            -DWITH_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/tmp/libheif-install
+          cmake --build /tmp/libheif/build -j"$(nproc)"
+          cmake --install /tmp/libheif/build
+
+      - name: Install cached libheif (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo cp -r /tmp/libheif-install/* /usr/local/
+          sudo ldconfig
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  lint:
+    name: Clippy + rustfmt
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdav1d-dev nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev
+
+      - name: Cache source-built libheif
+        id: libheif-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/libheif-install
+          key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build libheif from source
+        if: steps.libheif-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.23.0 https://github.com/strukturag/libheif.git /tmp/libheif
+          cmake -S /tmp/libheif -B /tmp/libheif/build -DCMAKE_BUILD_TYPE=Release \
+            -DWITH_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/tmp/libheif-install
+          cmake --build /tmp/libheif/build -j"$(nproc)"
+          cmake --install /tmp/libheif/build
+
+      - name: Install cached libheif
+        run: |
+          sudo cp -r /tmp/libheif-install/* /usr/local/
+          sudo ldconfig
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: rustfmt
+        run: cargo fmt --check
