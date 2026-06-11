@@ -129,8 +129,14 @@ mod tests {
 
     #[test]
     fn detect_from_extension() {
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.mp4"), &[]), Some(VideoFormat::Mp4));
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.webm"), &[]), Some(VideoFormat::Webm));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.mp4"), &[]),
+            Some(VideoFormat::Mp4)
+        );
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.webm"), &[]),
+            Some(VideoFormat::Webm)
+        );
     }
 
     #[test]
@@ -138,7 +144,10 @@ mod tests {
         let mut head = [0u8; 12];
         head[4..8].copy_from_slice(b"ftyp");
         head[8..12].copy_from_slice(b"isom");
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), &head), Some(VideoFormat::Mp4));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), &head),
+            Some(VideoFormat::Mp4)
+        );
     }
 
     #[test]
@@ -146,13 +155,19 @@ mod tests {
         let mut head = [0u8; 12];
         head[4..8].copy_from_slice(b"ftyp");
         head[8..12].copy_from_slice(b"qt  ");
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), &head), Some(VideoFormat::Mov));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), &head),
+            Some(VideoFormat::Mov)
+        );
     }
 
     #[test]
     fn detect_mkv_from_ebml_magic() {
         let head = [0x1A, 0x45, 0xDF, 0xA3, 0x00, 0x00];
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), &head), Some(VideoFormat::Mkv));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), &head),
+            Some(VideoFormat::Mkv)
+        );
     }
 
     #[test]
@@ -160,18 +175,27 @@ mod tests {
         let mut head = [0u8; 12];
         head[0..4].copy_from_slice(b"RIFF");
         head[8..12].copy_from_slice(b"AVI ");
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), &head), Some(VideoFormat::Avi));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), &head),
+            Some(VideoFormat::Avi)
+        );
     }
 
     #[test]
     fn detect_flv_from_magic() {
         let head = b"FLV\x01\x00";
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), head), Some(VideoFormat::Flv));
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), head),
+            Some(VideoFormat::Flv)
+        );
     }
 
     #[test]
     fn detect_returns_none_for_unknown() {
-        assert_eq!(detect_video_from_bytes(&PathBuf::from("x.xyz"), b"random bytes"), None);
+        assert_eq!(
+            detect_video_from_bytes(&PathBuf::from("x.xyz"), b"random bytes"),
+            None
+        );
     }
 
     #[test]

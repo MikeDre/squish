@@ -15,7 +15,9 @@ pub struct VideoResult {
 
 impl VideoResult {
     pub fn reduction_percent(&self) -> f64 {
-        if self.input_bytes == 0 { return 0.0; }
+        if self.input_bytes == 0 {
+            return 0.0;
+        }
         let delta = self.input_bytes as f64 - self.output_bytes as f64;
         (delta / self.input_bytes as f64) * 100.0
     }

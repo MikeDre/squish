@@ -22,11 +22,7 @@ pub fn check_ffmpeg() -> Result<(), MediaError> {
 /// - On non-zero exit, removes the partial `output` file (best-effort) and
 ///   returns `MediaError::FfmpegFailed { path: input, stderr }`.
 /// - On other I/O failure during spawn, returns `MediaError::Io`.
-pub fn run_ffmpeg(
-    input: &Path,
-    output: &Path,
-    args: &[OsString],
-) -> Result<(), MediaError> {
+pub fn run_ffmpeg(input: &Path, output: &Path, args: &[OsString]) -> Result<(), MediaError> {
     let mut cmd = std::process::Command::new("ffmpeg");
     cmd.arg("-y");
     cmd.arg("-i").arg(input);
@@ -156,8 +152,7 @@ mod tests {
         assert!(gen.status.success(), "fixture generation failed");
 
         let output = tmp.path().join("out.wav");
-        let args: Vec<OsString> =
-            vec![OsString::from("-c:a"), OsString::from("copy")];
+        let args: Vec<OsString> = vec![OsString::from("-c:a"), OsString::from("copy")];
         run_ffmpeg(&input, &output, &args).expect("run_ffmpeg should succeed");
         assert!(output.exists(), "output file should exist on success");
     }

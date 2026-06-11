@@ -268,38 +268,62 @@ mod tests {
     #[test]
     fn reencode_overrides_fast_copy_to_default() {
         // --fast normally forces Copy; for a forced re-encode that's invalid.
-        let o = VideoOptions { fast: true, ..Default::default() };
+        let o = VideoOptions {
+            fast: true,
+            ..Default::default()
+        };
         assert_eq!(o.effective_codec_for_ext(""), VideoCodec::Copy);
-        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::H265);
-        assert_eq!(o.effective_codec_for_ext_reencode("webm", true), VideoCodec::Vp9);
+        assert_eq!(
+            o.effective_codec_for_ext_reencode("mp4", true),
+            VideoCodec::H265
+        );
+        assert_eq!(
+            o.effective_codec_for_ext_reencode("webm", true),
+            VideoCodec::Vp9
+        );
     }
 
     #[test]
     fn reencode_overrides_explicit_copy() {
-        let o = VideoOptions { codec: Some(VideoCodec::Copy), ..Default::default() };
-        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::H265);
+        let o = VideoOptions {
+            codec: Some(VideoCodec::Copy),
+            ..Default::default()
+        };
+        assert_eq!(
+            o.effective_codec_for_ext_reencode("mp4", true),
+            VideoCodec::H265
+        );
     }
 
     #[test]
     fn reencode_false_preserves_normal_selection() {
-        let o = VideoOptions { fast: true, ..Default::default() };
-        assert_eq!(o.effective_codec_for_ext_reencode("mp4", false), VideoCodec::Copy);
+        let o = VideoOptions {
+            fast: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            o.effective_codec_for_ext_reencode("mp4", false),
+            VideoCodec::Copy
+        );
     }
 
     #[test]
     fn reencode_does_not_override_real_codec() {
-        let o = VideoOptions { codec: Some(VideoCodec::AV1), ..Default::default() };
-        assert_eq!(o.effective_codec_for_ext_reencode("mp4", true), VideoCodec::AV1);
+        let o = VideoOptions {
+            codec: Some(VideoCodec::AV1),
+            ..Default::default()
+        };
+        assert_eq!(
+            o.effective_codec_for_ext_reencode("mp4", true),
+            VideoCodec::AV1
+        );
     }
 
     #[test]
     fn target_video_bitrate_subtracts_audio_and_overhead() {
         // 10 MB over 60 s: 80 000 kbit × 0.95 / 60 s = 1266 kbps total,
         // minus 128 kbps audio → 1138 kbps for video.
-        assert_eq!(
-            target_video_bitrate_kbps(10_000_000, 60.0, 128),
-            Some(1138)
-        );
+        assert_eq!(target_video_bitrate_kbps(10_000_000, 60.0, 128), Some(1138));
     }
 
     #[test]

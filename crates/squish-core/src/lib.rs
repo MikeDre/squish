@@ -416,7 +416,10 @@ mod tests {
         let img = image::RgbImage::from_pixel(8, 8, image::Rgb([255, 255, 255]));
         img.save(&input).unwrap();
 
-        let opts = SquishOptions { overwrite: true, ..Default::default() };
+        let opts = SquishOptions {
+            overwrite: true,
+            ..Default::default()
+        };
         let r = squish_file(&input, &opts).unwrap();
 
         assert_eq!(r.output_path, input, "output must be the input path itself");

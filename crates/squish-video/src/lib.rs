@@ -5,10 +5,10 @@ pub mod format;
 pub mod options;
 pub mod result;
 
-pub use squish_media::MediaError as VideoError;
 pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
 pub use result::VideoResult;
+pub use squish_media::MediaError as VideoError;
 
 use squish_core::{derive_output_path_with_suffix, in_place_target, in_place_temp_path};
 use std::path::Path;
@@ -33,10 +33,7 @@ fn resolve_output_ext(input: &Path, format_in: VideoFormat, format_out: VideoFor
 /// Compress a single video file. Shells out to system ffmpeg.
 ///
 /// On error, any partial output file is cleaned up.
-pub fn squish_video(
-    input: &Path,
-    opts: &VideoOptions,
-) -> Result<VideoResult, VideoError> {
+pub fn squish_video(input: &Path, opts: &VideoOptions) -> Result<VideoResult, VideoError> {
     squish_media::check_ffmpeg()?;
 
     let start = Instant::now();
@@ -178,20 +175,29 @@ mod tests {
             &VideoOptions::default(),
         )
         .unwrap_err();
-        assert!(matches!(err, VideoError::Io(_) | VideoError::MissingDependency { .. }));
+        assert!(matches!(
+            err,
+            VideoError::Io(_) | VideoError::MissingDependency { .. }
+        ));
     }
 
     #[test]
     fn output_ext_preserves_input_when_no_remap() {
         // m4v parses to Mp4 but the caller's exact extension is preserved.
         let p = Path::new("clip.m4v");
-        assert_eq!(resolve_output_ext(p, VideoFormat::Mp4, VideoFormat::Mp4), "m4v");
+        assert_eq!(
+            resolve_output_ext(p, VideoFormat::Mp4, VideoFormat::Mp4),
+            "m4v"
+        );
     }
 
     #[test]
     fn output_ext_uses_target_when_remapped() {
         let p = Path::new("clip.dv");
-        assert_eq!(resolve_output_ext(p, VideoFormat::Dv, VideoFormat::Mp4), "mp4");
+        assert_eq!(
+            resolve_output_ext(p, VideoFormat::Dv, VideoFormat::Mp4),
+            "mp4"
+        );
     }
 
     #[test]
@@ -204,7 +210,9 @@ mod tests {
             ..Default::default()
         };
         // The new selection logic Task 2 introduces:
-        let format_out = opts.output_format.unwrap_or_else(|| format_in.output_format());
+        let format_out = opts
+            .output_format
+            .unwrap_or_else(|| format_in.output_format());
         assert_eq!(format_out, VideoFormat::Mp4);
         let ext = resolve_output_ext(input, format_in, format_out);
         assert_eq!(ext, "mp4");
@@ -218,7 +226,9 @@ mod tests {
         let input = Path::new("clip.mov");
         let format_in = VideoFormat::Mov;
         let opts = VideoOptions::default();
-        let format_out = opts.output_format.unwrap_or_else(|| format_in.output_format());
+        let format_out = opts
+            .output_format
+            .unwrap_or_else(|| format_in.output_format());
         assert_eq!(format_out, VideoFormat::Mov);
         let ext = resolve_output_ext(input, format_in, format_out);
         assert_eq!(ext, "mov");

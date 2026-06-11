@@ -74,7 +74,10 @@ fn fast_mode_produces_output() {
     let input = tmp.path().join("sample.mp4");
     fs::copy(fixture("sample.mp4"), &input).unwrap();
 
-    let opts = VideoOptions { fast: true, ..Default::default() };
+    let opts = VideoOptions {
+        fast: true,
+        ..Default::default()
+    };
     let result = squish_video(&input, &opts).unwrap();
     assert!(result.output_path.exists());
     assert!(result.output_bytes > 0);
@@ -191,66 +194,94 @@ fn dv_transcodes_to_mp4() {
     assert!(result.output_bytes > 0);
 }
 
-    #[test]
-    fn overwrite_replaces_mp4_in_place() {
-        if !has_ffmpeg() {
-            eprintln!("skipping: ffmpeg not present");
-            return;
-        }
-        let tmp = tempfile::TempDir::new().unwrap();
-        let input = tmp.path().join("clip.mp4");
-        let gen = std::process::Command::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i", "testsrc=size=128x128:rate=15:duration=1",
-                   "-c:v", "libx264", "-pix_fmt", "yuv420p"])
-            .arg(&input)
-            .output()
-            .unwrap();
-        assert!(gen.status.success(), "fixture generation failed");
+#[test]
+fn overwrite_replaces_mp4_in_place() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=128x128:rate=15:duration=1",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
 
-        let opts = squish_video::VideoOptions { overwrite: true, ..Default::default() };
-        let r = squish_video::squish_video(&input, &opts).unwrap();
+    let opts = squish_video::VideoOptions {
+        overwrite: true,
+        ..Default::default()
+    };
+    let r = squish_video::squish_video(&input, &opts).unwrap();
 
-        assert_eq!(r.output_path, input, "output must be the input path itself");
-        assert!(input.exists());
-        assert!(std::fs::metadata(&input).unwrap().len() > 0);
-        assert!(!tmp.path().join("clip_squished.mp4").exists());
-        let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
-            .unwrap()
-            .filter_map(|e| e.ok())
-            .filter(|e| e.file_name().to_string_lossy().contains(".sq-"))
-            .collect();
-        assert!(leftovers.is_empty(), "temp file must be renamed away");
+    assert_eq!(r.output_path, input, "output must be the input path itself");
+    assert!(input.exists());
+    assert!(std::fs::metadata(&input).unwrap().len() > 0);
+    assert!(!tmp.path().join("clip_squished.mp4").exists());
+    let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().contains(".sq-"))
+        .collect();
+    assert!(leftovers.is_empty(), "temp file must be renamed away");
+}
+
+#[test]
+fn overwrite_refuses_dv_in_place() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.dv");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc=size=720x480:rate=30000/1001:duration=1",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-target",
+            "ntsc-dv",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    if !gen.status.success() || std::fs::metadata(&input).map(|m| m.len()).unwrap_or(0) == 0 {
+        eprintln!("skipping: ffmpeg build cannot produce DV");
+        return;
     }
 
-    #[test]
-    fn overwrite_refuses_dv_in_place() {
-        if !has_ffmpeg() {
-            eprintln!("skipping: ffmpeg not present");
-            return;
-        }
-        let tmp = tempfile::TempDir::new().unwrap();
-        let input = tmp.path().join("clip.dv");
-        let gen = std::process::Command::new("ffmpeg")
-            .args(["-y", "-f", "lavfi", "-i",
-                   "testsrc=size=720x480:rate=30000/1001:duration=1",
-                   "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
-                   "-ar", "48000", "-ac", "2", "-target", "ntsc-dv"])
-            .arg(&input)
-            .output()
-            .unwrap();
-        if !gen.status.success() || std::fs::metadata(&input).map(|m| m.len()).unwrap_or(0) == 0 {
-            eprintln!("skipping: ffmpeg build cannot produce DV");
-            return;
-        }
-
-        let opts = squish_video::VideoOptions { overwrite: true, ..Default::default() };
-        let err = squish_video::squish_video(&input, &opts).unwrap_err();
-        assert!(
-            matches!(err, squish_video::VideoError::InPlaceFormatChange { .. }),
-            "expected InPlaceFormatChange, got {err:?}"
-        );
-        assert!(input.exists(), "original .dv must be untouched");
-    }
+    let opts = squish_video::VideoOptions {
+        overwrite: true,
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        matches!(err, squish_video::VideoError::InPlaceFormatChange { .. }),
+        "expected InPlaceFormatChange, got {err:?}"
+    );
+    assert!(input.exists(), "original .dv must be untouched");
+}
 
 #[test]
 fn force_overwrite_works() {
@@ -262,7 +293,10 @@ fn force_overwrite_works() {
     let input = tmp.path().join("sample.mp4");
     fs::copy(fixture("sample.mp4"), &input).unwrap();
 
-    let opts = VideoOptions { force_overwrite: true, ..Default::default() };
+    let opts = VideoOptions {
+        force_overwrite: true,
+        ..Default::default()
+    };
 
     let r1 = squish_video(&input, &opts).unwrap();
     assert!(r1.output_path.exists());

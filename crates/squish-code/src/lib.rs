@@ -211,7 +211,10 @@ mod tests {
         let input = tmp.path().join("app.js");
         fs::write(&input, b"const   x   =   1 ;\n\n\n").unwrap();
 
-        let opts = CodeOptions { overwrite: true, ..Default::default() };
+        let opts = CodeOptions {
+            overwrite: true,
+            ..Default::default()
+        };
         let r = squish_code(&input, &opts).unwrap();
 
         assert_eq!(r.output_path, input);
@@ -224,7 +227,10 @@ mod tests {
         let input = tmp.path().join("app.ts");
         fs::write(&input, b"const x: number = 1;\n").unwrap();
 
-        let opts = CodeOptions { overwrite: true, ..Default::default() };
+        let opts = CodeOptions {
+            overwrite: true,
+            ..Default::default()
+        };
         let err = squish_code(&input, &opts).unwrap_err();
         assert!(matches!(err, CodeError::InPlaceFormatChange { .. }));
         assert!(input.exists());

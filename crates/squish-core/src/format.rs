@@ -126,9 +126,18 @@ mod tests {
 
     #[test]
     fn detect_from_extension_jpeg_both_spellings() {
-        assert_eq!(detect_format(&PathBuf::from("x.jpg"), &[]), Some(Format::Jpeg));
-        assert_eq!(detect_format(&PathBuf::from("x.jpeg"), &[]), Some(Format::Jpeg));
-        assert_eq!(detect_format(&PathBuf::from("X.JPEG"), &[]), Some(Format::Jpeg));
+        assert_eq!(
+            detect_format(&PathBuf::from("x.jpg"), &[]),
+            Some(Format::Jpeg)
+        );
+        assert_eq!(
+            detect_format(&PathBuf::from("x.jpeg"), &[]),
+            Some(Format::Jpeg)
+        );
+        assert_eq!(
+            detect_format(&PathBuf::from("X.JPEG"), &[]),
+            Some(Format::Jpeg)
+        );
     }
 
     #[test]
@@ -141,7 +150,10 @@ mod tests {
     #[test]
     fn detect_from_magic_jpeg() {
         let head = [0xFF, 0xD8, 0xFF, 0xE0];
-        assert_eq!(detect_format(&PathBuf::from("x.xyz"), &head), Some(Format::Jpeg));
+        assert_eq!(
+            detect_format(&PathBuf::from("x.xyz"), &head),
+            Some(Format::Jpeg)
+        );
     }
 
     #[test]
@@ -149,23 +161,41 @@ mod tests {
         let mut head = [0u8; 12];
         head[0..4].copy_from_slice(b"RIFF");
         head[8..12].copy_from_slice(b"WEBP");
-        assert_eq!(detect_format(&PathBuf::from("x.xyz"), &head), Some(Format::Webp));
+        assert_eq!(
+            detect_format(&PathBuf::from("x.xyz"), &head),
+            Some(Format::Webp)
+        );
     }
 
     #[test]
     fn detect_svg_from_xml_prologue() {
-        assert_eq!(detect_format(&PathBuf::from("x"), b"<?xml version=\"1.0\"?>"), Some(Format::Svg));
-        assert_eq!(detect_format(&PathBuf::from("x"), b"<svg xmlns=..."), Some(Format::Svg));
+        assert_eq!(
+            detect_format(&PathBuf::from("x"), b"<?xml version=\"1.0\"?>"),
+            Some(Format::Svg)
+        );
+        assert_eq!(
+            detect_format(&PathBuf::from("x"), b"<svg xmlns=..."),
+            Some(Format::Svg)
+        );
     }
 
     #[test]
     fn detect_returns_none_for_unknown() {
-        assert_eq!(detect_format(&PathBuf::from("x.xyz"), b"random bytes"), None);
+        assert_eq!(
+            detect_format(&PathBuf::from("x.xyz"), b"random bytes"),
+            None
+        );
     }
 
     #[test]
     fn detect_tiff_both_endians() {
-        assert_eq!(detect_format(&PathBuf::from("x"), &[0x49, 0x49, 0x2A, 0x00]), Some(Format::Tiff));
-        assert_eq!(detect_format(&PathBuf::from("x"), &[0x4D, 0x4D, 0x00, 0x2A]), Some(Format::Tiff));
+        assert_eq!(
+            detect_format(&PathBuf::from("x"), &[0x49, 0x49, 0x2A, 0x00]),
+            Some(Format::Tiff)
+        );
+        assert_eq!(
+            detect_format(&PathBuf::from("x"), &[0x4D, 0x4D, 0x00, 0x2A]),
+            Some(Format::Tiff)
+        );
     }
 }

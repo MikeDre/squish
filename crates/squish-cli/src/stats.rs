@@ -315,11 +315,19 @@ mod tests {
         let mut by_kind = BTreeMap::new();
         by_kind.insert(
             "image".to_string(),
-            KindStats { n: 4, bytes_in: 12345, bytes_out: 3456 },
+            KindStats {
+                n: 4,
+                bytes_in: 12345,
+                bytes_out: 3456,
+            },
         );
         by_kind.insert(
             "video".to_string(),
-            KindStats { n: 1, bytes_in: 1_000_000, bytes_out: 400_000 },
+            KindStats {
+                n: 1,
+                bytes_in: 1_000_000,
+                bytes_out: 400_000,
+            },
         );
         Record {
             v: 1,
@@ -354,7 +362,11 @@ mod tests {
         // Force "code" output > input → record.saved_bytes() must subtract.
         r.by_kind.insert(
             "code".to_string(),
-            KindStats { n: 1, bytes_in: 100, bytes_out: 500 },
+            KindStats {
+                n: 1,
+                bytes_in: 100,
+                bytes_out: 500,
+            },
         );
         // image: 12345-3456 = 8889, video: 1_000_000-400_000 = 600_000, code: -400
         assert_eq!(r.saved_bytes(), 8889 + 600_000 - 400);
@@ -440,15 +452,20 @@ mod tests {
 
     fn rec_with(ts: DateTime<Utc>, kind: &str, n: u64, in_: u64, out_: u64) -> Record {
         let mut by_kind = BTreeMap::new();
-        by_kind.insert(kind.to_string(), KindStats { n, bytes_in: in_, bytes_out: out_ });
+        by_kind.insert(
+            kind.to_string(),
+            KindStats {
+                n,
+                bytes_in: in_,
+                bytes_out: out_,
+            },
+        );
         Record { v: 1, ts, by_kind }
     }
 
     #[test]
     fn report_zero_state_when_no_records() {
-        let now = Local
-            .with_ymd_and_hms(2026, 5, 28, 12, 0, 0)
-            .unwrap();
+        let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
         let s = render_report(&[], now);
         assert!(
             s.contains("no usage recorded yet"),
@@ -466,7 +483,10 @@ mod tests {
         ];
         let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
         let s = render_report(&recs, now);
-        assert!(s.contains("This month"), "missing 'This month' header in {s}");
+        assert!(
+            s.contains("This month"),
+            "missing 'This month' header in {s}"
+        );
         assert!(s.contains("All time"), "missing 'All time' header in {s}");
         let this_month_section = s.split("All time").next().unwrap();
         assert!(this_month_section.contains("video"));
@@ -484,7 +504,10 @@ mod tests {
         let recs = vec![rec_with(dt(2026, 5, 28), "image", 3, 1_048_576, 524_288)];
         let now = Local.with_ymd_and_hms(2026, 5, 28, 12, 0, 0).unwrap();
         let s = render_report(&recs, now);
-        assert!(s.contains("Files squished:"), "missing 'Files squished:' label in {s}");
+        assert!(
+            s.contains("Files squished:"),
+            "missing 'Files squished:' label in {s}"
+        );
         assert!(s.contains("image"));
     }
 

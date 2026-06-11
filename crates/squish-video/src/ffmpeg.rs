@@ -87,27 +87,29 @@ pub fn run_ffmpeg(
     force_reencode: bool,
     video_bitrate_kbps: Option<u32>,
 ) -> Result<(), VideoError> {
-    let out_ext = output
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("");
+    let out_ext = output.extension().and_then(|e| e.to_str()).unwrap_or("");
     let args = build_codec_args(out_ext, opts, force_reencode, video_bitrate_kbps);
     squish_media::run_ffmpeg(input, output, &args)
 }
 
-fn ffprobe_csv(path: &Path, entries: &str, select: Option<&str>) -> Result<Option<String>, VideoError> {
+fn ffprobe_csv(
+    path: &Path,
+    entries: &str,
+    select: Option<&str>,
+) -> Result<Option<String>, VideoError> {
     let mut cmd = std::process::Command::new("ffprobe");
     cmd.args(["-v", "error"]);
     if let Some(streams) = select {
         cmd.args(["-select_streams", streams]);
     }
-    cmd.args(["-show_entries", entries, "-of", "csv=p=0"]).arg(path);
+    cmd.args(["-show_entries", entries, "-of", "csv=p=0"])
+        .arg(path);
     let output = cmd.output().map_err(|e| {
         if e.kind() == std::io::ErrorKind::NotFound {
             VideoError::MissingDependency {
                 name: "ffprobe".into(),
-                install_hint: "ffprobe ships with ffmpeg; brew install ffmpeg or apt install ffmpeg"
-                    .into(),
+                install_hint:
+                    "ffprobe ships with ffmpeg; brew install ffmpeg or apt install ffmpeg".into(),
             }
         } else {
             VideoError::Io(e)
@@ -237,7 +239,10 @@ mod tests {
 
     #[test]
     fn force_reencode_replaces_fast_copy() {
-        let opts = VideoOptions { fast: true, ..Default::default() };
+        let opts = VideoOptions {
+            fast: true,
+            ..Default::default()
+        };
         let a: Vec<String> = build_codec_args("mp4", &opts, true, None)
             .into_iter()
             .map(|o| o.into_string().unwrap())
@@ -254,7 +259,10 @@ mod tests {
             ..Default::default()
         };
         let a = args("mp4", opts);
-        let pos = a.iter().position(|s| s == "-tag:v").expect("expected -tag:v");
+        let pos = a
+            .iter()
+            .position(|s| s == "-tag:v")
+            .expect("expected -tag:v");
         assert_eq!(a[pos + 1], "hvc1");
     }
 
