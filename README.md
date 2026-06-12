@@ -393,6 +393,10 @@ Test fixtures are in `crates/squish-core/tests/fixtures/` (images) and `crates/s
 2. Publish to crates.io in dependency order: `for p in squish-core squish-media squish-video squish-audio squish-code squish-media-cli; do cargo publish -p $p; done`
 3. Update the Homebrew tap: `./scripts/release-tap.sh vX.Y.Z` (expects a sibling clone of `MikeDre/homebrew-tap`).
 
+## Roadmap
+
+Planned work is tracked in [ROADMAP.md](ROADMAP.md).
+
 ## License
 
 MIT.
