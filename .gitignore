@@ -3,3 +3,6 @@
 Cargo.lock.orig
 .DS_Store
 docs
+
+# Brainstorming companion sessions
+.superpowers/
