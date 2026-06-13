@@ -127,7 +127,7 @@ fn prompt_bool(
         out.flush()?;
         match read_answer(input)? {
             Answer::Keep => return Ok(cur),
-            Answer::Clear => return Ok(Some(false)),
+            Answer::Clear => return Ok(None),
             Answer::Value(v) => match v.to_ascii_lowercase().as_str() {
                 "y" | "yes" => return Ok(Some(true)),
                 "n" | "no" => return Ok(Some(false)),
@@ -292,9 +292,9 @@ mod tests {
         assert_eq!(cfg.quality, None);
         assert_eq!(cfg.format, None);
         assert_eq!(cfg.suffix, None);
-        assert_eq!(cfg.recursive, Some(false));
-        assert_eq!(cfg.audio.strip_tags, Some(false));
-        assert_eq!(cfg.overwrite, Some(false));
+        assert_eq!(cfg.recursive, None);
+        assert_eq!(cfg.audio.strip_tags, None);
+        assert_eq!(cfg.overwrite, None);
     }
 
     #[test]
