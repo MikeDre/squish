@@ -1144,3 +1144,35 @@ fn finder_action_without_subcommand_is_an_error() {
     // must fail rather than silently doing nothing.
     bin().arg("finder-action").assert().failure().code(2);
 }
+
+#[test]
+fn config_overwrite_true_replaces_in_place() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::write(tmp.path().join("squish.toml"), "overwrite = true\n").unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .arg("a.png")
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("a.png").exists());
+    assert!(!tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn cli_suffix_suppresses_config_overwrite() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::write(tmp.path().join("squish.toml"), "overwrite = true\n").unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .args(["a.png", "--suffix", "tiny"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("a_tiny.png").exists());
+    assert!(tmp.path().join("a.png").exists());
+}

@@ -284,6 +284,12 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
     if !args.recursive {
         args.recursive = cfg.recursive.unwrap_or(false);
     }
+    // Config overwrite applies only when the CLI passed neither -o nor
+    // --suffix (they conflict on the CLI; respect that here). Placed before
+    // the suffix block so an enabled overwrite suppresses a config suffix.
+    if !args.overwrite && args.suffix.is_none() {
+        args.overwrite = cfg.overwrite.unwrap_or(false);
+    }
     // --overwrite conflicts with --suffix on the CLI; respect that here too.
     if args.suffix.is_none() && !args.overwrite {
         args.suffix = cfg.suffix.clone();
