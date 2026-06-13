@@ -117,13 +117,12 @@ fn prompt_bool(
     input: &mut impl BufRead,
     out: &mut impl Write,
 ) -> std::io::Result<Option<bool>> {
+    if let Some(w) = warning {
+        writeln!(out, "{w}")?;
+    }
     loop {
         write!(out, "{label} (y/N) {}: ", bool_hint(cur))?;
         out.flush()?;
-        if let Some(w) = warning {
-            write!(out, "\n{w}\n")?;
-            out.flush()?;
-        }
         match read_answer(input)? {
             Answer::Keep => return Ok(cur),
             Answer::Clear => return Ok(Some(false)),
@@ -189,12 +188,13 @@ mod tests {
     }
 
     fn base() -> FileConfig {
-        let mut c = FileConfig::default();
-        c.quality = Some(75);
-        c.format = Some("webp".to_string());
-        c.suffix = Some("min".to_string());
-        c.recursive = Some(true);
-        c
+        FileConfig {
+            quality: Some(75),
+            format: Some("webp".to_string()),
+            suffix: Some("min".to_string()),
+            recursive: Some(true),
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -267,5 +267,18 @@ mod tests {
         let mut inp = Cursor::new(b"\n\n".to_vec());
         let mut out: Vec<u8> = Vec::new();
         assert!(run_wizard(base(), &mut inp, &mut out).is_err());
+    }
+
+    #[test]
+    fn whitespace_around_input_is_trimmed() {
+        let (cfg, _) = run(base(), "  60  \n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(60));
+    }
+
+    #[test]
+    fn uppercase_yes_parses_as_true() {
+        // quality/format/suffix kept, recursive = YES, then keep rest.
+        let (cfg, _) = run(base(), "\n\n\nYES\n\n\n");
+        assert_eq!(cfg.recursive, Some(true));
     }
 }
