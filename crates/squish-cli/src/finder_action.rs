@@ -8,6 +8,8 @@ const SHELL_SCRIPT_TMPL: &str = include_str!("finder_action/quick-action.zsh.tmp
 
 /// The zsh script run by the Quick Action. The absolute path to the squish
 /// binary is baked in so the Service works regardless of the user's PATH.
+/// Assumes `squish_bin` is a plain filesystem path with no shell-special
+/// characters (always true for `current_exe()` on macOS).
 fn shell_script(squish_bin: &Path) -> String {
     SHELL_SCRIPT_TMPL.replace("@@SQUISH_BIN@@", &squish_bin.display().to_string())
 }

@@ -1,7 +1,10 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 notify() {
-  /usr/bin/osascript -e "display notification \"$1\" with title \"Squish\""
+  # Replace any double-quotes so they can't break the osascript -e string
+  # (the error path may include a filename containing ").
+  local msg="${1//\"/\'}"
+  /usr/bin/osascript -e "display notification \"$msg\" with title \"Squish\""
 }
 
 bin="@@SQUISH_BIN@@"
@@ -26,6 +29,7 @@ summary="$(printf '%s\n' "$out" | grep '^Squished ' | tail -1)"
 if (( rc != 0 )); then
   last="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
   notify "${last:-squish failed}"
+  # No summary line: empty batch (squish prints "Squished 0 files …") or nothing matched
 elif [[ -z "$summary" || "$summary" == "Squished 0 files"* ]]; then
   notify "Nothing to squish"
 else
