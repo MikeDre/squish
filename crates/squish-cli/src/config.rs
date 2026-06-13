@@ -79,6 +79,15 @@ pub fn find_project_config(start: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Resolve the global config path: the `SQUISH_GLOBAL_CONFIG` env override if
+/// set (used by tests), else `<platform config dir>/squish/config.toml`.
+pub fn global_config_path() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SQUISH_GLOBAL_CONFIG") {
+        return Some(PathBuf::from(p));
+    }
+    dirs::config_dir().map(|d| d.join("squish/config.toml"))
+}
+
 /// Merge two configs; fields set in `over` win over `base`.
 pub fn merge(base: FileConfig, over: FileConfig) -> FileConfig {
     FileConfig {
@@ -228,5 +237,17 @@ source-map = false
     fn find_returns_none_when_absent() {
         let tmp = tempfile::TempDir::new().unwrap();
         assert_eq!(find_project_config(tmp.path()), None);
+    }
+
+    #[test]
+    fn global_config_path_honors_env_override() {
+        // SAFETY: single-threaded test; set then remove the override.
+        std::env::set_var("SQUISH_GLOBAL_CONFIG", "/tmp/squish-test-xyz.toml");
+        let p = global_config_path();
+        std::env::remove_var("SQUISH_GLOBAL_CONFIG");
+        assert_eq!(
+            p,
+            Some(std::path::PathBuf::from("/tmp/squish-test-xyz.toml"))
+        );
     }
 }

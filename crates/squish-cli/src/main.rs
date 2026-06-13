@@ -236,10 +236,7 @@ fn real_main() -> Result<u8> {
 fn load_file_config() -> Result<config::FileConfig> {
     let mut cfg = config::FileConfig::default();
 
-    let global_path = std::env::var_os("SQUISH_GLOBAL_CONFIG")
-        .map(std::path::PathBuf::from)
-        .or_else(|| dirs::config_dir().map(|d| d.join("squish/config.toml")));
-    if let Some(p) = global_path {
+    if let Some(p) = config::global_config_path() {
         if p.is_file() {
             let text = std::fs::read_to_string(&p)?;
             cfg =
