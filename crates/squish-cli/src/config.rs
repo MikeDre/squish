@@ -241,7 +241,8 @@ source-map = false
 
     #[test]
     fn global_config_path_honors_env_override() {
-        // SAFETY: single-threaded test; set then remove the override.
+        // No other unit test in this module sets SQUISH_GLOBAL_CONFIG, so the
+        // window between set_var and remove_var cannot race another test.
         std::env::set_var("SQUISH_GLOBAL_CONFIG", "/tmp/squish-test-xyz.toml");
         let p = global_config_path();
         std::env::remove_var("SQUISH_GLOBAL_CONFIG");
