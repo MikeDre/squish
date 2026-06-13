@@ -1027,3 +1027,41 @@ fn watch_conflicts_with_dry_run() {
         .failure()
         .stderr(predicate::str::contains("cannot be used with"));
 }
+
+#[test]
+fn kinds_excludes_code_from_directory_run() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::write(
+        tmp.path().join("app.js"),
+        "const number_one = 1;\nconsole.log(number_one);\n",
+    )
+    .unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .arg("-r")
+        .args(["--kinds", "image,video,audio"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(
+        !tmp.path().join("app.min.js").exists(),
+        "code file must not be minified when --kinds excludes code"
+    );
+}
+
+#[test]
+fn kinds_unknown_name_is_fatal() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+
+    bin()
+        .arg(tmp.path().join("a.png"))
+        .args(["--kinds", "imagery"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("unknown kind"));
+}

@@ -44,6 +44,11 @@ fn real_main() -> Result<u8> {
     apply_file_config(&mut args, &file_cfg);
     let args = args;
 
+    let kinds = match args.kinds.as_deref() {
+        None => runner::KindFilter::default(),
+        Some(s) => runner::parse_kinds(s).map_err(|e| anyhow::anyhow!(e))?,
+    };
+
     for p in &args.paths {
         if !p.exists() {
             anyhow::bail!("path does not exist: {}", p.display());
@@ -115,6 +120,9 @@ fn real_main() -> Result<u8> {
             has_video = true;
         }
     }
+
+    has_video &= kinds.video;
+    has_audio &= kinds.audio;
 
     let (mut video_codec_override, mut audio_codec_override) =
         runner::validate_codec_string(args.codec.as_deref(), has_video, has_audio)?;
@@ -205,6 +213,7 @@ fn real_main() -> Result<u8> {
         quiet: args.quiet,
         dry_run: args.dry_run,
         overwrite: args.overwrite,
+        kinds,
     };
     if args.watch {
         watch::run_watch(&args.paths, &cfg, args.recursive, args.no_stats)?;

@@ -114,4 +114,9 @@ pub struct Args {
     /// or change. Stop with Ctrl-C.
     #[arg(long, conflicts_with_all = ["dry_run", "stats"])]
     pub watch: bool,
+
+    /// Restrict the run to these file kinds, comma-separated.
+    /// Kinds: image, video, audio, code. Default: all kinds.
+    #[arg(long, value_name = "KINDS")]
+    pub kinds: Option<String>,
 }

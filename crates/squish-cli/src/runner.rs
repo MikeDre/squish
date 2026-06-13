@@ -22,6 +22,7 @@ pub struct RunConfig {
     pub quiet: bool,
     pub dry_run: bool,
     pub overwrite: bool,
+    pub kinds: KindFilter,
 }
 
 pub struct RunReport {
@@ -279,7 +280,11 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let mut skipped_unknown = Vec::new();
 
     for path in paths {
-        match classify_file(path) {
+        let kind = classify_file(path);
+        if !cfg.kinds.allows(&kind) {
+            continue;
+        }
+        match kind {
             FileKind::Image => image_files.push(path.clone()),
             FileKind::Video => video_files.push(path.clone()),
             FileKind::Audio => audio_files.push(path.clone()),
