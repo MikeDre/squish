@@ -130,6 +130,12 @@ pub enum Command {
     /// Manage the macOS Finder Quick Action ("Right-click → Squish").
     #[command(subcommand, name = "finder-action")]
     FinderAction(FinderActionCmd),
+    /// Interactively set squish defaults (writes the config file).
+    Config {
+        /// Write ./squish.toml in the current directory instead of the global config.
+        #[arg(long)]
+        local: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]

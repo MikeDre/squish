@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod config_wizard;
 mod finder_action;
 mod format_request;
 mod runner;
@@ -28,8 +29,10 @@ fn main() -> std::process::ExitCode {
 fn real_main() -> Result<u8> {
     let mut args = cli::Args::parse();
 
-    if let Some(cli::Command::FinderAction(cmd)) = &args.command {
-        return finder_action::run(cmd);
+    match &args.command {
+        Some(cli::Command::FinderAction(cmd)) => return finder_action::run(cmd),
+        Some(cli::Command::Config { local }) => return config_wizard::run(*local),
+        None => {}
     }
 
     if args.stats {
@@ -236,10 +239,7 @@ fn real_main() -> Result<u8> {
 fn load_file_config() -> Result<config::FileConfig> {
     let mut cfg = config::FileConfig::default();
 
-    let global_path = std::env::var_os("SQUISH_GLOBAL_CONFIG")
-        .map(std::path::PathBuf::from)
-        .or_else(|| dirs::config_dir().map(|d| d.join("squish/config.toml")));
-    if let Some(p) = global_path {
+    if let Some(p) = config::global_config_path() {
         if p.is_file() {
             let text = std::fs::read_to_string(&p)?;
             cfg =
@@ -283,6 +283,14 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
     }
     if !args.recursive {
         args.recursive = cfg.recursive.unwrap_or(false);
+    }
+    // Config overwrite applies only when the CLI passed neither -o nor
+    // --suffix (a CLI --suffix blocks it because args.suffix.is_none() is
+    // then false). Must come before the suffix block so that config
+    // overwrite=true also suppresses a config suffix, matching the CLI's own
+    // conflicts_with constraint between -o and --suffix.
+    if !args.overwrite && args.suffix.is_none() {
+        args.overwrite = cfg.overwrite.unwrap_or(false);
     }
     // --overwrite conflicts with --suffix on the CLI; respect that here too.
     if args.suffix.is_none() && !args.overwrite {

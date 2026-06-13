@@ -342,6 +342,9 @@ quality = 75
 format = "webp"
 recursive = true
 max-width = 2000
+# Replace originals in place instead of writing _squished siblings.
+# Destructive — no copy is kept. CLI flags still override this.
+overwrite = false
 
 [video]
 codec = "h264"
@@ -355,6 +358,20 @@ safe = true
 ```
 
 Rate control is all-or-nothing: passing any of `--quality`/`--lossless`/`--bitrate`/`--fast`/`--target-size` on the command line disables all of those keys from config for that run, so a config `target-size` can never override an explicit `--quality`. Unknown keys are an error — typos fail loudly.
+
+### Interactive setup
+
+Don't want to hand-edit TOML? Run the wizard:
+
+```bash
+squish config            # edit the global config
+squish config --local    # edit ./squish.toml for this project instead
+```
+
+It walks through quality, format, suffix, recursive, strip-tags, and
+overwrite, pre-filling whatever is already set (press Enter to keep a value,
+`-` to clear it). Note: the file is rewritten, so any hand-written comments in
+it are not preserved.
 
 ## GitHub Action
 

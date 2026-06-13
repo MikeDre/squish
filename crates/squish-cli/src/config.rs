@@ -8,49 +8,85 @@
 //! (kebab-case); kind-specific options live in `[video]`, `[audio]`, and
 //! `[code]` tables.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FileConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lossless: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub recursive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub suffix: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub jobs: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_size: Option<String>,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overwrite: Option<bool>,
+    #[serde(default, skip_serializing_if = "VideoConfig::is_empty")]
     pub video: VideoConfig,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "AudioConfig::is_empty")]
     pub audio: AudioConfig,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "CodeConfig::is_empty")]
     pub code: CodeConfig,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct VideoConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fast: Option<bool>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+impl VideoConfig {
+    fn is_empty(&self) -> bool {
+        *self == VideoConfig::default()
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AudioConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bitrate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strip_tags: Option<bool>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+impl AudioConfig {
+    fn is_empty(&self) -> bool {
+        *self == AudioConfig::default()
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct CodeConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub safe: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_map: Option<bool>,
+}
+
+impl CodeConfig {
+    fn is_empty(&self) -> bool {
+        *self == CodeConfig::default()
+    }
 }
 
 /// Parse a config file's contents. Unknown keys are an error so typos
@@ -78,6 +114,15 @@ pub fn find_project_config(start: &Path) -> Option<PathBuf> {
     None
 }
 
+/// Resolve the global config path: the `SQUISH_GLOBAL_CONFIG` env override if
+/// set (used by tests), else `<platform config dir>/squish/config.toml`.
+pub fn global_config_path() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SQUISH_GLOBAL_CONFIG") {
+        return Some(PathBuf::from(p));
+    }
+    dirs::config_dir().map(|d| d.join("squish/config.toml"))
+}
+
 /// Merge two configs; fields set in `over` win over `base`.
 pub fn merge(base: FileConfig, over: FileConfig) -> FileConfig {
     FileConfig {
@@ -86,6 +131,7 @@ pub fn merge(base: FileConfig, over: FileConfig) -> FileConfig {
         format: over.format.or(base.format),
         recursive: over.recursive.or(base.recursive),
         suffix: over.suffix.or(base.suffix),
+        overwrite: over.overwrite.or(base.overwrite),
         jobs: over.jobs.or(base.jobs),
         max_width: over.max_width.or(base.max_width),
         max_height: over.max_height.or(base.max_height),
@@ -116,6 +162,7 @@ quality = 75
 lossless = false
 format = "webp"
 recursive = true
+overwrite = true
 suffix = "tiny"
 jobs = 4
 max-width = 2000
@@ -150,6 +197,7 @@ source-map = false
         assert_eq!(c.audio.bitrate.as_deref(), Some("128k"));
         assert_eq!(c.audio.strip_tags, Some(true));
         assert_eq!(c.code.safe, Some(true));
+        assert_eq!(c.overwrite, Some(true));
     }
 
     #[test]
@@ -209,8 +257,48 @@ source-map = false
     }
 
     #[test]
+    fn parses_overwrite_key() {
+        let c = parse_config("overwrite = true\n").unwrap();
+        assert_eq!(c.overwrite, Some(true));
+    }
+
+    #[test]
+    fn overwrite_absent_is_none() {
+        let c = parse_config("quality = 50\n").unwrap();
+        assert_eq!(c.overwrite, None);
+    }
+
+    #[test]
     fn find_returns_none_when_absent() {
         let tmp = tempfile::TempDir::new().unwrap();
         assert_eq!(find_project_config(tmp.path()), None);
+    }
+
+    #[test]
+    fn global_config_path_honors_env_override() {
+        // No other unit test in this module sets SQUISH_GLOBAL_CONFIG, so the
+        // window between set_var and remove_var cannot race another test.
+        std::env::set_var("SQUISH_GLOBAL_CONFIG", "/tmp/squish-test-xyz.toml");
+        let p = global_config_path();
+        std::env::remove_var("SQUISH_GLOBAL_CONFIG");
+        assert_eq!(
+            p,
+            Some(std::path::PathBuf::from("/tmp/squish-test-xyz.toml"))
+        );
+    }
+
+    #[test]
+    fn serialize_skips_none_and_round_trips() {
+        let c = FileConfig {
+            quality: Some(80),
+            overwrite: Some(true),
+            ..Default::default()
+        };
+        let text = toml::to_string_pretty(&c).unwrap();
+        assert!(!text.contains("format"));
+        assert!(!text.contains("suffix"));
+        assert!(!text.contains("[video]"));
+        let reparsed = parse_config(&text).unwrap();
+        assert_eq!(reparsed, c);
     }
 }

@@ -16,6 +16,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`--kinds` flag.** Restrict a run to specific file kinds
   (`--kinds image,video,audio`). Unknown kind names are an error. CLI-only
   by design — not a `squish.toml` key.
+- **`squish config` wizard.** An interactive command that steps through the
+  common defaults (quality, format, suffix, recursive, strip-tags, overwrite)
+  and writes the config file — global by default, `--local` for
+  `./squish.toml`. Pre-fills existing values; Enter keeps, `-` clears.
+- **`overwrite` config key.** Default `-o` (replace originals in place) from
+  the config file. CLI flags still win, and it stays mutually exclusive with
+  `suffix`.
 
 ## [0.5.0] - 2026-06-11
 
