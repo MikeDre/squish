@@ -1089,7 +1089,10 @@ fn finder_action_install_and_uninstall_roundtrip() {
         .stdout(predicate::str::contains("Installed"));
 
     let wflow = tmp.path().join("Squish.workflow/Contents/document.wflow");
-    assert!(tmp.path().join("Squish.workflow/Contents/Info.plist").exists());
+    assert!(tmp
+        .path()
+        .join("Squish.workflow/Contents/Info.plist")
+        .exists());
     let doc = fs::read_to_string(&wflow).unwrap();
     assert!(doc.contains("--kinds image,video,audio"));
 
@@ -1139,9 +1142,5 @@ fn plain_runs_still_work_without_subcommand() {
 fn finder_action_without_subcommand_is_an_error() {
     // `finder-action` requires `install` or `uninstall`; bare invocation
     // must fail rather than silently doing nothing.
-    bin()
-        .arg("finder-action")
-        .assert()
-        .failure()
-        .code(2);
+    bin().arg("finder-action").assert().failure().code(2);
 }

@@ -17,7 +17,9 @@ fn shell_script(squish_bin: &Path) -> String {
 
 /// Escape text for embedding in a plist <string> element. Ampersand first.
 fn xml_escape(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
 }
 
 fn document_wflow(squish_bin: &Path) -> String {
@@ -115,7 +117,10 @@ mod tests {
     #[test]
     fn wflow_embeds_escaped_script() {
         let doc = document_wflow(Path::new("/usr/local/bin/squish"));
-        assert!(doc.contains("2&gt;&amp;1"), "shell redirection must be XML-escaped");
+        assert!(
+            doc.contains("2&gt;&amp;1"),
+            "shell redirection must be XML-escaped"
+        );
         assert!(doc.contains("/bin/zsh"));
         assert!(doc.contains("com.apple.RunShellScript"));
         assert!(!doc.contains("@@COMMAND_STRING@@"));
@@ -152,10 +157,9 @@ mod tests {
         install_into(tmp.path(), Path::new("/old/squish")).unwrap();
         install_into(tmp.path(), Path::new("/new/squish")).unwrap();
 
-        let doc = std::fs::read_to_string(
-            tmp.path().join("Squish.workflow/Contents/document.wflow"),
-        )
-        .unwrap();
+        let doc =
+            std::fs::read_to_string(tmp.path().join("Squish.workflow/Contents/document.wflow"))
+                .unwrap();
         assert!(doc.contains("/new/squish"));
         assert!(!doc.contains("/old/squish"));
     }
