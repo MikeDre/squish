@@ -212,6 +212,9 @@ pub fn run(local: bool) -> Result<u8> {
     let updated = run_wizard(existing, &mut input, &mut out)?;
 
     let toml_text = toml::to_string_pretty(&updated).context("serializing config")?;
+    // For a bare relative path like "squish.toml" (the --local target),
+    // Path::parent() returns Some("") rather than None; skip create_dir_all on
+    // that empty path since it would error.
     if let Some(parent) = target.parent() {
         if !parent.as_os_str().is_empty() {
             std::fs::create_dir_all(parent)
