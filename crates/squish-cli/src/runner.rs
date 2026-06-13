@@ -96,6 +96,65 @@ fn classify_file(path: &Path) -> FileKind {
     FileKind::Unknown
 }
 
+/// Which file kinds a run may touch (`--kinds`). Default: all.
+#[derive(Debug, Clone, Copy)]
+pub struct KindFilter {
+    pub image: bool,
+    pub video: bool,
+    pub audio: bool,
+    pub code: bool,
+}
+
+impl Default for KindFilter {
+    fn default() -> Self {
+        Self {
+            image: true,
+            video: true,
+            audio: true,
+            code: true,
+        }
+    }
+}
+
+impl KindFilter {
+    /// Unknown is always allowed so filtered runs still report
+    /// unrecognized files in the summary.
+    fn allows(&self, kind: &FileKind) -> bool {
+        match kind {
+            FileKind::Image => self.image,
+            FileKind::Video => self.video,
+            FileKind::Audio => self.audio,
+            FileKind::Code => self.code,
+            FileKind::Unknown => true,
+        }
+    }
+}
+
+/// Parse a `--kinds` value like "image,video,audio". Unknown names are an
+/// error, consistent with config-file strictness.
+pub fn parse_kinds(s: &str) -> Result<KindFilter, String> {
+    let mut f = KindFilter {
+        image: false,
+        video: false,
+        audio: false,
+        code: false,
+    };
+    for part in s.split(',') {
+        match part.trim() {
+            "image" => f.image = true,
+            "video" => f.video = true,
+            "audio" => f.audio = true,
+            "code" => f.code = true,
+            other => {
+                return Err(format!(
+                    "unknown kind in --kinds: \"{other}\" (expected: image, video, audio, code)"
+                ))
+            }
+        }
+    }
+    Ok(f)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum CodecAppliesTo {
     Video,
@@ -872,6 +931,56 @@ mod target_size_validation_tests {
     fn target_size_empty_batch_passes() {
         // Nothing matched at all — the empty-batch handling elsewhere applies.
         assert!(validate_target_size_applicable(true, false, false).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod kind_filter_tests {
+    use super::*;
+
+    #[test]
+    fn default_filter_allows_everything() {
+        let f = KindFilter::default();
+        assert!(f.image && f.video && f.audio && f.code);
+    }
+
+    #[test]
+    fn parse_media_only() {
+        let f = parse_kinds("image,video,audio").unwrap();
+        assert!(f.image && f.video && f.audio);
+        assert!(!f.code);
+    }
+
+    #[test]
+    fn parse_single_kind_with_spaces() {
+        let f = parse_kinds(" image , code ").unwrap();
+        assert!(f.image && f.code);
+        assert!(!f.video && !f.audio);
+    }
+
+    #[test]
+    fn parse_unknown_kind_errors() {
+        let err = parse_kinds("image,imagery").unwrap_err();
+        assert!(err.contains("unknown kind"));
+        assert!(err.contains("imagery"));
+    }
+
+    #[test]
+    fn parse_empty_part_errors() {
+        assert!(parse_kinds("image,,video").is_err());
+        assert!(parse_kinds("").is_err());
+    }
+
+    #[test]
+    fn allows_matches_kinds_and_passes_unknown_through() {
+        let f = parse_kinds("image").unwrap();
+        assert!(f.allows(&FileKind::Image));
+        assert!(!f.allows(&FileKind::Video));
+        assert!(!f.allows(&FileKind::Audio));
+        assert!(!f.allows(&FileKind::Code));
+        // Unknown files stay visible so the "Skipped (unrecognized)" report
+        // keeps working regardless of the filter.
+        assert!(f.allows(&FileKind::Unknown));
     }
 }
 
