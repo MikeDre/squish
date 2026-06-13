@@ -1065,3 +1065,72 @@ fn kinds_unknown_name_is_fatal() {
         .code(2)
         .stderr(predicate::str::contains("unknown kind"));
 }
+
+#[test]
+fn finder_action_help_lists_install_and_uninstall() {
+    bin()
+        .args(["finder-action", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("install"))
+        .stdout(predicate::str::contains("uninstall"));
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn finder_action_install_and_uninstall_roundtrip() {
+    let tmp = TempDir::new().unwrap();
+
+    bin()
+        .env("SQUISH_SERVICES_DIR", tmp.path())
+        .args(["finder-action", "install"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Installed"));
+
+    let wflow = tmp.path().join("Squish.workflow/Contents/document.wflow");
+    assert!(tmp.path().join("Squish.workflow/Contents/Info.plist").exists());
+    let doc = fs::read_to_string(&wflow).unwrap();
+    assert!(doc.contains("--kinds image,video,audio"));
+
+    // Both plists must be valid property lists.
+    for f in ["Info.plist", "document.wflow"] {
+        let lint = std::process::Command::new("plutil")
+            .arg("-lint")
+            .arg(tmp.path().join("Squish.workflow/Contents").join(f))
+            .output()
+            .unwrap();
+        assert!(
+            lint.status.success(),
+            "plutil -lint {f}: {}",
+            String::from_utf8_lossy(&lint.stdout)
+        );
+    }
+
+    bin()
+        .env("SQUISH_SERVICES_DIR", tmp.path())
+        .args(["finder-action", "uninstall"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Removed"));
+    assert!(!tmp.path().join("Squish.workflow").exists());
+}
+
+#[cfg(not(target_os = "macos"))]
+#[test]
+fn finder_action_errors_off_macos() {
+    bin()
+        .args(["finder-action", "install"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("only available on macOS"));
+}
+
+#[test]
+fn plain_runs_still_work_without_subcommand() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    bin().arg(tmp.path().join("a.png")).assert().success();
+    assert!(tmp.path().join("a_squished.png").exists());
+}

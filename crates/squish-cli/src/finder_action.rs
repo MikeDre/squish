@@ -58,6 +58,31 @@ pub fn install_into(services_dir: &Path, squish_bin: &Path) -> Result<PathBuf> {
     Ok(bundle)
 }
 
+/// Entry point for `squish finder-action <install|uninstall>`.
+pub fn run(cmd: &crate::cli::FinderActionCmd) -> Result<u8> {
+    if !cfg!(target_os = "macos") {
+        anyhow::bail!("finder-action is only available on macOS");
+    }
+    let dir = services_dir()?;
+    match cmd {
+        crate::cli::FinderActionCmd::Install => {
+            let bin = std::env::current_exe().context("cannot determine squish binary path")?;
+            let bundle = install_into(&dir, &bin)?;
+            println!("Installed {}", bundle.display());
+            println!("Right-click files or folders in Finder → Quick Actions → Squish.");
+            println!("(Re-run this command if you move or reinstall squish.)");
+        }
+        crate::cli::FinderActionCmd::Uninstall => {
+            if uninstall_from(&dir)? {
+                println!("Removed the Squish Quick Action.");
+            } else {
+                println!("Quick Action not installed — nothing to do.");
+            }
+        }
+    }
+    Ok(0)
+}
+
 /// Remove the bundle. Returns false if it wasn't installed.
 pub fn uninstall_from(services_dir: &Path) -> Result<bool> {
     let bundle = services_dir.join(WORKFLOW_DIR_NAME);

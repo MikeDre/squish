@@ -28,6 +28,10 @@ fn main() -> std::process::ExitCode {
 fn real_main() -> Result<u8> {
     let mut args = cli::Args::parse();
 
+    if let Some(cli::Command::FinderAction(cmd)) = &args.command {
+        return finder_action::run(cmd);
+    }
+
     if args.stats {
         let now = chrono::Local::now();
         let records = stats::default_data_file()
