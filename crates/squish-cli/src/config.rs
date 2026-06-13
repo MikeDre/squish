@@ -19,6 +19,7 @@ pub struct FileConfig {
     pub format: Option<String>,
     pub recursive: Option<bool>,
     pub suffix: Option<String>,
+    pub overwrite: Option<bool>,
     pub jobs: Option<usize>,
     pub max_width: Option<u32>,
     pub max_height: Option<u32>,
@@ -86,6 +87,7 @@ pub fn merge(base: FileConfig, over: FileConfig) -> FileConfig {
         format: over.format.or(base.format),
         recursive: over.recursive.or(base.recursive),
         suffix: over.suffix.or(base.suffix),
+        overwrite: over.overwrite.or(base.overwrite),
         jobs: over.jobs.or(base.jobs),
         max_width: over.max_width.or(base.max_width),
         max_height: over.max_height.or(base.max_height),
@@ -116,6 +118,7 @@ quality = 75
 lossless = false
 format = "webp"
 recursive = true
+overwrite = true
 suffix = "tiny"
 jobs = 4
 max-width = 2000
@@ -150,6 +153,7 @@ source-map = false
         assert_eq!(c.audio.bitrate.as_deref(), Some("128k"));
         assert_eq!(c.audio.strip_tags, Some(true));
         assert_eq!(c.code.safe, Some(true));
+        assert_eq!(c.overwrite, Some(true));
     }
 
     #[test]
@@ -206,6 +210,18 @@ source-map = false
         fs::write(root.join("a/squish.toml"), "quality = 2\n").unwrap();
         let found = find_project_config(&nested).unwrap();
         assert_eq!(found, root.join("a/squish.toml"));
+    }
+
+    #[test]
+    fn parses_overwrite_key() {
+        let c = parse_config("overwrite = true\n").unwrap();
+        assert_eq!(c.overwrite, Some(true));
+    }
+
+    #[test]
+    fn overwrite_absent_is_none() {
+        let c = parse_config("quality = 50\n").unwrap();
+        assert_eq!(c.overwrite, None);
     }
 
     #[test]
