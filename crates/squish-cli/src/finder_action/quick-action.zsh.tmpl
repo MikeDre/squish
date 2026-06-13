@@ -1,0 +1,33 @@
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
+notify() {
+  /usr/bin/osascript -e "display notification \"$1\" with title \"Squish\""
+}
+
+bin="@@SQUISH_BIN@@"
+if [[ ! -x "$bin" ]]; then
+  bin="$(command -v squish)"
+fi
+if [[ -z "$bin" || ! -x "$bin" ]]; then
+  notify "squish not found — run: squish finder-action install"
+  exit 0
+fi
+
+if (( $# == 1 )); then
+  notify "Squishing 1 item…"
+else
+  notify "Squishing $# items…"
+fi
+
+out="$("$bin" "$@" -r --kinds image,video,audio 2>&1)"
+rc=$?
+summary="$(printf '%s\n' "$out" | grep '^Squished ' | tail -1)"
+
+if (( rc != 0 )); then
+  last="$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -1)"
+  notify "${last:-squish failed}"
+elif [[ -z "$summary" || "$summary" == "Squished 0 files"* ]]; then
+  notify "Nothing to squish"
+else
+  notify "$summary"
+fi

@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod finder_action;
 mod format_request;
 mod runner;
 mod stats;
