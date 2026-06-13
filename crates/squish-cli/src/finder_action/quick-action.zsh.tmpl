@@ -1,9 +1,10 @@
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
 notify() {
-  # Replace any double-quotes so they can't break the osascript -e string
-  # (the error path may include a filename containing ").
-  local msg="${1//\"/\'}"
+  # Neutralize backslashes then double-quotes so a pathological filename in
+  # the error path can't break the osascript -e "..." string literal.
+  local msg="${1//\\//}"
+  msg="${msg//\"/\'}"
   /usr/bin/osascript -e "display notification \"$msg\" with title \"Squish\""
 }
 
