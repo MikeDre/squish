@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Finder Quick Action (macOS).** `squish finder-action install` adds a
+  "Squish" entry to Finder's right-click → Quick Actions menu. Zero UI:
+  squishes the selected files/folders (media only — images, video, audio)
+  with the usual non-destructive defaults, posting start and finish
+  notifications with the savings. `squish finder-action uninstall` removes
+  it. The Homebrew formula now points at the command post-install.
+- **`--kinds` flag.** Restrict a run to specific file kinds
+  (`--kinds image,video,audio`). Unknown kind names are an error. CLI-only
+  by design — not a `squish.toml` key.
+
 ## [0.5.0] - 2026-06-11
 
 ### Added

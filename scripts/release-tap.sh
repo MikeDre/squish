@@ -58,6 +58,13 @@ class Squish < Formula
     bin.install "squish"
   end
 
+  def caveats
+    <<~EOS
+      To add the "Right-click → Squish" Finder Quick Action, run:
+        squish finder-action install
+    EOS
+  end
+
   test do
     assert_match version.to_s, shell_output("#{bin}/squish --version")
   end
