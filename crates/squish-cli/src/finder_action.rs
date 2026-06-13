@@ -45,22 +45,27 @@ pub fn services_dir() -> Result<PathBuf> {
 pub fn install_into(services_dir: &Path, squish_bin: &Path) -> Result<PathBuf> {
     let bundle = services_dir.join(WORKFLOW_DIR_NAME);
     let contents = bundle.join("Contents");
+    // The bundle only ever contains these two files; if that changes,
+    // reinstall would need to clear stale files from Contents/ first.
     std::fs::create_dir_all(&contents)
         .with_context(|| format!("creating {}", contents.display()))?;
-    std::fs::write(contents.join("Info.plist"), info_plist())?;
-    std::fs::write(contents.join("document.wflow"), document_wflow(squish_bin))?;
+    let info_path = contents.join("Info.plist");
+    std::fs::write(&info_path, info_plist())
+        .with_context(|| format!("writing {}", info_path.display()))?;
+    let wflow_path = contents.join("document.wflow");
+    std::fs::write(&wflow_path, document_wflow(squish_bin))
+        .with_context(|| format!("writing {}", wflow_path.display()))?;
     Ok(bundle)
 }
 
 /// Remove the bundle. Returns false if it wasn't installed.
 pub fn uninstall_from(services_dir: &Path) -> Result<bool> {
     let bundle = services_dir.join(WORKFLOW_DIR_NAME);
-    if !bundle.exists() {
-        return Ok(false);
+    match std::fs::remove_dir_all(&bundle) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e).with_context(|| format!("removing {}", bundle.display())),
     }
-    std::fs::remove_dir_all(&bundle)
-        .with_context(|| format!("removing {}", bundle.display()))?;
-    Ok(true)
 }
 
 #[cfg(test)]
