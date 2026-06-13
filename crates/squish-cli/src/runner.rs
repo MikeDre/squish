@@ -130,9 +130,13 @@ impl KindFilter {
     }
 }
 
-/// Parse a `--kinds` value like "image,video,audio". Unknown names are an
-/// error, consistent with config-file strictness.
+/// Parse a `--kinds` value like "image,video,audio" into a `KindFilter`.
+/// An empty value, or any unrecognized or empty comma-separated part, is an
+/// error — consistent with config-file strictness (typos fail loudly).
 pub fn parse_kinds(s: &str) -> Result<KindFilter, String> {
+    if s.trim().is_empty() {
+        return Err("--kinds value must not be empty".to_string());
+    }
     let mut f = KindFilter {
         image: false,
         video: false,
