@@ -1,6 +1,7 @@
 //! macOS Finder Quick Action: generate ~/Library/Services/Squish.workflow.
 
-use std::path::Path;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
 
 const INFO_PLIST: &str = include_str!("finder_action/Info.plist.tmpl");
 const DOCUMENT_WFLOW_TMPL: &str = include_str!("finder_action/document.wflow.tmpl");
@@ -25,6 +26,41 @@ fn document_wflow(squish_bin: &Path) -> String {
 
 fn info_plist() -> String {
     INFO_PLIST.to_string()
+}
+
+pub const WORKFLOW_DIR_NAME: &str = "Squish.workflow";
+
+/// Where Quick Actions live. `SQUISH_SERVICES_DIR` overrides for tests,
+/// mirroring the existing SQUISH_GLOBAL_CONFIG test hook.
+pub fn services_dir() -> Result<PathBuf> {
+    if let Some(p) = std::env::var_os("SQUISH_SERVICES_DIR") {
+        return Ok(PathBuf::from(p));
+    }
+    dirs::home_dir()
+        .map(|h| h.join("Library/Services"))
+        .context("cannot determine home directory")
+}
+
+/// Write (or rewrite) the Squish.workflow bundle. Idempotent.
+pub fn install_into(services_dir: &Path, squish_bin: &Path) -> Result<PathBuf> {
+    let bundle = services_dir.join(WORKFLOW_DIR_NAME);
+    let contents = bundle.join("Contents");
+    std::fs::create_dir_all(&contents)
+        .with_context(|| format!("creating {}", contents.display()))?;
+    std::fs::write(contents.join("Info.plist"), info_plist())?;
+    std::fs::write(contents.join("document.wflow"), document_wflow(squish_bin))?;
+    Ok(bundle)
+}
+
+/// Remove the bundle. Returns false if it wasn't installed.
+pub fn uninstall_from(services_dir: &Path) -> Result<bool> {
+    let bundle = services_dir.join(WORKFLOW_DIR_NAME);
+    if !bundle.exists() {
+        return Ok(false);
+    }
+    std::fs::remove_dir_all(&bundle)
+        .with_context(|| format!("removing {}", bundle.display()))?;
+    Ok(true)
 }
 
 #[cfg(test)]
@@ -61,5 +97,36 @@ mod tests {
         assert!(plist.contains("com.apple.finder"));
         assert!(plist.contains("public.item"));
         assert!(plist.contains("<string>Squish</string>"));
+    }
+
+    #[test]
+    fn install_writes_bundle_then_uninstall_removes_it() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let bundle = install_into(tmp.path(), Path::new("/usr/local/bin/squish")).unwrap();
+
+        assert_eq!(bundle, tmp.path().join("Squish.workflow"));
+        let info = std::fs::read_to_string(bundle.join("Contents/Info.plist")).unwrap();
+        assert!(info.contains("com.apple.finder"));
+        let doc = std::fs::read_to_string(bundle.join("Contents/document.wflow")).unwrap();
+        assert!(doc.contains("/usr/local/bin/squish"));
+
+        assert!(uninstall_from(tmp.path()).unwrap());
+        assert!(!bundle.exists());
+        // Second uninstall: nothing there, reports false, no error.
+        assert!(!uninstall_from(tmp.path()).unwrap());
+    }
+
+    #[test]
+    fn install_is_idempotent_and_refreshes_content() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        install_into(tmp.path(), Path::new("/old/squish")).unwrap();
+        install_into(tmp.path(), Path::new("/new/squish")).unwrap();
+
+        let doc = std::fs::read_to_string(
+            tmp.path().join("Squish.workflow/Contents/document.wflow"),
+        )
+        .unwrap();
+        assert!(doc.contains("/new/squish"));
+        assert!(!doc.contains("/old/squish"));
     }
 }
