@@ -1162,6 +1162,26 @@ fn config_overwrite_true_replaces_in_place() {
 }
 
 #[test]
+fn config_help_mentions_local_flag() {
+    bin()
+        .args(["config", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--local"));
+}
+
+#[test]
+fn config_without_tty_errors() {
+    bin()
+        .arg("config")
+        .write_stdin("")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("interactive terminal"));
+}
+
+#[test]
 fn cli_suffix_suppresses_config_overwrite() {
     let tmp = TempDir::new().unwrap();
     fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();

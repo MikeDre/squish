@@ -29,8 +29,10 @@ fn main() -> std::process::ExitCode {
 fn real_main() -> Result<u8> {
     let mut args = cli::Args::parse();
 
-    if let Some(cli::Command::FinderAction(cmd)) = &args.command {
-        return finder_action::run(cmd);
+    match &args.command {
+        Some(cli::Command::FinderAction(cmd)) => return finder_action::run(cmd),
+        Some(cli::Command::Config { local }) => return config_wizard::run(*local),
+        None => {}
     }
 
     if args.stats {

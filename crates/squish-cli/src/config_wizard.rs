@@ -1,7 +1,9 @@
 //! Interactive `squish config` wizard.
 
-use crate::config::FileConfig;
-use std::io::{BufRead, Write};
+use crate::config::{self, FileConfig};
+use anyhow::{Context, Result};
+use std::io::{BufRead, IsTerminal, Write};
+use std::path::PathBuf;
 
 use crate::format_request::RequestedFormat;
 
@@ -173,6 +175,52 @@ pub fn run_wizard(
         out,
     )?;
     Ok(existing)
+}
+
+/// Entry point for `squish config [--local]`.
+pub fn run(local: bool) -> Result<u8> {
+    if !std::io::stdin().is_terminal() {
+        anyhow::bail!("squish config requires an interactive terminal");
+    }
+
+    let target: PathBuf = if local {
+        PathBuf::from("squish.toml")
+    } else {
+        config::global_config_path().context("cannot determine the global config path")?
+    };
+
+    let existing = if target.is_file() {
+        let text = std::fs::read_to_string(&target)
+            .with_context(|| format!("reading {}", target.display()))?;
+        config::parse_config(&text).map_err(|e| anyhow::anyhow!("{}: {e}", target.display()))?
+    } else {
+        config::FileConfig::default()
+    };
+
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut input = stdin.lock();
+    let mut out = stdout.lock();
+
+    writeln!(out, "squish config — editing {}", target.display())?;
+    writeln!(
+        out,
+        "Press Enter to keep the current value, type a new one to change it,\nor \"-\" to clear it. Note: existing comments in the file are not preserved.\n"
+    )?;
+    out.flush()?;
+
+    let updated = run_wizard(existing, &mut input, &mut out)?;
+
+    let toml_text = toml::to_string_pretty(&updated).context("serializing config")?;
+    if let Some(parent) = target.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
+    }
+    std::fs::write(&target, toml_text).with_context(|| format!("writing {}", target.display()))?;
+    writeln!(out, "\nWrote {}", target.display())?;
+    Ok(0)
 }
 
 #[cfg(test)]

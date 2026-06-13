@@ -8,50 +8,85 @@
 //! (kebab-case); kind-specific options live in `[video]`, `[audio]`, and
 //! `[code]` tables.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FileConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub quality: Option<u8>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub lossless: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub recursive: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub suffix: Option<String>,
-    pub overwrite: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub jobs: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_width: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub max_height: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub target_size: Option<String>,
-    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub overwrite: Option<bool>,
+    #[serde(default, skip_serializing_if = "VideoConfig::is_empty")]
     pub video: VideoConfig,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "AudioConfig::is_empty")]
     pub audio: AudioConfig,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "CodeConfig::is_empty")]
     pub code: CodeConfig,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct VideoConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub fast: Option<bool>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+impl VideoConfig {
+    fn is_empty(&self) -> bool {
+        *self == VideoConfig::default()
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AudioConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub codec: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bitrate: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub strip_tags: Option<bool>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Deserialize)]
+impl AudioConfig {
+    fn is_empty(&self) -> bool {
+        *self == AudioConfig::default()
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct CodeConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub safe: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub source_map: Option<bool>,
+}
+
+impl CodeConfig {
+    fn is_empty(&self) -> bool {
+        *self == CodeConfig::default()
+    }
 }
 
 /// Parse a config file's contents. Unknown keys are an error so typos
@@ -250,5 +285,20 @@ source-map = false
             p,
             Some(std::path::PathBuf::from("/tmp/squish-test-xyz.toml"))
         );
+    }
+
+    #[test]
+    fn serialize_skips_none_and_round_trips() {
+        let c = FileConfig {
+            quality: Some(80),
+            overwrite: Some(true),
+            ..Default::default()
+        };
+        let text = toml::to_string_pretty(&c).unwrap();
+        assert!(!text.contains("format"));
+        assert!(!text.contains("suffix"));
+        assert!(!text.contains("[video]"));
+        let reparsed = parse_config(&text).unwrap();
+        assert_eq!(reparsed, c);
     }
 }
