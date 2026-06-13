@@ -317,6 +317,8 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
                              as they appear or change (Ctrl-C to stop). Never
                              re-squishes its own outputs
       --no-config            Ignore squish.toml config files for this run
+      --kinds <KINDS>        Restrict the run to these file kinds, comma-
+                             separated: image, video, audio, code (default: all)
       --stats                Print usage report (this month + all-time) and exit
       --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
   -j, --jobs <N>             Parallelism (default: num CPUs)
@@ -373,6 +375,22 @@ Squish assets in CI with the bundled action — handy before deploys, or paired 
 | `install-deps` | `true` | apt/brew runtime deps (libheif, dav1d, ffmpeg, gifsicle) |
 
 Runs on `ubuntu` and `macos` runners (x64 + arm64).
+
+## Finder Quick Action (macOS)
+
+Add a "Squish" entry to Finder's right-click menu — for the folks who never
+open a terminal:
+
+```bash
+squish finder-action install
+```
+
+Select files or folders in Finder → right-click → **Quick Actions → Squish**.
+It squishes media (images, video, audio — never code) with your usual
+defaults: `_squished` siblings, originals untouched, `squish.toml` respected.
+A notification reports progress and the final savings. Remove it any time
+with `squish finder-action uninstall`; re-run install after moving or
+reinstalling squish.
 
 ## Collision behavior
 

@@ -1,10 +1,14 @@
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 /// Compress images losslessly or with sensible quality defaults.
 #[derive(Parser, Debug)]
-#[command(name = "squish", version, about)]
+#[command(name = "squish", version, about, subcommand_negates_reqs = true)]
 pub struct Args {
+    /// Subcommands (currently only finder-action).
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
     /// Files or directories to compress.
     #[arg(required_unless_present = "stats")]
     pub paths: Vec<PathBuf>,
@@ -114,4 +118,24 @@ pub struct Args {
     /// or change. Stop with Ctrl-C.
     #[arg(long, conflicts_with_all = ["dry_run", "stats"])]
     pub watch: bool,
+
+    /// Restrict the run to these file kinds, comma-separated.
+    /// Kinds: image, video, audio, code. Default: all kinds.
+    #[arg(long, value_name = "KINDS")]
+    pub kinds: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Manage the macOS Finder Quick Action ("Right-click → Squish").
+    #[command(subcommand, name = "finder-action")]
+    FinderAction(FinderActionCmd),
+}
+
+#[derive(Subcommand, Debug)]
+pub enum FinderActionCmd {
+    /// Install the Quick Action into ~/Library/Services.
+    Install,
+    /// Remove the Quick Action.
+    Uninstall,
 }
