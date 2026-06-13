@@ -1134,3 +1134,14 @@ fn plain_runs_still_work_without_subcommand() {
     bin().arg(tmp.path().join("a.png")).assert().success();
     assert!(tmp.path().join("a_squished.png").exists());
 }
+
+#[test]
+fn finder_action_without_subcommand_is_an_error() {
+    // `finder-action` requires `install` or `uninstall`; bare invocation
+    // must fail rather than silently doing nothing.
+    bin()
+        .arg("finder-action")
+        .assert()
+        .failure()
+        .code(2);
+}
