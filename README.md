@@ -378,7 +378,7 @@ it are not preserved.
 Squish assets in CI with the bundled action — handy before deploys, or paired with a commit-back step:
 
 ```yaml
-- uses: MikeDre/squish@v0.5.0
+- uses: MikeDre/squish@v0.6.0
   with:
     paths: public/images
     args: "--recursive --overwrite --quality 75"

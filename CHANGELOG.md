@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-06-14
 
 ### Added
 - **Finder Quick Action (macOS).** `squish finder-action install` adds a
@@ -23,6 +23,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`overwrite` config key.** Default `-o` (replace originals in place) from
   the config file. CLI flags still win, and it stays mutually exclusive with
   `suffix`.
+
+[0.6.0]: https://github.com/MikeDre/squish/compare/v0.5.0...v0.6.0
 
 ## [0.5.0] - 2026-06-11
 
