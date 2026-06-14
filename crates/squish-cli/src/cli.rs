@@ -1,6 +1,25 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
+/// Value of `--quality`: a fixed 0–100 number, or `auto` (perceptual
+/// visually-lossless search, image formats only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QualityArg {
+    Fixed(u8),
+    Auto,
+}
+
+/// clap value parser for `--quality`: accepts `auto` (any case) or 0..=100.
+fn parse_quality(s: &str) -> Result<QualityArg, String> {
+    if s.eq_ignore_ascii_case("auto") {
+        return Ok(QualityArg::Auto);
+    }
+    match s.parse::<u8>() {
+        Ok(n) if n <= 100 => Ok(QualityArg::Fixed(n)),
+        _ => Err(format!("expected a number 0-100 or \"auto\", got \"{s}\"")),
+    }
+}
+
 /// Compress images losslessly or with sensible quality defaults.
 #[derive(Parser, Debug)]
 #[command(name = "squish", version, about, subcommand_negates_reqs = true)]
@@ -13,9 +32,10 @@ pub struct Args {
     #[arg(required_unless_present = "stats")]
     pub paths: Vec<PathBuf>,
 
-    /// Quality override, 0-100 (format-dependent default when omitted).
-    #[arg(short = 'q', long, value_parser = clap::value_parser!(u8).range(0..=100))]
-    pub quality: Option<u8>,
+    /// Quality: 0-100, or `auto` for the lowest visually-lossless quality
+    /// (image formats only). Auto conflicts with --target-size.
+    #[arg(short = 'q', long, value_parser = parse_quality)]
+    pub quality: Option<QualityArg>,
 
     /// Lossless compression (overrides --quality).
     #[arg(long)]

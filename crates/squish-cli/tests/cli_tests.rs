@@ -1196,3 +1196,64 @@ fn cli_suffix_suppresses_config_overwrite() {
     assert!(tmp.path().join("a_tiny.png").exists());
     assert!(tmp.path().join("a.png").exists());
 }
+
+#[test]
+fn quality_auto_produces_smaller_visually_lossless_jpeg() {
+    let tmp = TempDir::new().unwrap();
+    let src = tmp.path().join("a.jpg");
+    fs::copy(core_fixture("sample.jpg"), &src).unwrap();
+    bin()
+        .args(["a.jpg", "--quality", "auto"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+    let out = tmp.path().join("a_squished.jpg");
+    assert!(out.exists());
+    let in_len = fs::metadata(&src).unwrap().len();
+    let out_len = fs::metadata(&out).unwrap().len();
+    assert!(
+        out_len < in_len,
+        "auto output {out_len} should be < source {in_len}"
+    );
+}
+
+#[test]
+fn quality_numeric_still_parses() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    bin()
+        .args(["a.png", "--quality", "50"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+    assert!(tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn quality_invalid_value_errors() {
+    bin()
+        .args([
+            core_fixture("sample.png").to_str().unwrap(),
+            "--quality",
+            "autoo",
+        ])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("auto"));
+}
+
+#[test]
+fn quality_auto_conflicts_with_target_size() {
+    bin()
+        .args([
+            core_fixture("sample.jpg").to_str().unwrap(),
+            "--quality",
+            "auto",
+            "--target-size",
+            "1M",
+        ])
+        .assert()
+        .failure()
+        .code(2);
+}

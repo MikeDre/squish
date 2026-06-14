@@ -106,6 +106,18 @@ fn real_main() -> Result<u8> {
         }
     };
 
+    // Split --quality into the numeric value the encoders use and the auto flag.
+    // Auto is image-only: video/audio receive no explicit quality (codec default).
+    let (image_quality, auto): (Option<u8>, bool) = match args.quality {
+        Some(cli::QualityArg::Fixed(n)) => (Some(n), false),
+        Some(cli::QualityArg::Auto) => (None, true),
+        None => (None, false),
+    };
+    let av_quality: Option<u8> = match args.quality {
+        Some(cli::QualityArg::Fixed(n)) => Some(n),
+        _ => None,
+    };
+
     let worklist = walker::collect_worklist(&args.paths, args.recursive);
 
     // Classify worklist to determine which kinds are present (for codec validation).
@@ -170,7 +182,7 @@ fn real_main() -> Result<u8> {
     }
 
     let opts = SquishOptions {
-        quality: args.quality,
+        quality: image_quality,
         lossless: args.lossless,
         output_format: requested_format.as_ref().and_then(|r| r.image),
         force_overwrite: args.force,
@@ -179,11 +191,11 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         target_size,
-        auto: false, // stopgap; Task 3 wires the real value
+        auto,
     };
 
     let video_opts = VideoOptions {
-        quality: args.quality,
+        quality: av_quality,
         codec: video_codec_override,
         fast: args.fast,
         force_overwrite: args.force,
@@ -194,7 +206,7 @@ fn real_main() -> Result<u8> {
     };
 
     let audio_opts = AudioOptions {
-        quality: args.quality,
+        quality: av_quality,
         bitrate_kbps,
         codec: audio_codec_override,
         strip_tags: args.strip_tags,
@@ -272,7 +284,7 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
         || args.fast
         || args.target_size.is_some();
     if !cli_rate_control {
-        args.quality = cfg.quality;
+        args.quality = cfg.quality.map(cli::QualityArg::Fixed);
         args.lossless = cfg.lossless.unwrap_or(false);
         args.target_size = cfg.target_size.clone();
         args.bitrate = cfg.audio.bitrate.clone();
