@@ -1,0 +1,176 @@
+//! `squish doctor`: report what this install can do — built-in formats plus
+//! the external tools (ffmpeg/ffprobe/gifsicle), with versions and install
+//! hints. Always exits 0.
+
+/// Result of probing one external tool.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum ToolStatus {
+    /// Present; `Some(version)` if a version was parsed, else `None`.
+    Present(Option<String>),
+    Missing,
+}
+
+/// One external tool: identity, what it powers, install hint, probe result.
+struct ToolReport {
+    name: &'static str,
+    powers: &'static str,
+    install: &'static str,
+    status: ToolStatus,
+}
+
+/// Extract a version token from a tool's first `-version` line: the first
+/// whitespace-separated token that starts with an ASCII digit and contains a
+/// '.'. Returns None if there's no such token.
+fn parse_version(first_line: &str) -> Option<String> {
+    first_line
+        .split_whitespace()
+        .find(|tok| tok.starts_with(|c: char| c.is_ascii_digit()) && tok.contains('.'))
+        .map(|s| s.to_string())
+}
+
+/// Render the full report text from already-probed tool reports. Pure: no I/O.
+fn render_report(tools: &[ToolReport]) -> String {
+    let mut out = String::new();
+    out.push_str("squish doctor — what this install can do\n\n");
+
+    out.push_str("Built in (always available):\n");
+    out.push_str("  ✓ Images   PNG · JPEG · WebP · AVIF · SVG · TIFF · HEIC\n");
+    out.push_str("  ✓ Code     JS · TS · CSS · HTML · JSON\n\n");
+
+    out.push_str("External tools:\n");
+    for t in tools {
+        match &t.status {
+            ToolStatus::Present(Some(v)) => {
+                out.push_str(&format!("  ✓ {:<9} {:<8} → {}\n", t.name, v, t.powers));
+            }
+            ToolStatus::Present(None) => {
+                out.push_str(&format!(
+                    "  ✓ {:<9} {:<8} → {}\n",
+                    t.name, "(present)", t.powers
+                ));
+            }
+            ToolStatus::Missing => {
+                out.push_str(&format!(
+                    "  ✗ {:<9} {:<8} → {}\n",
+                    t.name, "missing", t.powers
+                ));
+                out.push_str(&format!("       install: {}\n", t.install));
+            }
+        }
+    }
+
+    let missing: Vec<&ToolReport> = tools
+        .iter()
+        .filter(|t| t.status == ToolStatus::Missing)
+        .collect();
+    out.push('\n');
+    if missing.is_empty() {
+        out.push_str("All external tools installed — every format is supported.\n");
+    } else {
+        for t in &missing {
+            out.push_str(&format!(
+                "{} is unavailable until {} is installed.\n",
+                t.powers, t.name
+            ));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn report(name: &'static str, powers: &'static str, status: ToolStatus) -> ToolReport {
+        ToolReport {
+            name,
+            powers,
+            install: "brew install X (macOS) · apt install X (Linux)",
+            status,
+        }
+    }
+
+    #[test]
+    fn parse_version_ffmpeg() {
+        assert_eq!(
+            parse_version("ffmpeg version 7.1 Copyright (c) 2000-2024"),
+            Some("7.1".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_version_gifsicle() {
+        assert_eq!(
+            parse_version("LCDF Gifsicle 1.94"),
+            Some("1.94".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_version_distro_suffix() {
+        assert_eq!(
+            parse_version("ffmpeg version 4.4.2-0ubuntu0.22.04.1 Copyright"),
+            Some("4.4.2-0ubuntu0.22.04.1".to_string())
+        );
+    }
+
+    #[test]
+    fn parse_version_none_when_absent() {
+        assert_eq!(parse_version("some tool with no version token"), None);
+    }
+
+    #[test]
+    fn render_all_present_says_all_good_and_no_hints() {
+        let tools = vec![
+            report(
+                "ffmpeg",
+                "video and audio compression",
+                ToolStatus::Present(Some("7.1".into())),
+            ),
+            report(
+                "gifsicle",
+                "GIF compression",
+                ToolStatus::Present(Some("1.94".into())),
+            ),
+        ];
+        let out = render_report(&tools);
+        assert!(out.contains("✓ ffmpeg"));
+        assert!(out.contains("7.1"));
+        assert!(out.contains("All external tools installed"));
+        assert!(!out.contains("install:"));
+        assert!(out.contains("Images"));
+        assert!(out.contains("Code"));
+    }
+
+    #[test]
+    fn render_missing_gifsicle_shows_cross_hint_and_unavailable_line() {
+        let tools = vec![
+            report(
+                "ffmpeg",
+                "video and audio compression",
+                ToolStatus::Present(Some("7.1".into())),
+            ),
+            report("gifsicle", "GIF compression", ToolStatus::Missing),
+        ];
+        let out = render_report(&tools);
+        assert!(out.contains("✓ ffmpeg"));
+        assert!(out.contains("✗ gifsicle"));
+        assert!(out.contains("missing"));
+        assert!(out.contains("install:"));
+        assert!(out.contains("GIF compression is unavailable until gifsicle is installed."));
+        assert!(!out.contains("All external tools installed"));
+    }
+
+    #[test]
+    fn render_present_unknown_version() {
+        let tools = vec![report(
+            "ffmpeg",
+            "video and audio compression",
+            ToolStatus::Present(None),
+        )];
+        let out = render_report(&tools);
+        assert!(out.contains("✓ ffmpeg"));
+        assert!(out.contains("(present)"));
+        assert!(!out.contains("missing"));
+    }
+}
