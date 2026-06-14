@@ -12,6 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Image formats with a quality dial (JPEG/WebP/AVIF) only; conflicts with
   `--target-size`. Settable device-wide as `quality = "auto"` in config and via
   the `squish config` wizard.
+- **`squish doctor`.** Prints a capability report — built-in formats plus the
+  external tools (ffmpeg, ffprobe, gifsicle) with versions and install hints for
+  anything missing. Always exits 0.
 
 ## [0.6.0] - 2026-06-14
 

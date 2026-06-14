@@ -1,6 +1,7 @@
 mod cli;
 mod config;
 mod config_wizard;
+mod doctor;
 mod finder_action;
 mod format_request;
 mod runner;
@@ -32,6 +33,7 @@ fn real_main() -> Result<u8> {
     match &args.command {
         Some(cli::Command::FinderAction(cmd)) => return finder_action::run(cmd),
         Some(cli::Command::Config { local }) => return config_wizard::run(*local),
+        Some(cli::Command::Doctor) => return doctor::run(),
         None => {}
     }
 

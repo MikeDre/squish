@@ -1257,3 +1257,14 @@ fn quality_auto_conflicts_with_target_size() {
         .failure()
         .code(2);
 }
+
+#[test]
+fn doctor_reports_capabilities_and_exits_zero() {
+    bin()
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Images"))
+        .stdout(predicate::str::contains("Code"))
+        .stdout(predicate::str::contains("ffmpeg"));
+}
