@@ -113,10 +113,9 @@ fn real_main() -> Result<u8> {
         Some(cli::QualityArg::Auto) => (None, true),
         None => (None, false),
     };
-    let av_quality: Option<u8> = match args.quality {
-        Some(cli::QualityArg::Fixed(n)) => Some(n),
-        _ => None,
-    };
+    // Video/audio have no perceptual auto; they take the same numeric quality
+    // (None when auto, so the codec default applies).
+    let av_quality = image_quality;
 
     let worklist = walker::collect_worklist(&args.paths, args.recursive);
 
