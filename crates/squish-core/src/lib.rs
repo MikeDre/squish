@@ -656,4 +656,41 @@ mod auto_quality_search_tests {
             q100_bytes.len()
         );
     }
+
+    #[test]
+    fn auto_on_png_falls_back_to_normal_encode() {
+        // PNG is not a lossy-dial format, so `auto` must behave exactly like a
+        // normal default encode (no perceptual search, no error).
+        let bytes = std::fs::read(fixture("sample.png")).unwrap();
+
+        let auto_opts = SquishOptions {
+            auto: true,
+            ..Default::default()
+        };
+        let default_opts = SquishOptions::default();
+
+        let (auto_out, _) = encode_once(
+            Format::Png,
+            Format::Png,
+            &bytes,
+            &auto_opts,
+            &fixture("sample.png"),
+            false,
+        )
+        .unwrap();
+        let (default_out, _) = encode_once(
+            Format::Png,
+            Format::Png,
+            &bytes,
+            &default_opts,
+            &fixture("sample.png"),
+            false,
+        )
+        .unwrap();
+
+        // encode_once ignores `auto` entirely (the search lives in squish_file's
+        // dispatch, which only routes JPEG/WebP/AVIF to it), so the two outputs
+        // are byte-identical.
+        assert_eq!(auto_out, default_out);
+    }
 }
