@@ -1,5 +1,6 @@
 //! Core image compression library for squish.
 
+mod auto_quality;
 pub mod error;
 pub mod format;
 pub mod formats;
