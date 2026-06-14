@@ -156,6 +156,8 @@ pub enum Command {
         #[arg(long)]
         local: bool,
     },
+    /// Report which formats and external tools are available on this machine.
+    Doctor,
 }
 
 #[derive(Subcommand, Debug)]

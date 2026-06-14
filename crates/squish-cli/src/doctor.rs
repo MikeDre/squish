@@ -2,6 +2,9 @@
 //! the external tools (ffmpeg/ffprobe/gifsicle), with versions and install
 //! hints. Always exits 0.
 
+use std::io::Write;
+use std::process::Command;
+
 /// Result of probing one external tool.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ToolStatus {
@@ -75,6 +78,50 @@ fn render_report(tools: &[ToolReport]) -> String {
         }
     }
     out
+}
+
+/// Probe one tool by running `<name> <version_arg>`. Returns `Missing` if the
+/// command can't be spawned or exits non-zero; otherwise `Present` with the
+/// version parsed from the first stdout line (or `None` if unparseable).
+fn probe_tool(name: &str, version_arg: &str) -> ToolStatus {
+    match Command::new(name).arg(version_arg).output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let first = stdout.lines().next().unwrap_or("");
+            ToolStatus::Present(parse_version(first))
+        }
+        _ => ToolStatus::Missing,
+    }
+}
+
+/// Entry point for `squish doctor`: probe the external tools, render, print.
+pub fn run() -> anyhow::Result<u8> {
+    let ffmpeg_hint = "brew install ffmpeg (macOS) · apt install ffmpeg (Linux)";
+    let tools = vec![
+        ToolReport {
+            name: "ffmpeg",
+            powers: "video and audio compression",
+            install: ffmpeg_hint,
+            status: probe_tool("ffmpeg", "-version"),
+        },
+        ToolReport {
+            name: "ffprobe",
+            powers: "audio stream / codec detection",
+            install: ffmpeg_hint,
+            status: probe_tool("ffprobe", "-version"),
+        },
+        ToolReport {
+            name: "gifsicle",
+            powers: "GIF compression",
+            install: "brew install gifsicle (macOS) · apt install gifsicle (Linux)",
+            status: probe_tool("gifsicle", "--version"),
+        },
+    ];
+
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    write!(out, "{}", render_report(&tools))?;
+    Ok(0)
 }
 
 #[cfg(test)]
