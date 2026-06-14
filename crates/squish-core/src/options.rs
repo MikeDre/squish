@@ -38,6 +38,12 @@ pub struct SquishOptions {
     /// minimum quality, the smallest attempt is written and a warning is
     /// attached to the result.
     pub target_size: Option<u64>,
+
+    /// When true, image formats with a quality dial binary-search for the
+    /// lowest quality that is still visually lossless (SSIMULACRA2 ≥ 90).
+    /// Image-only; ignored by video/audio. Mutually exclusive with
+    /// `target_size` at the CLI layer.
+    pub auto: bool,
 }
 
 impl SquishOptions {

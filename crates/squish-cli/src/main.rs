@@ -179,6 +179,7 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         target_size,
+        auto: false, // stopgap; Task 3 wires the real value
     };
 
     let video_opts = VideoOptions {
