@@ -1,5 +1,6 @@
 //! Core image compression library for squish.
 
+mod auto_quality;
 pub mod error;
 pub mod format;
 pub mod formats;
@@ -16,6 +17,7 @@ pub use naming::{
 pub use options::SquishOptions;
 pub use result::SquishResult;
 
+use auto_quality::{ssimulacra2_score, VISUALLY_LOSSLESS_THRESHOLD};
 use image::DynamicImage;
 use std::fs;
 use std::path::Path;
@@ -45,8 +47,8 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
 
     let is_animated_webp =
         format_in == Format::Webp && formats::webp::is_animated_webp(&input_bytes_vec);
-    let (output_bytes, warnings) = match opts.target_size {
-        Some(target) => compress_to_target(
+    let (output_bytes, warnings) = if let Some(target) = opts.target_size {
+        compress_to_target(
             format_in,
             format_out,
             &input_bytes_vec,
@@ -54,15 +56,25 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
             input,
             is_animated_webp,
             target,
-        )?,
-        None => encode_once(
+        )?
+    } else if opts.auto && auto_quality_applies(format_out) && !opts.lossless && !is_animated_webp {
+        compress_to_visually_lossless(
             format_in,
             format_out,
             &input_bytes_vec,
             opts,
             input,
             is_animated_webp,
-        )?,
+        )?
+    } else {
+        encode_once(
+            format_in,
+            format_out,
+            &input_bytes_vec,
+            opts,
+            input,
+            is_animated_webp,
+        )?
     };
 
     let target_ext = if format_in == format_out {
@@ -139,6 +151,137 @@ fn encode_once(
 /// SVG is vector-lossless; TIFF output re-encodes losslessly.
 fn has_quality_dial(format_out: Format) -> bool {
     !matches!(format_out, Format::Svg | Format::Tiff)
+}
+
+/// Whether `--quality auto` (perceptual search) applies to this output format.
+/// Lossy raster only — JPEG, WebP, AVIF. Everything else falls back to a
+/// normal encode.
+fn auto_quality_applies(format_out: Format) -> bool {
+    matches!(format_out, Format::Jpeg | Format::Webp | Format::Avif)
+}
+
+/// Find the LOWEST quality whose decoded output is still visually lossless
+/// (SSIMULACRA2 ≥ threshold) versus the source, via binary search over the
+/// 1..=100 range (~7 encode+decode+score passes). The inverse of
+/// `compress_to_target`, which keeps the highest quality under a byte budget.
+///
+/// Falls back to a single default-quality `encode_once` when the metric can't
+/// be computed (e.g. an image under 8px). Callers must only invoke this for
+/// lossy raster formats — JPEG/WebP/AVIF (guarded in `squish_file`).
+fn compress_to_visually_lossless(
+    format_in: Format,
+    format_out: Format,
+    input_bytes: &[u8],
+    opts: &SquishOptions,
+    path: &Path,
+    is_animated_webp: bool,
+) -> Result<(Vec<u8>, Vec<String>), SquishError> {
+    let src_rgb = match decode_to_dynamic_image(format_in, input_bytes, path) {
+        Ok(img) => img.to_rgb8(),
+        Err(_) => {
+            return encode_once(
+                format_in,
+                format_out,
+                input_bytes,
+                opts,
+                path,
+                is_animated_webp,
+            )
+        }
+    };
+
+    let mut lo: u8 = 1;
+    let mut hi: u8 = 100;
+    let mut best_passing: Option<Vec<u8>> = None;
+
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let attempt_opts = SquishOptions {
+            quality: Some(mid),
+            auto: false,
+            target_size: None,
+            ..opts.clone()
+        };
+        let (bytes, _warnings) = encode_once(
+            format_in,
+            format_out,
+            input_bytes,
+            &attempt_opts,
+            path,
+            is_animated_webp,
+        )?;
+
+        let cand_rgb = match image::load_from_memory(&bytes) {
+            Ok(img) => img.to_rgb8(),
+            Err(_) => {
+                return encode_once(
+                    format_in,
+                    format_out,
+                    input_bytes,
+                    opts,
+                    path,
+                    is_animated_webp,
+                )
+            }
+        };
+        let (cw, ch) = cand_rgb.dimensions();
+        let resized;
+        let src_slice: &[u8] = if src_rgb.dimensions() == (cw, ch) {
+            src_rgb.as_raw()
+        } else {
+            resized =
+                image::imageops::resize(&src_rgb, cw, ch, image::imageops::FilterType::Lanczos3);
+            resized.as_raw()
+        };
+
+        match ssimulacra2_score(src_slice, cand_rgb.as_raw(), cw as usize, ch as usize) {
+            None => {
+                return encode_once(
+                    format_in,
+                    format_out,
+                    input_bytes,
+                    opts,
+                    path,
+                    is_animated_webp,
+                )
+            }
+            Some(score) if score >= VISUALLY_LOSSLESS_THRESHOLD => {
+                best_passing = Some(bytes);
+                if mid == 1 {
+                    break;
+                }
+                hi = mid - 1;
+            }
+            Some(_) => {
+                lo = mid + 1;
+            }
+        }
+    }
+
+    match best_passing {
+        Some(bytes) => Ok((bytes, Vec::new())),
+        None => {
+            let q100 = SquishOptions {
+                quality: Some(100),
+                auto: false,
+                target_size: None,
+                ..opts.clone()
+            };
+            let (bytes, mut warnings) = encode_once(
+                format_in,
+                format_out,
+                input_bytes,
+                &q100,
+                path,
+                is_animated_webp,
+            )?;
+            warnings.push(format!(
+                "{}: --quality auto could not reach visually-lossless quality; wrote maximum quality",
+                path.display()
+            ));
+            Ok((bytes, warnings))
+        }
+    }
 }
 
 /// Find the highest quality whose output fits `target` bytes, via binary
@@ -443,5 +586,111 @@ mod tests {
         assert!(matches!(err, SquishError::InPlaceFormatChange { .. }));
         assert!(input.exists());
         assert!(!tmp.path().join("dot.webp").exists());
+    }
+}
+
+#[cfg(test)]
+mod auto_quality_search_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> PathBuf {
+        let mut p = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        p.push("tests/fixtures");
+        p.push(name);
+        p
+    }
+
+    #[test]
+    fn auto_picks_a_quality_that_is_visually_lossless_and_smaller_than_max() {
+        let bytes = std::fs::read(fixture("sample.jpg")).unwrap();
+
+        let auto_opts = SquishOptions {
+            auto: true,
+            ..Default::default()
+        };
+        let (auto_bytes, _) = compress_to_visually_lossless(
+            Format::Jpeg,
+            Format::Jpeg,
+            &bytes,
+            &auto_opts,
+            &fixture("sample.jpg"),
+            false,
+        )
+        .unwrap();
+
+        let src = decode_to_dynamic_image(Format::Jpeg, &bytes, &fixture("sample.jpg"))
+            .unwrap()
+            .to_rgb8();
+        let cand = image::load_from_memory(&auto_bytes).unwrap().to_rgb8();
+        assert_eq!(src.dimensions(), cand.dimensions());
+        let score = crate::auto_quality::ssimulacra2_score(
+            src.as_raw(),
+            cand.as_raw(),
+            src.width() as usize,
+            src.height() as usize,
+        )
+        .unwrap();
+        assert!(
+            score >= crate::auto_quality::VISUALLY_LOSSLESS_THRESHOLD,
+            "auto output should be visually lossless, scored {score}"
+        );
+
+        let q100 = SquishOptions {
+            quality: Some(100),
+            ..Default::default()
+        };
+        let (q100_bytes, _) = encode_once(
+            Format::Jpeg,
+            Format::Jpeg,
+            &bytes,
+            &q100,
+            &fixture("sample.jpg"),
+            false,
+        )
+        .unwrap();
+        assert!(
+            auto_bytes.len() < q100_bytes.len(),
+            "auto ({}) should be smaller than q100 ({})",
+            auto_bytes.len(),
+            q100_bytes.len()
+        );
+    }
+
+    #[test]
+    fn auto_on_png_falls_back_to_normal_encode() {
+        // PNG is not a lossy-dial format, so `auto` must behave exactly like a
+        // normal default encode (no perceptual search, no error).
+        let bytes = std::fs::read(fixture("sample.png")).unwrap();
+
+        let auto_opts = SquishOptions {
+            auto: true,
+            ..Default::default()
+        };
+        let default_opts = SquishOptions::default();
+
+        let (auto_out, _) = encode_once(
+            Format::Png,
+            Format::Png,
+            &bytes,
+            &auto_opts,
+            &fixture("sample.png"),
+            false,
+        )
+        .unwrap();
+        let (default_out, _) = encode_once(
+            Format::Png,
+            Format::Png,
+            &bytes,
+            &default_opts,
+            &fixture("sample.png"),
+            false,
+        )
+        .unwrap();
+
+        // encode_once ignores `auto` entirely (the search lives in squish_file's
+        // dispatch, which only routes JPEG/WebP/AVIF to it), so the two outputs
+        // are byte-identical.
+        assert_eq!(auto_out, default_out);
     }
 }

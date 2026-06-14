@@ -121,6 +121,9 @@ squish hero.jpg --max-width 1920 --max-height 1080
 # Compress to a size budget (highest quality that fits)
 squish hero.jpg --target-size 500k
 
+# Compress as hard as possible with no visible loss (perceptual auto-quality)
+squish photo.jpg --quality auto
+
 # Preview without writing
 squish ./big-folder/ -r --dry-run
 
@@ -297,7 +300,8 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
 ## Flags
 
 ```
-  -q, --quality <0-100>      Quality override (default: format-specific)
+  -q, --quality <0-100|auto>  Quality, or `auto` for the lowest visually-lossless
+                              quality (images only; conflicts with --target-size)
       --lossless             Lossless compression (overrides --quality)
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
@@ -338,7 +342,7 @@ squish reads defaults from the nearest `squish.toml` (walking up from the curren
 
 ```toml
 # squish.toml
-quality = 75
+quality = 75          # or "auto" — perceptual visually-lossless (images only)
 format = "webp"
 recursive = true
 max-width = 2000
@@ -356,6 +360,8 @@ strip-tags = true
 [code]
 safe = true
 ```
+
+`quality` accepts a number (0–100) or the string `"auto"` (perceptual visually-lossless, images only; conflicts with `target-size`). The `squish config` wizard offers `auto` as an option.
 
 Rate control is all-or-nothing: passing any of `--quality`/`--lossless`/`--bitrate`/`--fast`/`--target-size` on the command line disables all of those keys from config for that run, so a config `target-size` can never override an explicit `--quality`. Unknown keys are an error — typos fail loudly.
 

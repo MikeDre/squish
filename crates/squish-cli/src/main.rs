@@ -106,6 +106,17 @@ fn real_main() -> Result<u8> {
         }
     };
 
+    // Split --quality into the numeric value the encoders use and the auto flag.
+    // Auto is image-only: video/audio receive no explicit quality (codec default).
+    let (image_quality, auto): (Option<u8>, bool) = match args.quality {
+        Some(cli::QualityArg::Fixed(n)) => (Some(n), false),
+        Some(cli::QualityArg::Auto) => (None, true),
+        None => (None, false),
+    };
+    // Video/audio have no perceptual auto; they take the same numeric quality
+    // (None when auto, so the codec default applies).
+    let av_quality = image_quality;
+
     let worklist = walker::collect_worklist(&args.paths, args.recursive);
 
     // Classify worklist to determine which kinds are present (for codec validation).
@@ -170,7 +181,7 @@ fn real_main() -> Result<u8> {
     }
 
     let opts = SquishOptions {
-        quality: args.quality,
+        quality: image_quality,
         lossless: args.lossless,
         output_format: requested_format.as_ref().and_then(|r| r.image),
         force_overwrite: args.force,
@@ -179,10 +190,11 @@ fn real_main() -> Result<u8> {
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         target_size,
+        auto,
     };
 
     let video_opts = VideoOptions {
-        quality: args.quality,
+        quality: av_quality,
         codec: video_codec_override,
         fast: args.fast,
         force_overwrite: args.force,
@@ -193,7 +205,7 @@ fn real_main() -> Result<u8> {
     };
 
     let audio_opts = AudioOptions {
-        quality: args.quality,
+        quality: av_quality,
         bitrate_kbps,
         codec: audio_codec_override,
         strip_tags: args.strip_tags,

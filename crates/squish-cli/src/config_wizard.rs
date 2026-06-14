@@ -1,5 +1,6 @@
 //! Interactive `squish config` wizard.
 
+use crate::cli::QualityArg;
 use crate::config::{self, FileConfig};
 use anyhow::{Context, Result};
 use std::io::{BufRead, IsTerminal, Write};
@@ -49,24 +50,35 @@ fn bool_hint(v: Option<bool>) -> String {
 }
 
 fn prompt_quality(
-    cur: Option<u8>,
+    cur: Option<QualityArg>,
     input: &mut impl BufRead,
     out: &mut impl Write,
-) -> std::io::Result<Option<u8>> {
+) -> std::io::Result<Option<QualityArg>> {
+    let cur_str = match cur {
+        Some(QualityArg::Fixed(n)) => Some(n.to_string()),
+        Some(QualityArg::Auto) => Some("auto".to_string()),
+        None => None,
+    };
     loop {
         write!(
             out,
-            "quality (0–100) {}: ",
-            current_hint(cur.map(|q| q.to_string()).as_deref())
+            "quality (0–100 or \"auto\") {}: ",
+            current_hint(cur_str.as_deref())
         )?;
         out.flush()?;
         match read_answer(input)? {
             Answer::Keep => return Ok(cur),
             Answer::Clear => return Ok(None),
+            Answer::Value(v) if v.eq_ignore_ascii_case("auto") => {
+                return Ok(Some(QualityArg::Auto))
+            }
             Answer::Value(v) => match v.parse::<u8>() {
-                Ok(q) if q <= 100 => return Ok(Some(q)),
+                Ok(q) if q <= 100 => return Ok(Some(QualityArg::Fixed(q))),
                 _ => {
-                    writeln!(out, "  please enter a whole number from 0 to 100")?;
+                    writeln!(
+                        out,
+                        "  please enter a whole number from 0 to 100, or \"auto\""
+                    )?;
                 }
             },
         }
@@ -240,7 +252,7 @@ mod tests {
 
     fn base() -> FileConfig {
         FileConfig {
-            quality: Some(75),
+            quality: Some(QualityArg::Fixed(75)),
             format: Some("webp".to_string()),
             suffix: Some("min".to_string()),
             recursive: Some(true),
@@ -251,7 +263,7 @@ mod tests {
     #[test]
     fn enter_on_every_prompt_keeps_existing() {
         let (cfg, _) = run(base(), "\n\n\n\n\n\n");
-        assert_eq!(cfg.quality, Some(75));
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(75)));
         assert_eq!(cfg.format.as_deref(), Some("webp"));
         assert_eq!(cfg.suffix.as_deref(), Some("min"));
         assert_eq!(cfg.recursive, Some(true));
@@ -262,7 +274,7 @@ mod tests {
     #[test]
     fn typed_values_update_fields() {
         let (cfg, _) = run(base(), "60\njpeg\nsmall\nn\ny\nn\n");
-        assert_eq!(cfg.quality, Some(60));
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(60)));
         assert_eq!(cfg.format.as_deref(), Some("jpeg"));
         assert_eq!(cfg.suffix.as_deref(), Some("small"));
         assert_eq!(cfg.recursive, Some(false));
@@ -273,7 +285,7 @@ mod tests {
     #[test]
     fn invalid_quality_reprompts_then_accepts() {
         let (cfg, out) = run(base(), "999\nabc\n42\n\n\n\n\n\n");
-        assert_eq!(cfg.quality, Some(42));
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(42)));
         assert!(
             out.matches("quality").count() >= 3,
             "should re-prompt quality"
@@ -323,7 +335,7 @@ mod tests {
     #[test]
     fn whitespace_around_input_is_trimmed() {
         let (cfg, _) = run(base(), "  60  \n\n\n\n\n\n");
-        assert_eq!(cfg.quality, Some(60));
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(60)));
     }
 
     #[test]
@@ -331,5 +343,25 @@ mod tests {
         // quality/format/suffix kept, recursive = YES, then keep rest.
         let (cfg, _) = run(base(), "\n\n\nYES\n\n\n");
         assert_eq!(cfg.recursive, Some(true));
+    }
+
+    #[test]
+    fn quality_accepts_auto() {
+        // First prompt is quality; type "auto", keep the rest.
+        let (cfg, _) = run(base(), "auto\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Auto));
+    }
+
+    #[test]
+    fn quality_accepts_number() {
+        let (cfg, _) = run(base(), "60\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(60)));
+    }
+
+    #[test]
+    fn quality_invalid_then_auto_reprompts() {
+        let (cfg, out) = run(base(), "150\nauto\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Auto));
+        assert!(out.matches("quality").count() >= 2);
     }
 }
