@@ -225,18 +225,16 @@ fn compress_to_visually_lossless(
             }
         };
         let (cw, ch) = cand_rgb.dimensions();
-        let src_for_cmp = if src_rgb.dimensions() == (cw, ch) {
-            src_rgb.clone()
+        let resized;
+        let src_slice: &[u8] = if src_rgb.dimensions() == (cw, ch) {
+            src_rgb.as_raw()
         } else {
-            image::imageops::resize(&src_rgb, cw, ch, image::imageops::FilterType::Lanczos3)
+            resized =
+                image::imageops::resize(&src_rgb, cw, ch, image::imageops::FilterType::Lanczos3);
+            resized.as_raw()
         };
 
-        match ssimulacra2_score(
-            src_for_cmp.as_raw(),
-            cand_rgb.as_raw(),
-            cw as usize,
-            ch as usize,
-        ) {
+        match ssimulacra2_score(src_slice, cand_rgb.as_raw(), cw as usize, ch as usize) {
             None => {
                 return encode_once(
                     format_in,
@@ -269,14 +267,19 @@ fn compress_to_visually_lossless(
                 target_size: None,
                 ..opts.clone()
             };
-            encode_once(
+            let (bytes, mut warnings) = encode_once(
                 format_in,
                 format_out,
                 input_bytes,
                 &q100,
                 path,
                 is_animated_webp,
-            )
+            )?;
+            warnings.push(format!(
+                "{}: --quality auto could not reach visually-lossless quality; wrote maximum quality",
+                path.display()
+            ));
+            Ok((bytes, warnings))
         }
     }
 }
