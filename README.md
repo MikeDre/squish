@@ -203,6 +203,18 @@ squish --stats
 squish photos/ -r --no-stats
 ```
 
+### Check your setup
+
+See which formats work on this machine and whether the optional tools are installed:
+
+```bash
+squish doctor
+```
+
+Images and code minification work out of the box. Video and audio need
+`ffmpeg`, and GIF needs `gifsicle`; `doctor` shows what's present (with
+versions) and how to install anything missing. It always exits 0.
+
 ## Formats
 
 ### Images
