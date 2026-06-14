@@ -8,14 +8,19 @@
 //! (kebab-case); kind-specific options live in `[video]`, `[audio]`, and
 //! `[code]` tables.
 
+use crate::cli::QualityArg;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FileConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quality: Option<u8>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "quality_serde"
+    )]
+    pub quality: Option<QualityArg>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lossless: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -89,16 +94,45 @@ impl CodeConfig {
     }
 }
 
+/// (De)serialize `Option<QualityArg>` as a TOML integer 0..=100 or the string
+/// "auto". Used by the `quality` config key.
+mod quality_serde {
+    use super::QualityArg;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<QualityArg>, s: S) -> Result<S::Ok, S::Error> {
+        match v {
+            None => s.serialize_none(),
+            Some(QualityArg::Auto) => s.serialize_str("auto"),
+            Some(QualityArg::Fixed(n)) => s.serialize_u8(*n),
+        }
+    }
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Raw {
+        Int(i64),
+        Str(String),
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<QualityArg>, D::Error> {
+        use serde::de::Error;
+        match Option::<Raw>::deserialize(d)? {
+            None => Ok(None),
+            Some(Raw::Str(s)) if s.eq_ignore_ascii_case("auto") => Ok(Some(QualityArg::Auto)),
+            Some(Raw::Str(s)) => Err(D::Error::custom(format!(
+                "quality must be 0-100 or \"auto\", got \"{s}\""
+            ))),
+            Some(Raw::Int(n)) if (0..=100).contains(&n) => Ok(Some(QualityArg::Fixed(n as u8))),
+            Some(Raw::Int(n)) => Err(D::Error::custom(format!("quality must be 0-100, got {n}"))),
+        }
+    }
+}
+
 /// Parse a config file's contents. Unknown keys are an error so typos
 /// (`qualty = 80`) fail loudly instead of being silently ignored.
 pub fn parse_config(toml_text: &str) -> Result<FileConfig, String> {
-    let config: FileConfig = toml::from_str(toml_text).map_err(|e| e.to_string())?;
-    if let Some(q) = config.quality {
-        if q > 100 {
-            return Err(format!("quality must be 0-100, got {q}"));
-        }
-    }
-    Ok(config)
+    toml::from_str(toml_text).map_err(|e| e.to_string())
 }
 
 /// Walk up from `start` looking for a `squish.toml`. Returns the first hit.
@@ -186,7 +220,7 @@ source-map = false
     #[test]
     fn parses_full_config() {
         let c = parse_config(FULL).unwrap();
-        assert_eq!(c.quality, Some(75));
+        assert_eq!(c.quality, Some(crate::cli::QualityArg::Fixed(75)));
         assert_eq!(c.format.as_deref(), Some("webp"));
         assert_eq!(c.recursive, Some(true));
         assert_eq!(c.suffix.as_deref(), Some("tiny"));
@@ -234,7 +268,7 @@ source-map = false
         let base = parse_config("quality = 50\nsuffix = \"a\"\n").unwrap();
         let over = parse_config("quality = 80\n[audio]\ncodec = \"opus\"\n").unwrap();
         let m = merge(base, over);
-        assert_eq!(m.quality, Some(80)); // overlay wins
+        assert_eq!(m.quality, Some(crate::cli::QualityArg::Fixed(80))); // overlay wins
         assert_eq!(m.suffix.as_deref(), Some("a")); // base survives
         assert_eq!(m.audio.codec.as_deref(), Some("opus"));
     }
@@ -290,7 +324,7 @@ source-map = false
     #[test]
     fn serialize_skips_none_and_round_trips() {
         let c = FileConfig {
-            quality: Some(80),
+            quality: Some(crate::cli::QualityArg::Fixed(80)),
             overwrite: Some(true),
             ..Default::default()
         };
@@ -300,5 +334,30 @@ source-map = false
         assert!(!text.contains("[video]"));
         let reparsed = parse_config(&text).unwrap();
         assert_eq!(reparsed, c);
+    }
+
+    #[test]
+    fn parses_quality_number() {
+        let c = parse_config("quality = 75\n").unwrap();
+        assert_eq!(c.quality, Some(crate::cli::QualityArg::Fixed(75)));
+    }
+
+    #[test]
+    fn parses_quality_auto() {
+        let c = parse_config("quality = \"auto\"\n").unwrap();
+        assert_eq!(c.quality, Some(crate::cli::QualityArg::Auto));
+    }
+
+    #[test]
+    fn quality_out_of_range_still_errors() {
+        assert!(parse_config("quality = 150\n").is_err());
+    }
+
+    #[test]
+    fn quality_round_trips_auto() {
+        let c = parse_config("quality = \"auto\"\n").unwrap();
+        let text = toml::to_string_pretty(&c).unwrap();
+        assert!(text.contains("auto"));
+        assert_eq!(parse_config(&text).unwrap(), c);
     }
 }

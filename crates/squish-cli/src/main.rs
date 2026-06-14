@@ -283,7 +283,7 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
         || args.fast
         || args.target_size.is_some();
     if !cli_rate_control {
-        args.quality = cfg.quality.map(cli::QualityArg::Fixed);
+        args.quality = cfg.quality;
         args.lossless = cfg.lossless.unwrap_or(false);
         args.target_size = cfg.target_size.clone();
         args.bitrate = cfg.audio.bitrate.clone();
