@@ -62,17 +62,23 @@ fn prompt_quality(
     loop {
         write!(
             out,
-            "quality (0–100) {}: ",
+            "quality (0–100 or \"auto\") {}: ",
             current_hint(cur_str.as_deref())
         )?;
         out.flush()?;
         match read_answer(input)? {
             Answer::Keep => return Ok(cur),
             Answer::Clear => return Ok(None),
+            Answer::Value(v) if v.eq_ignore_ascii_case("auto") => {
+                return Ok(Some(QualityArg::Auto))
+            }
             Answer::Value(v) => match v.parse::<u8>() {
                 Ok(q) if q <= 100 => return Ok(Some(QualityArg::Fixed(q))),
                 _ => {
-                    writeln!(out, "  please enter a whole number from 0 to 100")?;
+                    writeln!(
+                        out,
+                        "  please enter a whole number from 0 to 100, or \"auto\""
+                    )?;
                 }
             },
         }
@@ -337,5 +343,25 @@ mod tests {
         // quality/format/suffix kept, recursive = YES, then keep rest.
         let (cfg, _) = run(base(), "\n\n\nYES\n\n\n");
         assert_eq!(cfg.recursive, Some(true));
+    }
+
+    #[test]
+    fn quality_accepts_auto() {
+        // First prompt is quality; type "auto", keep the rest.
+        let (cfg, _) = run(base(), "auto\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Auto));
+    }
+
+    #[test]
+    fn quality_accepts_number() {
+        let (cfg, _) = run(base(), "60\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Fixed(60)));
+    }
+
+    #[test]
+    fn quality_invalid_then_auto_reprompts() {
+        let (cfg, out) = run(base(), "150\nauto\n\n\n\n\n\n");
+        assert_eq!(cfg.quality, Some(QualityArg::Auto));
+        assert!(out.matches("quality").count() >= 2);
     }
 }
