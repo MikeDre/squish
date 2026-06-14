@@ -4,6 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`--quality auto`.** Perceptual auto-quality: binary-searches for the lowest
+  encoder quality whose output is still visually lossless (SSIMULACRA2 ≥ 90).
+  Image formats with a quality dial (JPEG/WebP/AVIF) only; conflicts with
+  `--target-size`. Settable device-wide as `quality = "auto"` in config and via
+  the `squish config` wizard.
+
 ## [0.6.0] - 2026-06-14
 
 ### Added
