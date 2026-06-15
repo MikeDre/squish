@@ -4,6 +4,7 @@ mod config_wizard;
 mod doctor;
 mod finder_action;
 mod format_request;
+mod preset;
 mod runner;
 mod stats;
 mod target_size;
@@ -46,13 +47,17 @@ fn real_main() -> Result<u8> {
         return Ok(0);
     }
 
-    let file_cfg = if args.no_config {
+    let mut file_cfg = if args.no_config {
         config::FileConfig::default()
     } else {
         load_file_config()?
     };
+    if let Some(preset) = args.preset {
+        preset::apply_preset(&mut args, &mut file_cfg, preset);
+    }
     apply_file_config(&mut args, &file_cfg);
     let args = args;
+    let file_cfg = file_cfg;
 
     let kinds = match args.kinds.as_deref() {
         None => runner::KindFilter::default(),
@@ -236,6 +241,7 @@ fn real_main() -> Result<u8> {
         dry_run: args.dry_run,
         overwrite: args.overwrite,
         kinds,
+        skip_format_kind_check: args.preset.is_some(),
     };
     if args.watch {
         watch::run_watch(&args.paths, &cfg, args.recursive, args.no_stats)?;

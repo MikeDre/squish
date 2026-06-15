@@ -124,6 +124,9 @@ squish hero.jpg --target-size 500k
 # Compress as hard as possible with no visible loss (perceptual auto-quality)
 squish photo.jpg --quality auto
 
+# Web-optimize: resize to 1920px, convert to WebP, visually-lossless quality (H.264 for video)
+squish ./assets -r --preset web
+
 # Preview without writing
 squish ./big-folder/ -r --dry-run
 
@@ -344,6 +347,8 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --fast                 Video: optimise without re-encoding
       --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
       --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
+      --preset <web>         Apply a destination preset of sensible defaults
+                             (overridable by explicit flags). Currently: web
       --safe                 Code: skip mangling and DCE (whitespace-only minification)
       --source-map           Code: emit a .map file alongside output (JS/TS/CSS only)
 ```

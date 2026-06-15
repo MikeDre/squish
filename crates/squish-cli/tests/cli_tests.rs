@@ -1268,3 +1268,57 @@ fn doctor_reports_capabilities_and_exits_zero() {
         .stdout(predicate::str::contains("Code"))
         .stdout(predicate::str::contains("ffmpeg"));
 }
+
+#[test]
+fn preset_web_converts_image_to_webp() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    bin()
+        .args(["a.png", "--preset", "web"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+    assert!(tmp.path().join("a_squished.webp").exists());
+}
+
+#[test]
+fn preset_web_explicit_quality_is_honored() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    bin()
+        .args(["a.png", "--preset", "web", "--quality", "90"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+    assert!(tmp.path().join("a_squished.webp").exists());
+}
+
+#[test]
+fn preset_web_on_code_only_does_not_error_on_missing_images() {
+    // web requests an image output format (webp); a batch with NO images
+    // (here only a JS file) must not error with "no image files". This
+    // exercises RunConfig::skip_format_kind_check — without it the format
+    // validator would bail before the JS is minified.
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("app.js"), "const x = 1; console.log(x);\n").unwrap();
+    bin()
+        .args(["app.js", "--preset", "web"])
+        .current_dir(tmp.path())
+        .assert()
+        .success();
+    assert!(tmp.path().join("app.min.js").exists());
+}
+
+#[test]
+fn preset_bogus_value_errors() {
+    bin()
+        .args([
+            core_fixture("sample.png").to_str().unwrap(),
+            "--preset",
+            "bogus",
+        ])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("web"));
+}

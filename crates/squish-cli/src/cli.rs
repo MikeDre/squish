@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Value of `--quality`: a fixed 0–100 number, or `auto` (perceptual
@@ -18,6 +18,13 @@ fn parse_quality(s: &str) -> Result<QualityArg, String> {
         Ok(n) if n <= 100 => Ok(QualityArg::Fixed(n)),
         _ => Err(format!("expected a number 0-100 or \"auto\", got \"{s}\"")),
     }
+}
+
+/// Built-in optimization presets (v1: web only).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Preset {
+    /// Optimize for web: resize + WebP + visually-lossless images, H.264 video.
+    Web,
 }
 
 /// Compress images losslessly or with sensible quality defaults.
@@ -143,6 +150,11 @@ pub struct Args {
     /// Kinds: image, video, audio, code. Default: all kinds.
     #[arg(long, value_name = "KINDS")]
     pub kinds: Option<String>,
+
+    /// Apply a destination preset of sensible defaults (overridable by explicit
+    /// flags). Values: web.
+    #[arg(long, value_enum)]
+    pub preset: Option<Preset>,
 }
 
 #[derive(Subcommand, Debug)]
