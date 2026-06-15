@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-06-15
 
 ### Added
 - **`--quality auto`.** Perceptual auto-quality: binary-searches for the lowest
@@ -20,6 +20,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   video re-encodes to H.264. Overridable: any explicit flag wins over the
   preset. Applies only to the kinds present (never errors on a batch missing
   images or video).
+
+[0.7.0]: https://github.com/MikeDre/squish/compare/v0.6.0...v0.7.0
 
 ## [0.6.0] - 2026-06-14
 
