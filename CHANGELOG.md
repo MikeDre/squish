@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`squish doctor`.** Prints a capability report — built-in formats plus the
   external tools (ffmpeg, ffprobe, gifsicle) with versions and install hints for
   anything missing. Always exits 0.
+- **`--preset web`.** A destination preset bundling web-delivery defaults —
+  images resize to 1920px wide, convert to WebP, and use `--quality auto`;
+  video re-encodes to H.264. Overridable: any explicit flag wins over the
+  preset. Applies only to the kinds present (never errors on a batch missing
+  images or video).
 
 ## [0.6.0] - 2026-06-14
 
