@@ -1294,14 +1294,19 @@ fn preset_web_explicit_quality_is_honored() {
 }
 
 #[test]
-fn preset_web_on_png_only_does_not_error_on_missing_video() {
+fn preset_web_on_code_only_does_not_error_on_missing_images() {
+    // web requests an image output format (webp); a batch with NO images
+    // (here only a JS file) must not error with "no image files". This
+    // exercises RunConfig::skip_format_kind_check — without it the format
+    // validator would bail before the JS is minified.
     let tmp = TempDir::new().unwrap();
-    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::write(tmp.path().join("app.js"), "const x = 1; console.log(x);\n").unwrap();
     bin()
-        .args(["a.png", "--preset", "web"])
+        .args(["app.js", "--preset", "web"])
         .current_dir(tmp.path())
         .assert()
         .success();
+    assert!(tmp.path().join("app.min.js").exists());
 }
 
 #[test]

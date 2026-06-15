@@ -305,6 +305,8 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         return Err(anyhow::anyhow!(msg));
     }
 
+    // Skipped under a preset: a preset may request a format (e.g. webp) for a
+    // kind not present in this batch (e.g. a code-only run); that must not error.
     if !cfg.skip_format_kind_check {
         if let Err(msg) = validate_format_kinds_present(
             cfg.opts.output_format.is_some(),
