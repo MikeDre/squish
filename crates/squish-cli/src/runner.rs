@@ -23,6 +23,10 @@ pub struct RunConfig {
     pub dry_run: bool,
     pub overwrite: bool,
     pub kinds: KindFilter,
+    /// When true (a preset is active), skip the "--format specifies X but no X
+    /// files" batch-presence check — a preset applies to whatever kinds are
+    /// present and must not error on absent ones.
+    pub skip_format_kind_check: bool,
 }
 
 pub struct RunReport {
@@ -301,15 +305,17 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         return Err(anyhow::anyhow!(msg));
     }
 
-    if let Err(msg) = validate_format_kinds_present(
-        cfg.opts.output_format.is_some(),
-        cfg.video_opts.output_format.is_some(),
-        cfg.audio_opts.output_format.is_some(),
-        !image_files.is_empty(),
-        !video_files.is_empty(),
-        !audio_files.is_empty(),
-    ) {
-        return Err(anyhow::anyhow!(msg));
+    if !cfg.skip_format_kind_check {
+        if let Err(msg) = validate_format_kinds_present(
+            cfg.opts.output_format.is_some(),
+            cfg.video_opts.output_format.is_some(),
+            cfg.audio_opts.output_format.is_some(),
+            !image_files.is_empty(),
+            !video_files.is_empty(),
+            !audio_files.is_empty(),
+        ) {
+            return Err(anyhow::anyhow!(msg));
+        }
     }
 
     if cfg.dry_run {
