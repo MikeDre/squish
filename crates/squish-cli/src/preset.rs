@@ -17,9 +17,10 @@ pub fn apply_preset(args: &mut Args, file_cfg: &mut FileConfig, preset: Preset) 
             if args.format.is_none() {
                 args.format = Some("webp".to_string());
             }
-            // Video → H.264 via the ambient config-codec path (no batch
-            // validation). Only when the CLI gave no --codec; preset overrides
-            // any config-supplied video codec.
+            // Video → H.264 via the ambient config-codec path (read directly
+            // from file_cfg later, not validated against the batch). Overwrites
+            // any config-supplied video codec (preset > config), but only when
+            // the CLI gave no --codec (CLI > preset).
             if args.codec.is_none() {
                 file_cfg.video.codec = Some("h264".to_string());
             }
@@ -81,6 +82,17 @@ mod tests {
         apply_preset(&mut args, &mut cfg, Preset::Web);
         assert_eq!(cfg.video.codec, None);
         assert_eq!(args.codec.as_deref(), Some("av1"));
+    }
+
+    #[test]
+    fn web_video_codec_overrides_config_codec() {
+        // Precedence is CLI > preset > config: with no CLI --codec, the preset's
+        // h264 must override a codec the config file supplied.
+        let mut args = args_from(&["squish", "clip.mp4"]);
+        let mut cfg = FileConfig::default();
+        cfg.video.codec = Some("av1".to_string());
+        apply_preset(&mut args, &mut cfg, Preset::Web);
+        assert_eq!(cfg.video.codec.as_deref(), Some("h264"));
     }
 
     #[test]
