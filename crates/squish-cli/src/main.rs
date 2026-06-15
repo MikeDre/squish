@@ -4,6 +4,7 @@ mod config_wizard;
 mod doctor;
 mod finder_action;
 mod format_request;
+mod preset;
 mod runner;
 mod stats;
 mod target_size;
