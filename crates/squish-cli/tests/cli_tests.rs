@@ -1096,6 +1096,14 @@ fn finder_action_install_and_uninstall_roundtrip() {
     let doc = fs::read_to_string(&wflow).unwrap();
     assert!(doc.contains("--kinds image,video,audio"));
 
+    // The bundle icon is installed and referenced by Info.plist.
+    assert!(tmp
+        .path()
+        .join("Squish.workflow/Contents/Resources/squish.icns")
+        .exists());
+    let info = fs::read_to_string(tmp.path().join("Squish.workflow/Contents/Info.plist")).unwrap();
+    assert!(info.contains("CFBundleIconFile"));
+
     // Both plists must be valid property lists.
     for f in ["Info.plist", "document.wflow"] {
         let lint = std::process::Command::new("plutil")

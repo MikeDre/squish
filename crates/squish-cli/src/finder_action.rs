@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 const INFO_PLIST: &str = include_str!("finder_action/Info.plist.tmpl");
 const DOCUMENT_WFLOW_TMPL: &str = include_str!("finder_action/document.wflow.tmpl");
 const SHELL_SCRIPT_TMPL: &str = include_str!("finder_action/quick-action.zsh.tmpl");
+/// The bundle icon (amber squish glyph), referenced by `CFBundleIconFile` in
+/// Info.plist. Written to `Contents/Resources/squish.icns` at install time.
+const ICNS: &[u8] = include_bytes!("finder_action/squish.icns");
 
 /// The zsh script run by the Quick Action. The absolute path to the squish
 /// binary is baked in so the Service works regardless of the user's PATH.
@@ -47,16 +50,19 @@ pub fn services_dir() -> Result<PathBuf> {
 pub fn install_into(services_dir: &Path, squish_bin: &Path) -> Result<PathBuf> {
     let bundle = services_dir.join(WORKFLOW_DIR_NAME);
     let contents = bundle.join("Contents");
-    // The bundle only ever contains these two files; if that changes,
-    // reinstall would need to clear stale files from Contents/ first.
-    std::fs::create_dir_all(&contents)
-        .with_context(|| format!("creating {}", contents.display()))?;
+    let resources = contents.join("Resources");
+    // Reinstall overwrites these files in place; if the bundle's file set ever
+    // shrinks, reinstall would need to clear stale files from Contents/ first.
+    std::fs::create_dir_all(&resources)
+        .with_context(|| format!("creating {}", resources.display()))?;
     let info_path = contents.join("Info.plist");
     std::fs::write(&info_path, info_plist())
         .with_context(|| format!("writing {}", info_path.display()))?;
     let wflow_path = contents.join("document.wflow");
     std::fs::write(&wflow_path, document_wflow(squish_bin))
         .with_context(|| format!("writing {}", wflow_path.display()))?;
+    let icon_path = resources.join("squish.icns");
+    std::fs::write(&icon_path, ICNS).with_context(|| format!("writing {}", icon_path.display()))?;
     Ok(bundle)
 }
 
@@ -132,6 +138,26 @@ mod tests {
         assert!(plist.contains("com.apple.finder"));
         assert!(plist.contains("public.item"));
         assert!(plist.contains("<string>Squish</string>"));
+        // References the bundle icon written into Contents/Resources.
+        assert!(plist.contains("CFBundleIconFile"));
+        assert!(plist.contains("<string>squish</string>"));
+    }
+
+    #[test]
+    fn install_writes_bundle_icon() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        install_into(tmp.path(), Path::new("/usr/local/bin/squish")).unwrap();
+        let icon = tmp
+            .path()
+            .join("Squish.workflow/Contents/Resources/squish.icns");
+        let bytes = std::fs::read(&icon).expect("icon written to Resources");
+        // A real .icns starts with the "icns" magic and is non-trivial in size.
+        assert!(bytes.len() > 1000, "icns should be non-empty");
+        assert_eq!(
+            &bytes[0..4],
+            b"icns",
+            "Resources/squish.icns must be a real icns"
+        );
     }
 
     #[test]
