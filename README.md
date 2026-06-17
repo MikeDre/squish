@@ -1,4 +1,9 @@
-# squish
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/squish-white.svg">
+    <img src="assets/squish.svg" alt="squish" width="280">
+  </picture>
+</p>
 
 Super fast local file optimisation. Compresses images, video, and audio; minifies JS, TS, CSS, HTML, and JSON — all from one CLI, no servers, no uploads. Takes files or directories, writes `*_squished.*` siblings alongside the originals (or replaces in place with `-o`). Non-destructive by default — originals are never touched unless you ask.
 
