@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>squish docs — every flag, format, and workflow</title>
+  <meta name="description"
+    content="Full usage documentation for squish: install, images, video, audio, code, flags, config, CI, and Finder integration.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="nav-brand" href="index.html" aria-label="squish — home">
+      <svg class="nav-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+        <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+      </svg>
+      <span class="nav-name">squish</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="index.html">Home</a>
+      <a href="docs.html" aria-current="page">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-github" href="https://github.com/MikeDre/squish">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <span>GitHub</span>
+      </a>
+      <button class="theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.5" fill="currentColor"/>
+          <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"/>
+          </g>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M20.6 14.2a8.6 8.6 0 0 1-10.8-10.8A8.9 8.9 0 1 0 20.6 14.2z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="docs-layout">
+      <nav class="docs-sidebar" aria-label="On this page">
+        <p class="toc-label">On this page</p>
+        <ul class="toc">
+          <li><a href="#install">Install</a></li>
+          <li><a href="#doctor">Check your setup</a></li>
+          <li><a href="#images">Images</a></li>
+          <li><a href="#video">Video</a></li>
+          <li><a href="#audio">Audio</a></li>
+          <li><a href="#code">Code</a></li>
+          <li><a href="#stats">Usage report</a></li>
+          <li><a href="#formats">Formats</a></li>
+          <li><a href="#flags">Flags</a></li>
+          <li><a href="#config">Config file</a></li>
+          <li><a href="#github-action">GitHub Action</a></li>
+          <li><a href="#finder-quick-action">Finder Quick Action</a></li>
+          <li><a href="#collisions">Collision behavior</a></li>
+        </ul>
+      </nav>
+
+      <article class="docs-article">
+        <h1 class="docs-title">Docs<span class="accent">.</span></h1>
+        <p class="docs-intro">
+          Everything squish can do, with the exact commands to do it. Compresses images,
+          video, and audio; minifies JS, TS, CSS, HTML, and JSON — all local,
+          non-destructive by default.
+        </p>
+
+        <details class="docs-toc-mobile">
+          <summary>On this page</summary>
+          <ul class="toc">
+            <li><a href="#install">Install</a></li>
+            <li><a href="#doctor">Check your setup</a></li>
+            <li><a href="#images">Images</a></li>
+            <li><a href="#video">Video</a></li>
+            <li><a href="#audio">Audio</a></li>
+            <li><a href="#code">Code</a></li>
+            <li><a href="#stats">Usage report</a></li>
+            <li><a href="#formats">Formats</a></li>
+            <li><a href="#flags">Flags</a></li>
+            <li><a href="#config">Config file</a></li>
+            <li><a href="#github-action">GitHub Action</a></li>
+            <li><a href="#finder-quick-action">Finder Quick Action</a></li>
+            <li><a href="#collisions">Collision behavior</a></li>
+          </ul>
+        </details>
+
+        <section class="docs-section" id="install">
+          <h2 class="docs-h2">Install</h2>
+
+          <h3 class="docs-h3">Homebrew (macOS — recommended)</h3>
+          <pre class="code-block has-copy"><code>brew install mikedre/tap/squish</code><button
+            class="copy-btn" type="button" data-copy="brew install mikedre/tap/squish"
+            aria-label="Copy Homebrew command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Installs a prebuilt binary plus every system dependency (ffmpeg, gifsicle, libheif,
+            dav1d). Nothing else to do.</p>
+
+          <h3 class="docs-h3">Prebuilt binaries</h3>
+          <p>Each release ships binaries for macOS (arm64/x64) and Linux (x64/arm64) on the
+            <a href="https://github.com/MikeDre/squish/releases">releases page</a>. Unpack and put
+            <code>squish</code> on your PATH. Linux binaries need <code>libheif</code> (≥ 1.18) and
+            <code>dav1d</code> (≥ 1.3) present at runtime, plus the subprocess dependencies below
+            for full format coverage.</p>
+
+          <h3 class="docs-h3">Install via cargo</h3>
+          <pre class="code-block has-copy"><code>cargo install squish-media-cli</code><button
+            class="copy-btn" type="button" data-copy="cargo install squish-media-cli"
+            aria-label="Copy cargo command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Compiles squish from crates.io (stable Rust 1.95+) and places the binary in
+            <code>~/.cargo/bin</code>. You still need the system dependencies for full format
+            support.</p>
+
+          <h3 class="docs-h3">Build from source</h3>
+          <pre class="code-block"><code><span class="c-comment"># installs system deps via Homebrew (macOS) or apt (Linux)</span>
+./scripts/setup.sh
+cargo install --path crates/squish-cli</code></pre>
+
+          <h3 class="docs-h3">System dependencies</h3>
+          <p>GIF and HEIC support require external libraries. Install them for full format
+            coverage:</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Dependency</th><th>Needed for</th><th>macOS</th><th>Linux</th></tr></thead>
+              <tbody>
+                <tr><td>gifsicle</td><td>GIF compression</td><td><code>brew install gifsicle</code></td><td><code>apt install gifsicle</code></td></tr>
+                <tr><td>libheif + x265</td><td>HEIC/HEIF</td><td><code>brew install libheif x265</code></td><td><code>apt install libheif-dev libx265-dev</code></td></tr>
+                <tr><td>dav1d</td><td>AVIF decoding</td><td><code>brew install dav1d</code></td><td><code>apt install libdav1d-dev</code></td></tr>
+                <tr><td>ffmpeg</td><td>Video &amp; audio</td><td><code>brew install ffmpeg</code></td><td><code>apt install ffmpeg</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="docs-note">If a dependency is missing when you need it, squish tells you
+            exactly what to install.</p>
+        </section>
+
+        <section class="docs-section" id="doctor">
+          <h2 class="docs-h2">Check your setup</h2>
+          <p>See which formats work on this machine and whether the optional tools are
+            installed:</p>
+          <pre class="code-block has-copy"><code>squish doctor</code><button
+            class="copy-btn" type="button" data-copy="squish doctor"
+            aria-label="Copy doctor command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Images and code minification work out of the box. Video and audio need
+            <code>ffmpeg</code>, and GIF needs <code>gifsicle</code>; <code>doctor</code> shows
+            what's present (with versions) and how to install anything missing. It always
+            exits 0.</p>
+        </section>
+
+        <section class="docs-section" id="images">
+          <h2 class="docs-h2">Images</h2>
+          <p>Common ways to run squish against images:</p>
+          <pre class="code-block"><code><span class="c-comment"># Single file</span>
+squish dog.png
+<span class="c-comment"># → dog_squished.png</span>
+
+<span class="c-comment"># Whole folder, recursively</span>
+squish ./assets/ -r
+
+<span class="c-comment"># Convert format while compressing</span>
+squish photos/ -r --format webp --quality 75
+
+<span class="c-comment"># Preserve every bit (lossless)</span>
+squish logo.svg --lossless
+
+<span class="c-comment"># Resize while compressing (never upscales)</span>
+squish photos/ -r --max-width 2000
+
+<span class="c-comment"># Fit within a box</span>
+squish hero.jpg --max-width 1920 --max-height 1080
+
+<span class="c-comment"># Compress to a size budget (highest quality that fits)</span>
+squish hero.jpg --target-size 500k
+
+<span class="c-comment"># Compress as hard as possible with no visible loss (perceptual auto-quality)</span>
+squish photo.jpg --quality auto
+
+<span class="c-comment"># Web-optimize: resize to 1920px, convert to WebP, visually-lossless quality (H.264 for video)</span>
+squish ./assets -r --preset web
+
+<span class="c-comment"># Preview without writing</span>
+squish ./big-folder/ -r --dry-run
+
+<span class="c-comment"># Keep watching a folder, squishing files as they land</span>
+squish ./assets/ -r --watch</code></pre>
+        </section>
+
+        <section class="docs-section" id="video">
+          <h2 class="docs-h2">Video</h2>
+          <p>Common ways to run squish against video:</p>
+          <pre class="code-block"><code><span class="c-comment"># Compress a video (defaults to H.265)</span>
+squish video.mp4
+<span class="c-comment"># → video_squished.mp4</span>
+
+<span class="c-comment"># Use H.264 instead</span>
+squish video.mp4 --codec h264
+
+<span class="c-comment"># Fast mode — optimise without re-encoding</span>
+squish video.mp4 --fast
+
+<span class="c-comment"># Fit a clip under an upload limit (bitrate computed from duration)</span>
+squish clip.mp4 --target-size 8M
+
+<span class="c-comment"># Mixed batch — images and videos together</span>
+squish ./media/ -r
+<span class="c-comment"># → Squished 8 files (5 images, 3 videos) · 120.3 MB → 34.1 MB (-71.7%)</span>
+
+<span class="c-comment"># Convert a .mov to .mp4 (re-encodes with the container default codec)</span>
+squish trailer.mov --format mp4
+<span class="c-comment"># → trailer_squished.mp4</span></code></pre>
+        </section>
+
+        <section class="docs-section" id="audio">
+          <h2 class="docs-h2">Audio</h2>
+          <p>Common ways to run squish against audio:</p>
+          <pre class="code-block"><code><span class="c-comment"># Single file — re-encode at the same codec with sensible quality</span>
+squish track.mp3
+
+<span class="c-comment"># Convert a lossless file to Opus (~50% size reduction)</span>
+squish --codec opus song.flac
+
+<span class="c-comment"># Pick a specific bitrate</span>
+squish --bitrate 192k podcast.mp3
+
+<span class="c-comment"># Strip ID3 tags and album art</span>
+squish --strip-tags album/*.mp3
+
+<span class="c-comment"># Fit a podcast under a size budget (bitrate computed from duration)</span>
+squish episode.mp3 --target-size 25M
+
+<span class="c-comment"># Convert lossless to a specific container/codec</span>
+squish song.flac --format opus
+<span class="c-comment"># → song_squished.opus</span></code></pre>
+        </section>
+
+        <section class="docs-section" id="code">
+          <h2 class="docs-h2">Code</h2>
+          <p>Common ways to run squish against code:</p>
+          <pre class="code-block"><code><span class="c-comment"># Minify everything in dist/ recursively</span>
+squish dist/ -r
+<span class="c-comment"># → app.js → app.min.js, style.css → style.min.css, …</span>
+
+<span class="c-comment"># Safe mode — whitespace-only, no identifier mangling</span>
+squish --safe app.js
+
+<span class="c-comment"># Emit a source map alongside the minified output</span>
+squish --source-map app.js style.css</code></pre>
+          <p class="docs-note"><strong>Known limitations:</strong> IE conditional comments
+            (<code>&lt;!--[if IE]&gt;...&lt;![endif]--&gt;</code>) are stripped along with
+            regular comments. Pass <code>--source-map</code> if you need to preserve comments
+            in JS/CSS for debugging.</p>
+        </section>
+
+        <section class="docs-section" id="stats">
+          <h2 class="docs-h2">Usage report</h2>
+          <pre class="code-block"><code><span class="c-comment"># How much have I saved this month + all-time?</span>
+squish --stats
+
+<span class="c-comment"># Skip recording this run (also: SQUISH_NO_STATS=1)</span>
+squish photos/ -r --no-stats</code></pre>
+        </section>
+
+        <section class="docs-section" id="formats">
+          <h2 class="docs-h2">Formats</h2>
+
+          <h3 class="docs-h3">Images</h3>
+          <p>Supported as <strong>input</strong> and <strong>output</strong>: PNG, JPEG,
+            WebP, AVIF, SVG, GIF, HEIC, TIFF.</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Format</th><th>Library</th></tr></thead>
+              <tbody>
+                <tr><td>PNG</td><td><code>oxipng</code> + <code>imagequant</code></td></tr>
+                <tr><td>JPEG</td><td><code>mozjpeg</code> (progressive, optimised Huffman)</td></tr>
+                <tr><td>WebP</td><td><code>libwebp</code> (static); animated WebP copies through unchanged</td></tr>
+                <tr><td>AVIF</td><td><code>ravif</code> (encode) + <code>dav1d</code> (decode)</td></tr>
+                <tr><td>SVG</td><td><code>oxvg_optimiser</code> (SVGO-equivalent: comments, default attrs, relative path coords)</td></tr>
+                <tr><td>GIF (static + animated)</td><td><code>gifsicle -O3</code></td></tr>
+                <tr><td>HEIC</td><td><code>libheif-rs</code></td></tr>
+                <tr><td>TIFF</td><td>input only — defaults to re-encoding as JPEG; use <code>--format tiff</code> to keep TIFF output</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 class="docs-h3">Video</h3>
+          <p>Supported containers: MP4, WebM, MOV, AVI, MKV, FLV, DV (→ mp4). Requires
+            system <code>ffmpeg</code>.</p>
+          <p><code>.dv</code>/<code>.dif</code> is a transcode-only input: it is always
+            re-encoded to an <code>.mp4</code> (H.265 by default), and <code>--fast</code>
+            (copy) is ignored for DV sources.</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Codec</th><th>Flag</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>H.265 (HEVC)</td><td><code>--codec h265</code> (default)</td><td>~50% smaller than H.264</td></tr>
+                <tr><td>H.264 (AVC)</td><td><code>--codec h264</code></td><td>Maximum compatibility</td></tr>
+                <tr><td>AV1</td><td><code>--codec av1</code></td><td>Best compression, slower encode</td></tr>
+                <tr><td>VP9</td><td>auto for <code>.webm</code></td><td>Selected automatically for WebM containers</td></tr>
+                <tr><td>Copy</td><td><code>--fast</code></td><td>No re-encode, strips metadata only</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Audio streams are copied as-is (no audio re-encoding).</p>
+
+          <h3 class="docs-h3">Audio</h3>
+          <p>Supported via <code>ffmpeg</code> + <code>ffprobe</code>: MP3, AAC/M4A, WAV,
+            FLAC, OGG, Opus, AIFF, WebM-audio. Tags and album art are preserved by default.</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Codec</th><th>Flag</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td>MP3</td><td><code>--codec mp3</code></td><td>LAME VBR quality scale</td></tr>
+                <tr><td>AAC</td><td><code>--codec aac</code></td><td>Bitrate ladder (default 192 kbps at q=80)</td></tr>
+                <tr><td>Opus</td><td><code>--codec opus</code></td><td>Modern lossy codec; default for lossless inputs in non-interactive mode</td></tr>
+                <tr><td>Vorbis</td><td><code>--codec vorbis</code></td><td>Quality scale, in <code>.ogg</code></td></tr>
+                <tr><td>FLAC</td><td><code>--codec flac</code></td><td>Lossless re-encode</td></tr>
+                <tr><td>ALAC</td><td><code>--codec alac</code></td><td>Lossless, in <code>.m4a</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>By default, lossy inputs (MP3/AAC/etc) re-encode to the same codec; lossless
+            inputs (FLAC/WAV/AIFF) prompt once for a target codec (defaults to Opus in
+            non-interactive mode).</p>
+
+          <h3 class="docs-h3">Code</h3>
+          <p>Minifies JavaScript, TypeScript, CSS, HTML, and JSON via pure-Rust libraries —
+            no Node runtime required.</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Language</th><th>Library</th><th>Default behavior</th></tr></thead>
+              <tbody>
+                <tr><td>JS / TS</td><td><code>oxc_minifier</code></td><td>Mangle + DCE; <code>--safe</code> for whitespace-only</td></tr>
+                <tr><td>CSS</td><td><code>lightningcss</code></td><td>Whitespace + comment removal, normalization</td></tr>
+                <tr><td>HTML</td><td><code>minify-html</code></td><td>Whitespace + comment removal; preserves <code>&lt;script&gt;</code> content</td></tr>
+                <tr><td>JSON</td><td><code>serde_json</code></td><td>Whitespace removal; rejects JSON5/JSONC</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Output uses <code>.min</code> suffix with <code>.</code> separator (industry
+            convention): <code>app.js</code> → <code>app.min.js</code>. TypeScript and JSX
+            inputs become <code>.js</code> (types are erased; JSX is compiled).</p>
+          <p>SVG continues to be handled as an image (structural compaction via
+            <code>oxvg_optimiser</code>, an SVGO-equivalent).</p>
+        </section>
+
+        <section class="docs-section" id="flags">
+          <h2 class="docs-h2">Flags</h2>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Flag</th><th>What it does</th></tr></thead>
+              <tbody>
+                <tr><td><code>-q, --quality &lt;0-100|auto&gt;</code></td>
+                  <td>Quality, or <code>auto</code> for the lowest visually-lossless quality (images
+                    only; conflicts with <code>--target-size</code>)</td></tr>
+                <tr><td><code>--lossless</code></td>
+                  <td>Lossless compression (overrides <code>--quality</code>)</td></tr>
+                <tr><td><code>-f, --format &lt;FORMAT&gt;</code></td>
+                  <td>Output format (image/video/audio); applied per input kind</td></tr>
+                <tr><td><code>--max-width &lt;PIXELS&gt;</code></td>
+                  <td>Scale down images wider than this (preserves aspect ratio)</td></tr>
+                <tr><td><code>--max-height &lt;PIXELS&gt;</code></td>
+                  <td>Scale down images taller than this (preserves aspect ratio)</td></tr>
+                <tr><td><code>--target-size &lt;SIZE&gt;</code></td>
+                  <td>Per-file output size budget, e.g. <code>500k</code>, <code>1.5M</code>,
+                    <code>2g</code> (decimal units). Images pick the highest quality that fits;
+                    video/audio compute a bitrate from the input's duration. Conflicts with
+                    <code>--quality</code>/<code>--lossless</code>/<code>--bitrate</code>/<code>--fast</code>;
+                    not applicable to code files or lossless audio codecs</td></tr>
+                <tr><td><code>-r, --recursive</code></td>
+                  <td>Recurse into directories</td></tr>
+                <tr><td><code>--force</code></td>
+                  <td>Overwrite existing <code>_squished</code> files</td></tr>
+                <tr><td><code>-o, --overwrite</code></td>
+                  <td>Replace each input file in place (skips files whose squish would change the
+                    extension, e.g. <code>.dv→.mp4</code>)</td></tr>
+                <tr><td><code>--suffix &lt;NAME&gt;</code></td>
+                  <td>Custom output filename suffix (default: <code>squished</code>), e.g. <code>squish --suffix tiny app.js</code> → <code>app.tiny.js</code></td></tr>
+                <tr><td><code>--dry-run</code></td>
+                  <td>Show what would happen; don't write</td></tr>
+                <tr><td><code>--watch</code></td>
+                  <td>Keep running: watch the given paths and squish files as they appear or change
+                    (Ctrl-C to stop). Never re-squishes its own outputs</td></tr>
+                <tr><td><code>--no-config</code></td>
+                  <td>Ignore <code>squish.toml</code> config files for this run</td></tr>
+                <tr><td><code>--kinds &lt;KINDS&gt;</code></td>
+                  <td>Restrict the run to these file kinds, comma-separated: <code>image</code>,
+                    <code>video</code>, <code>audio</code>, <code>code</code> (default: all)</td></tr>
+                <tr><td><code>--stats</code></td>
+                  <td>Print usage report (this month + all-time) and exit</td></tr>
+                <tr><td><code>--no-stats</code></td>
+                  <td>Skip recording this run (also: <code>SQUISH_NO_STATS=1</code>)</td></tr>
+                <tr><td><code>-j, --jobs &lt;N&gt;</code></td>
+                  <td>Parallelism (default: num CPUs)</td></tr>
+                <tr><td><code>-v, --verbose</code></td>
+                  <td>Per-file output</td></tr>
+                <tr><td><code>--quiet</code></td>
+                  <td>Errors only</td></tr>
+                <tr><td><code>--codec &lt;CODEC&gt;</code></td>
+                  <td>Codec: <code>video=h264|h265|av1|vp9, audio=mp3|aac|opus|vorbis|flac|alac</code></td></tr>
+                <tr><td><code>--fast</code></td>
+                  <td>Video: optimise without re-encoding</td></tr>
+                <tr><td><code>--bitrate &lt;BITRATE&gt;</code></td>
+                  <td>Audio bitrate, e.g. <code>128k</code>, <code>192k</code>. Overrides
+                    <code>--quality</code> for lossy audio</td></tr>
+                <tr><td><code>--strip-tags</code></td>
+                  <td>Strip audio metadata (ID3 tags, album art). Default: preserved</td></tr>
+                <tr><td><code>--preset &lt;web&gt;</code></td>
+                  <td>Apply a destination preset of sensible defaults (overridable by explicit
+                    flags). Currently: <code>web</code></td></tr>
+                <tr><td><code>--safe</code></td>
+                  <td>Code: skip mangling and DCE (whitespace-only minification)</td></tr>
+                <tr><td><code>--source-map</code></td>
+                  <td>Code: emit a <code>.map</code> file alongside output (JS/TS/CSS only)</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="docs-section" id="config">
+          <h2 class="docs-h2">Config file</h2>
+          <p>squish reads defaults from the nearest <code>squish.toml</code> (walking up
+            from the current directory) and from a global config at
+            <code>~/Library/Application Support/squish/config.toml</code> (macOS) or
+            <code>~/.config/squish/config.toml</code> (Linux). Pass <code>--no-config</code>
+            to ignore both. Keys mirror the CLI flag names.</p>
+          <p class="docs-note">Precedence: <strong>CLI flags &gt; project
+            <code>squish.toml</code> &gt; global config</strong>.</p>
+          <pre class="code-block"><code><span class="c-comment"># squish.toml</span>
+quality = 75          <span class="c-comment"># or "auto" — perceptual visually-lossless (images only)</span>
+format = <span class="c-str">"webp"</span>
+recursive = true
+max-width = 2000
+<span class="c-comment"># Replace originals in place instead of writing _squished siblings.</span>
+<span class="c-comment"># Destructive — no copy is kept. CLI flags still override this.</span>
+overwrite = false
+
+[video]
+codec = <span class="c-str">"h264"</span>
+
+[audio]
+codec = <span class="c-str">"opus"</span>
+strip-tags = true
+
+[code]
+safe = true</code></pre>
+          <p><code>quality</code> accepts a number (0–100) or the string <code>"auto"</code>
+            (perceptual visually-lossless, images only; conflicts with <code>target-size</code>).
+            The <code>squish config</code> wizard offers <code>auto</code> as an option.</p>
+          <p>Rate control is all-or-nothing: passing any of
+            <code>--quality</code>/<code>--lossless</code>/<code>--bitrate</code>/<code>--fast</code>/<code>--target-size</code>
+            on the command line disables all of those keys from config for that run, so a
+            config <code>target-size</code> can never override an explicit
+            <code>--quality</code>. Unknown keys are an error — typos fail loudly.</p>
+
+          <h3 class="docs-h3">Interactive setup</h3>
+          <p>Don't want to hand-edit TOML? Run the wizard:</p>
+          <pre class="code-block"><code>squish config            <span class="c-comment"># edit the global config</span>
+squish config --local    <span class="c-comment"># edit ./squish.toml for this project instead</span></code></pre>
+          <p>It walks through quality, format, suffix, recursive, strip-tags, and overwrite,
+            pre-filling whatever is already set (press Enter to keep a value, <code>-</code>
+            to clear it). Note: the file is rewritten, so any hand-written comments in it are
+            not preserved.</p>
+        </section>
+
+        <section class="docs-section" id="github-action">
+          <h2 class="docs-h2">GitHub Action</h2>
+          <p>Squish assets in CI with the bundled action — handy before deploys, or paired
+            with a commit-back step:</p>
+          <pre class="code-block"><code><span class="c-key">- uses:</span> MikeDre/squish@v0.7.0
+  <span class="c-key">with:</span>
+    <span class="c-key">paths:</span> public/images
+    <span class="c-key">args:</span> <span class="c-str">"--recursive --overwrite --quality 75"</span></code></pre>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Input</th><th>Default</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td><code>paths</code></td><td><em>(required)</em></td><td>Files or directories, space-separated</td></tr>
+                <tr><td><code>args</code></td><td><code>""</code></td><td>Any squish CLI flags</td></tr>
+                <tr><td><code>version</code></td><td><code>latest</code></td><td>Release tag of the binary to download</td></tr>
+                <tr><td><code>install-deps</code></td><td><code>true</code></td><td>apt/brew runtime deps (libheif, dav1d, ffmpeg, gifsicle)</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Runs on <code>ubuntu</code> and <code>macos</code> runners (x64 + arm64).</p>
+        </section>
+
+        <section class="docs-section" id="finder-quick-action">
+          <h2 class="docs-h2">Finder Quick Action</h2>
+          <p>Add a "Squish" entry to Finder's right-click menu — for the folks who never
+            open a terminal:</p>
+          <pre class="code-block has-copy"><code>squish finder-action install</code><button
+            class="copy-btn" type="button" data-copy="squish finder-action install"
+            aria-label="Copy Finder Quick Action install command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Select files or folders in Finder → right-click → <strong>Quick Actions →
+            Squish</strong>. It squishes media (images, video, audio — never code) with your
+            usual defaults: <code>_squished</code> siblings, originals untouched,
+            <code>squish.toml</code> respected.</p>
+          <p>A notification reports progress and the final savings. Remove it any time with
+            <code>squish finder-action uninstall</code>; re-run install after moving or
+            reinstalling squish.</p>
+        </section>
+
+        <section class="docs-section" id="collisions">
+          <h2 class="docs-h2">Collision behavior</h2>
+          <p>If <code>dog_squished.png</code> already exists, squish writes
+            <code>dog_squished_2.png</code>, then <code>_3</code>, etc. Pass
+            <code>--force</code> to overwrite instead.</p>
+        </section>
+
+      </article>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <svg class="footer-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+      <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+    </svg>
+    <p class="footer-line">
+      MIT licensed · <a href="docs.html">Docs</a> ·
+      <a href="https://github.com/MikeDre/squish">GitHub</a> ·
+      <a href="https://crates.io/crates/squish-media-cli">crates.io</a>
+    </p>
+    <p class="footer-tag">Every byte you don't ship is a byte nobody waits for.</p>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="docs.js"></script>
+</body>
+</html>

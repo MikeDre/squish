@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>squish — compress everything, locally</title>
+  <meta name="description"
+    content="One local CLI that compresses images, video, and audio, and minifies JS, TS, CSS, HTML, and JSON. No uploads, no servers, no Node.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="nav-brand" href="#top" aria-label="squish — back to top">
+      <svg class="nav-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+        <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+      </svg>
+      <span class="nav-name">squish</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#formats">Formats</a>
+      <a href="#results">Results</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="docs.html">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-github" href="https://github.com/MikeDre/squish">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <span>GitHub</span>
+      </a>
+      <button class="theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.5" fill="currentColor"/>
+          <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"/>
+          </g>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M20.6 14.2a8.6 8.6 0 0 1-10.8-10.8A8.9 8.9 0 1 0 20.6 14.2z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ============================== HERO ============================== -->
+    <section class="hero" id="top">
+      <p class="hero-eyebrow">Open source · Built in Rust · macOS &amp; Linux</p>
+
+      <h1 class="hero-title">
+        <button class="wordmark" type="button"
+          aria-label="squish — press to squish the logo">
+          <span class="wm-letter">s</span><span class="wm-letter">q</span><span
+            class="wm-letter">u</span><span class="wm-letter">i</span><span
+            class="wm-letter">s</span><span class="wm-letter">h</span><span
+            class="wm-letter wm-dot">.</span>
+        </button>
+      </h1>
+      <p class="hero-hint" aria-hidden="true">go on, press it</p>
+
+      <p class="hero-sub">
+        Compresses images, video, and audio. Minifies JS, TS, CSS, HTML, and JSON.
+        One command, entirely on your machine — <strong>no uploads, no servers, no
+        node_modules</strong>.
+      </p>
+
+      <div class="hero-install">
+        <code class="install-pill">
+          <span class="pill-prompt" aria-hidden="true">$</span>
+          <span class="pill-cmd">brew install mikedre/tap/squish</span>
+          <button class="copy-btn" type="button" data-copy="brew install mikedre/tap/squish"
+            aria-label="Copy install command">
+            <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="1.5"
+                d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/>
+            </svg>
+          </button>
+        </code>
+        <a class="hero-alt" href="#install">other ways to install ↓</a>
+      </div>
+
+      <!-- Live terminal demo -->
+      <figure class="terminal" data-reveal>
+        <figcaption class="term-bar">
+          <span class="term-dot" aria-hidden="true"></span>
+          <span class="term-dot" aria-hidden="true"></span>
+          <span class="term-dot" aria-hidden="true"></span>
+          <span class="term-title">~/project</span>
+          <button class="term-replay" type="button" aria-label="Replay the demo">
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"
+                d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 1.5v3h-3"/>
+            </svg>
+            replay
+          </button>
+        </figcaption>
+        <div class="term-body" id="demo-terminal">
+          <p class="term-line term-cmd">
+            <span class="t-prompt">$</span> <span class="t-typed">squish ./assets/ -r</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">photo.jpg</span>
+            <span class="t-size">4.4 MB <span class="t-arrow">→</span> 1.4 MB</span>
+            <span class="t-pct">−69.4%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">hero.png</span>
+            <span class="t-size">2.1 MB <span class="t-arrow">→</span> 483 KB</span>
+            <span class="t-pct">−77.0%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">banner.webp</span>
+            <span class="t-size">812 KB <span class="t-arrow">→</span> 455 KB</span>
+            <span class="t-pct">−44.0%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">logo.svg</span>
+            <span class="t-size">24 KB <span class="t-arrow">→</span> 11 KB</span>
+            <span class="t-pct">−54.2%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">scan.tiff <span class="t-note">→ .jpg</span></span>
+            <span class="t-size">9.8 MB <span class="t-arrow">→</span> 294 KB</span>
+            <span class="t-pct">−97.0%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">clip.mp4</span>
+            <span class="t-size">3.1 MB <span class="t-arrow">→</span> 1.0 MB</span>
+            <span class="t-pct">−67.7%</span>
+          </p>
+          <p class="term-line t-file">
+            <span class="t-name">track.mp3</span>
+            <span class="t-size">8.2 MB <span class="t-arrow">→</span> 1.3 MB</span>
+            <span class="t-pct">−84.1%</span>
+          </p>
+          <p class="term-line t-summary">
+            <span class="t-check">✔</span> Squished 7 files · 28.4 MB → 4.9 MB
+            <span class="t-pct">(−82.6%)</span> · 1.4s
+          </p>
+        </div>
+      </figure>
+
+      <p class="hero-footnote">
+        Non-destructive by default — squish writes <code>*_squished.*</code> siblings and
+        never touches your originals unless you ask.
+      </p>
+    </section>
+
+    <!-- ============================ FORMATS ============================ -->
+    <section class="section" id="formats" data-reveal>
+      <h2 class="section-title">It eats everything.</h2>
+      <p class="section-sub">
+        Point it at a file — or a whole folder — and squish works out what each thing is
+        and picks the right tool for it.
+      </p>
+
+      <div class="kind-grid">
+        <article class="kind-card">
+          <h3 class="kind-name">Images</h3>
+          <p class="kind-desc">
+            mozjpeg, oxipng + imagequant, ravif, and an SVGO-equivalent — compiled straight
+            into the binary. Convert formats while you compress.
+          </p>
+          <ul class="chip-row" aria-label="Supported image formats">
+            <li>PNG</li><li>JPEG</li><li>WebP</li><li>AVIF</li>
+            <li>SVG</li><li>GIF</li><li>HEIC</li><li>TIFF</li>
+          </ul>
+          <code class="kind-cmd">squish photos/ -r --format webp</code>
+        </article>
+
+        <article class="kind-card">
+          <h3 class="kind-name">Video</h3>
+          <p class="kind-desc">
+            H.265 by default, H.264 for compatibility, AV1 for the smallest files — via your
+            system ffmpeg. Audio streams copied untouched.
+          </p>
+          <ul class="chip-row" aria-label="Supported video containers">
+            <li>MP4</li><li>WebM</li><li>MOV</li><li>MKV</li><li>AVI</li><li>DV</li>
+          </ul>
+          <code class="kind-cmd">squish clip.mp4 --target-size 8M</code>
+        </article>
+
+        <article class="kind-card">
+          <h3 class="kind-name">Audio</h3>
+          <p class="kind-desc">
+            Re-encode at the same codec, or convert lossless to Opus for roughly half the
+            size. ID3 tags and album art preserved by default.
+          </p>
+          <ul class="chip-row" aria-label="Supported audio formats">
+            <li>MP3</li><li>AAC</li><li>Opus</li><li>FLAC</li><li>WAV</li><li>OGG</li>
+          </ul>
+          <code class="kind-cmd">squish song.flac --codec opus</code>
+        </article>
+
+        <article class="kind-card">
+          <h3 class="kind-name">Code</h3>
+          <p class="kind-desc">
+            oxc and lightningcss minify JS, TS, CSS, HTML, and JSON in pure Rust. TypeScript
+            in, minified JS out — no Node runtime anywhere.
+          </p>
+          <ul class="chip-row" aria-label="Supported code languages">
+            <li>JS</li><li>TS</li><li>JSX</li><li>CSS</li><li>HTML</li><li>JSON</li>
+          </ul>
+          <code class="kind-cmd">squish dist/ -r --source-map</code>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================ RESULTS ============================ -->
+    <section class="section" id="results" data-reveal>
+      <h2 class="section-title">Real files, honest numbers.</h2>
+      <p class="section-sub">
+        Measured on representative samples with default settings. The faint track is the
+        original size; the gold bar is what's left after squishing.
+      </p>
+
+      <div class="chart" role="img"
+        aria-label="Bar chart of file size remaining after squishing: JPEG photo 69% smaller, PNG screenshot 77% smaller, WebP 44% smaller, SVG 54% smaller, TIFF converted to JPEG 97% smaller, MP4 with a 1 megabyte target 68% smaller, 320 kilobit MP3 84% smaller.">
+        <div class="chart-row" style="--w: 31%">
+          <span class="chart-label">JPEG photo</span>
+          <span class="chart-track" title="4.4 MB → 1.4 MB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−69%</span>
+        </div>
+        <div class="chart-row" style="--w: 23%">
+          <span class="chart-label">PNG screenshot</span>
+          <span class="chart-track" title="2.1 MB → 483 KB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−77%</span>
+        </div>
+        <div class="chart-row" style="--w: 56%">
+          <span class="chart-label">WebP</span>
+          <span class="chart-track" title="812 KB → 455 KB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−44%</span>
+        </div>
+        <div class="chart-row" style="--w: 46%">
+          <span class="chart-label">SVG</span>
+          <span class="chart-track" title="24 KB → 11 KB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−54%</span>
+        </div>
+        <div class="chart-row" style="--w: 3%">
+          <span class="chart-label">TIFF <span class="chart-note">→ JPEG</span></span>
+          <span class="chart-track" title="9.8 MB → 294 KB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−97%</span>
+        </div>
+        <div class="chart-row" style="--w: 32%">
+          <span class="chart-label">MP4 <span class="chart-note">--target-size 1M</span></span>
+          <span class="chart-track" title="3.1 MB → 1.0 MB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−68%</span>
+        </div>
+        <div class="chart-row" style="--w: 16%">
+          <span class="chart-label">MP3 <span class="chart-note">320 kbps</span></span>
+          <span class="chart-track" title="8.2 MB → 1.3 MB"><span class="chart-bar"></span></span>
+          <span class="chart-pct">−84%</span>
+        </div>
+      </div>
+      <p class="chart-caption">Your mileage varies with content — run <code>--dry-run</code>
+        to preview savings on your own files before writing a byte.</p>
+    </section>
+
+    <!-- ============================ FEATURES =========================== -->
+    <section class="section" id="features" data-reveal>
+      <h2 class="section-title">Careful by default.<br>Powerful when asked.</h2>
+
+      <div class="feature-grid">
+        <div class="feature">
+          <code class="feature-flag">--target-size 8M</code>
+          <p>Fit any file under an upload limit. Images binary-search the quality dial;
+            video and audio compute a bitrate from the file's duration.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--quality auto</code>
+          <p>The hardest squish with no visible loss — perceptual quality search picks the
+            lowest setting that still looks identical.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--watch</code>
+          <p>Keep it running on a folder and every file that lands gets squished as it
+            arrives. It never re-squishes its own output.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--preset web</code>
+          <p>Resize to 1920px, convert to WebP, visually-lossless quality — the whole
+            web-asset routine in one flag.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--dry-run</code>
+          <p>See exactly what would happen — files, formats, savings — before anything is
+            written.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">squish doctor</code>
+          <p>Checks which formats work on this machine and tells you precisely what to
+            install for the rest.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">squish config</code>
+          <p>A wizard that writes your defaults to <code>squish.toml</code> — per-project or
+            global, no TOML editing required.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--stats</code>
+          <p>A local-only ledger of every byte you've saved, this month and all-time.
+            Nothing is phoned home.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================== EVERYWHERE ========================== -->
+    <section class="section" id="everywhere" data-reveal>
+      <h2 class="section-title">Terminal, CI, or right-click.</h2>
+      <p class="section-sub">
+        squish meets you where the files are — even if that's a Finder window.
+      </p>
+
+      <div class="everywhere-grid">
+        <article class="ev-card">
+          <h3 class="ev-name">GitHub Action</h3>
+          <p class="ev-desc">Squish assets in CI before every deploy, or pair it with a
+            commit-back step. Runs on ubuntu and macos runners.</p>
+          <pre class="code-block"><code><span class="c-key">- uses:</span> MikeDre/squish@v0.7.0
+  <span class="c-key">with:</span>
+    <span class="c-key">paths:</span> public/images
+    <span class="c-key">args:</span> <span class="c-str">"--recursive --overwrite"</span></code></pre>
+        </article>
+
+        <article class="ev-card">
+          <h3 class="ev-name">Finder Quick Action</h3>
+          <p class="ev-desc">For the folks who never open a terminal: select files,
+            right-click, squish. A notification reports the savings.</p>
+          <div class="finder-mock" aria-hidden="true">
+            <div class="fm-menu">
+              <span class="fm-item fm-dim">Rename…</span>
+              <span class="fm-item fm-dim">Compress "assets"</span>
+              <span class="fm-sep"></span>
+              <span class="fm-item">Quick Actions
+                <span class="fm-flyout">
+                  <span class="fm-item fm-active">
+                    <svg viewBox="0 0 13.5 11.4" width="13" height="11">
+                      <path fill="currentColor" d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+                    </svg>
+                    Squish
+                  </span>
+                </span>
+              </span>
+            </div>
+          </div>
+          <code class="kind-cmd">squish finder-action install</code>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============================ INSTALL ============================ -->
+    <section class="section" id="install" data-reveal>
+      <h2 class="section-title">Get squish.</h2>
+
+      <div class="install-tabs" role="tablist" aria-label="Install methods">
+        <button class="tab is-active" role="tab" aria-selected="true"
+          aria-controls="tab-brew" id="tabbtn-brew" type="button">Homebrew</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1"
+          aria-controls="tab-cargo" id="tabbtn-cargo" type="button">Cargo</button>
+        <button class="tab" role="tab" aria-selected="false" tabindex="-1"
+          aria-controls="tab-bin" id="tabbtn-bin" type="button">Prebuilt binaries</button>
+      </div>
+
+      <div class="tab-panel" id="tab-brew" role="tabpanel" aria-labelledby="tabbtn-brew">
+        <pre class="code-block has-copy"><code>brew install mikedre/tap/squish</code><button
+          class="copy-btn" type="button" data-copy="brew install mikedre/tap/squish"
+          aria-label="Copy Homebrew command"><svg viewBox="0 0 16 16" width="15" height="15"
+          aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+          d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+        <p class="tab-note">Prebuilt binary plus every system dependency — ffmpeg, gifsicle,
+          libheif, dav1d. Nothing else to do.</p>
+      </div>
+
+      <div class="tab-panel" id="tab-cargo" role="tabpanel" aria-labelledby="tabbtn-cargo" hidden>
+        <pre class="code-block has-copy"><code>cargo install squish-media-cli</code><button
+          class="copy-btn" type="button" data-copy="cargo install squish-media-cli"
+          aria-label="Copy cargo command"><svg viewBox="0 0 16 16" width="15" height="15"
+          aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+          d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+        <p class="tab-note">Compiles from crates.io on stable Rust (1.95+). Install the
+          system dependencies separately for full format coverage.</p>
+      </div>
+
+      <div class="tab-panel" id="tab-bin" role="tabpanel" aria-labelledby="tabbtn-bin" hidden>
+        <p class="tab-note">Every release ships binaries for macOS (arm64/x64) and Linux
+          (x64/arm64). Unpack, put <code>squish</code> on your PATH, done.</p>
+        <a class="btn" href="https://github.com/MikeDre/squish/releases">
+          Download from releases ↗
+        </a>
+      </div>
+
+      <p class="install-check">Then check your setup: <code>squish doctor</code></p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <svg class="footer-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+      <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+    </svg>
+    <p class="footer-line">
+      MIT licensed · <a href="docs.html">Docs</a> ·
+      <a href="https://github.com/MikeDre/squish">GitHub</a> ·
+      <a href="https://crates.io/crates/squish-media-cli">crates.io</a>
+    </p>
+    <p class="footer-tag">Every byte you don't ship is a byte nobody waits for.</p>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="home.js"></script>
+</body>
+</html>
