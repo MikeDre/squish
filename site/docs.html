@@ -263,7 +263,7 @@ squish --safe app.js
 
 <span class="c-comment"># Emit a source map alongside the minified output</span>
 squish --source-map app.js style.css</code></pre>
-          <p class="docs-note">Known limitation: IE conditional comments
+          <p class="docs-note"><strong>Known limitations:</strong> IE conditional comments
             (<code>&lt;!--[if IE]&gt;...&lt;![endif]--&gt;</code>) are stripped along with
             regular comments. Pass <code>--source-map</code> if you need to preserve comments
             in JS/CSS for debugging.</p>
@@ -392,7 +392,7 @@ squish photos/ -r --no-stats</code></pre>
                   <td>Replace each input file in place (skips files whose squish would change the
                     extension, e.g. <code>.dv→.mp4</code>)</td></tr>
                 <tr><td><code>--suffix &lt;NAME&gt;</code></td>
-                  <td>Custom output filename suffix (default: <code>squished</code>)</td></tr>
+                  <td>Custom output filename suffix (default: <code>squished</code>), e.g. <code>squish --suffix tiny app.js</code> → <code>app.tiny.js</code></td></tr>
                 <tr><td><code>--dry-run</code></td>
                   <td>Show what would happen; don't write</td></tr>
                 <tr><td><code>--watch</code></td>
