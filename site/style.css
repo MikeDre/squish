@@ -7,53 +7,56 @@
 /* ---------- tokens ---------- */
 
 :root {
-  --bg: #fcf9f2;
+  --bg: #f5f8fc;
   --surface: #ffffff;
-  --surface-2: #f5efe2;
-  --ink: #211a0c;
-  --muted: #6f6248;
-  --line: #e7ddc8;
-  --brand: #e8bb6b;
-  --brand-deep: #8a6620;
-  --brand-soft: rgba(232, 187, 107, 0.16);
+  --surface-2: #e9f0f9;
+  --ink: #101827;
+  --muted: #5b6b84;
+  --line: #d9e2f0;
+  --brand: #4a8df0;
+  --brand-deep: #1d5fc4;
+  --brand-soft: rgba(74, 141, 240, 0.14);
   --green: #1d8a3e;
-  --term-bg: #16120a;
-  --term-ink: #efe6d2;
-  --term-dim: #8d8064;
-  --term-green: #5fd37f;
-  --term-gold: #e8bb6b;
-  --shadow: 0 18px 50px -18px rgba(60, 42, 6, 0.25);
+  --btn-ink: #ffffff;
+  --term-bg: #0d1424;
+  --term-ink: #e4ecf8;
+  --term-dim: #7284a1;
+  --term-accent: #7db1ff;
+  --term-green: #56d07c;
+  --shadow: 0 18px 50px -18px rgba(23, 48, 92, 0.22);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
   color-scheme: light;
 }
 
 :root[data-theme='dark'] {
-  --bg: #131007;
-  --surface: #1d1810;
-  --surface-2: #241e13;
-  --ink: #f3ead7;
-  --muted: #a3967a;
-  --line: #332b1b;
-  --brand: #e8bb6b;
-  --brand-deep: #e8bb6b;
-  --brand-soft: rgba(232, 187, 107, 0.12);
+  --bg: #0c1220;
+  --surface: #141d30;
+  --surface-2: #1b2740;
+  --ink: #e8eef9;
+  --muted: #93a3bd;
+  --line: #263450;
+  --brand: #6ea8ff;
+  --brand-deep: #6ea8ff;
+  --brand-soft: rgba(110, 168, 255, 0.13);
   --green: #4cc26b;
+  --btn-ink: #0c1220;
   --shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #131007;
-    --surface: #1d1810;
-    --surface-2: #241e13;
-    --ink: #f3ead7;
-    --muted: #a3967a;
-    --line: #332b1b;
-    --brand: #e8bb6b;
-    --brand-deep: #e8bb6b;
-    --brand-soft: rgba(232, 187, 107, 0.12);
+    --bg: #0c1220;
+    --surface: #141d30;
+    --surface-2: #1b2740;
+    --ink: #e8eef9;
+    --muted: #93a3bd;
+    --line: #263450;
+    --brand: #6ea8ff;
+    --brand-deep: #6ea8ff;
+    --brand-soft: rgba(110, 168, 255, 0.13);
     --green: #4cc26b;
+    --btn-ink: #0c1220;
     --shadow: 0 18px 50px -18px rgba(0, 0, 0, 0.6);
     color-scheme: dark;
   }
@@ -435,7 +438,7 @@ a {
   margin: 2.8rem auto 0;
   text-align: left;
   background: var(--term-bg);
-  border: 1px solid rgba(232, 187, 107, 0.18);
+  border: 1px solid rgba(125, 177, 255, 0.2);
   border-radius: 16px;
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -446,7 +449,7 @@ a {
   align-items: center;
   gap: 0.45rem;
   padding: 0.7rem 1rem;
-  border-bottom: 1px solid rgba(232, 187, 107, 0.12);
+  border-bottom: 1px solid rgba(125, 177, 255, 0.14);
 }
 
 .term-dot {
@@ -479,10 +482,10 @@ a {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid rgba(232, 187, 107, 0.25);
+  border: 1px solid rgba(125, 177, 255, 0.3);
   border-radius: 999px;
   background: none;
-  color: var(--term-gold);
+  color: var(--term-accent);
   font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
   padding: 0.25rem 0.7rem;
@@ -491,7 +494,7 @@ a {
 }
 
 .term-replay:hover {
-  background: rgba(232, 187, 107, 0.12);
+  background: rgba(125, 177, 255, 0.14);
 }
 
 .term-replay:active {
@@ -513,7 +516,7 @@ a {
 }
 
 .term-cmd .t-prompt {
-  color: var(--term-gold);
+  color: var(--term-accent);
   font-weight: 700;
 }
 
@@ -523,7 +526,7 @@ a {
 
 .term-body.is-typing .t-typed::after {
   content: '▋';
-  color: var(--term-gold);
+  color: var(--term-accent);
   animation: blink 1s steps(1) infinite;
 }
 
@@ -555,7 +558,7 @@ a {
 }
 
 .t-arrow {
-  color: var(--term-gold);
+  color: var(--term-accent);
 }
 
 .t-pct {
@@ -711,7 +714,7 @@ a {
   font-size: 0.78rem;
   padding: 0.55rem 0.8rem;
   background: var(--term-bg);
-  color: var(--term-gold);
+  color: var(--term-accent);
   border-radius: 9px;
   overflow-x: auto;
   white-space: nowrap;
@@ -895,7 +898,7 @@ a {
 }
 
 .c-key {
-  color: var(--term-gold);
+  color: var(--term-accent);
 }
 
 .c-str {
@@ -962,7 +965,7 @@ a {
   align-items: center;
   gap: 0.45rem;
   background: var(--brand);
-  color: #211a0c;
+  color: var(--btn-ink);
   font-weight: 600;
 }
 
@@ -1028,9 +1031,9 @@ a {
 }
 
 .code-block .copy-btn {
-  background: rgba(232, 187, 107, 0.1);
-  border-color: rgba(232, 187, 107, 0.25);
-  color: var(--term-gold);
+  background: rgba(125, 177, 255, 0.12);
+  border-color: rgba(125, 177, 255, 0.3);
+  color: var(--term-accent);
   flex-shrink: 0;
 }
 
@@ -1051,8 +1054,8 @@ a {
   display: inline-block;
   margin-top: 1rem;
   padding: 0.7rem 1.4rem;
-  background: var(--brand);
-  color: #211a0c;
+  background: var(--brand-deep);
+  color: var(--btn-ink);
   font-weight: 700;
   text-decoration: none;
   border-radius: 12px;
