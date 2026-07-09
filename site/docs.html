@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>squish docs — every flag, format, and workflow</title>
+  <meta name="description"
+    content="Full usage documentation for squish: install, images, video, audio, code, flags, config, CI, and Finder integration.">
+  <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:ital,wdth,wght@0,62..125,100..900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="docs.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="nav">
+    <a class="nav-brand" href="index.html" aria-label="squish — back to top">
+      <svg class="nav-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+        <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+      </svg>
+      <span class="nav-name">squish</span>
+    </a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="index.html">Home</a>
+      <a href="docs.html" aria-current="page">Docs</a>
+    </nav>
+    <div class="nav-actions">
+      <a class="nav-github" href="https://github.com/MikeDre/squish">
+        <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+        <span>GitHub</span>
+      </a>
+      <button class="theme-toggle" type="button" aria-label="Switch to dark mode">
+        <svg class="icon-sun" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.5" fill="currentColor"/>
+          <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+            <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3 19 19M19 5l-1.7 1.7M6.7 17.3 5 19"/>
+          </g>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path fill="currentColor" d="M20.6 14.2a8.6 8.6 0 0 1-10.8-10.8A8.9 8.9 0 1 0 20.6 14.2z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="docs-layout">
+      <nav class="docs-sidebar" aria-label="On this page">
+        <p class="toc-label">On this page</p>
+        <ul class="toc">
+          <li><a href="#install">Install</a></li>
+          <li><a href="#doctor">Check your setup</a></li>
+          <li><a href="#images">Images</a></li>
+          <li><a href="#video">Video</a></li>
+          <li><a href="#audio">Audio</a></li>
+          <li><a href="#code">Code</a></li>
+          <li><a href="#stats">Usage report</a></li>
+          <li><a href="#formats">Formats</a></li>
+          <li><a href="#flags">Flags</a></li>
+          <li><a href="#config">Config file</a></li>
+          <li><a href="#github-action">GitHub Action</a></li>
+          <li><a href="#finder-quick-action">Finder Quick Action</a></li>
+          <li><a href="#collisions">Collision behavior</a></li>
+        </ul>
+      </nav>
+
+      <article class="docs-article">
+        <h1 class="docs-title">Docs<span class="accent">.</span></h1>
+        <p class="docs-intro">
+          Everything squish can do, with the exact commands to do it. Compresses images,
+          video, and audio; minifies JS, TS, CSS, HTML, and JSON — all local,
+          non-destructive by default.
+        </p>
+
+        <details class="docs-toc-mobile">
+          <summary>On this page</summary>
+          <ul class="toc">
+            <li><a href="#install">Install</a></li>
+            <li><a href="#doctor">Check your setup</a></li>
+            <li><a href="#images">Images</a></li>
+            <li><a href="#video">Video</a></li>
+            <li><a href="#audio">Audio</a></li>
+            <li><a href="#code">Code</a></li>
+            <li><a href="#stats">Usage report</a></li>
+            <li><a href="#formats">Formats</a></li>
+            <li><a href="#flags">Flags</a></li>
+            <li><a href="#config">Config file</a></li>
+            <li><a href="#github-action">GitHub Action</a></li>
+            <li><a href="#finder-quick-action">Finder Quick Action</a></li>
+            <li><a href="#collisions">Collision behavior</a></li>
+          </ul>
+        </details>
+
+        <section class="docs-section" id="install">
+          <h2 class="docs-h2">Install</h2>
+
+          <h3 class="docs-h3">Homebrew (macOS — recommended)</h3>
+          <pre class="code-block has-copy"><code>brew install mikedre/tap/squish</code><button
+            class="copy-btn" type="button" data-copy="brew install mikedre/tap/squish"
+            aria-label="Copy Homebrew command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Installs a prebuilt binary plus every system dependency (ffmpeg, gifsicle, libheif,
+            dav1d). Nothing else to do.</p>
+
+          <h3 class="docs-h3">Prebuilt binaries</h3>
+          <p>Each release ships binaries for macOS (arm64/x64) and Linux (x64/arm64) on the
+            <a href="https://github.com/MikeDre/squish/releases">releases page</a>. Unpack and put
+            <code>squish</code> on your PATH. Linux binaries need <code>libheif</code> (≥ 1.18) and
+            <code>dav1d</code> (≥ 1.3) present at runtime, plus the subprocess dependencies below
+            for full format coverage.</p>
+
+          <h3 class="docs-h3">Install via cargo</h3>
+          <pre class="code-block has-copy"><code>cargo install squish-media-cli</code><button
+            class="copy-btn" type="button" data-copy="cargo install squish-media-cli"
+            aria-label="Copy cargo command"><svg viewBox="0 0 16 16" width="15" height="15"
+            aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
+            d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
+          <p>Compiles squish from crates.io (stable Rust 1.95+) and places the binary in
+            <code>~/.cargo/bin</code>. You still need the system dependencies for full format
+            support.</p>
+
+          <h3 class="docs-h3">Build from source</h3>
+          <pre class="code-block"><code><span class="c-comment"># installs system deps via Homebrew (macOS) or apt (Linux)</span>
+./scripts/setup.sh
+cargo install --path crates/squish-cli</code></pre>
+
+          <h3 class="docs-h3">System dependencies</h3>
+          <p>GIF and HEIC support require external libraries. Install them for full format
+            coverage:</p>
+          <div class="docs-table-wrap">
+            <table class="docs-table">
+              <thead><tr><th>Dependency</th><th>Needed for</th><th>macOS</th><th>Linux</th></tr></thead>
+              <tbody>
+                <tr><td>gifsicle</td><td>GIF compression</td><td><code>brew install gifsicle</code></td><td><code>apt install gifsicle</code></td></tr>
+                <tr><td>libheif + x265</td><td>HEIC/HEIF</td><td><code>brew install libheif x265</code></td><td><code>apt install libheif-dev libx265-dev</code></td></tr>
+                <tr><td>dav1d</td><td>AVIF decoding</td><td><code>brew install dav1d</code></td><td><code>apt install libdav1d-dev</code></td></tr>
+                <tr><td>ffmpeg</td><td>Video &amp; audio</td><td><code>brew install ffmpeg</code></td><td><code>apt install ffmpeg</code></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="docs-note">If a dependency is missing when you need it, squish tells you
+            exactly what to install.</p>
+        </section>
+
+      </article>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <svg class="footer-mark" viewBox="0 0 13.5 11.4" aria-hidden="true">
+      <path d="M10.2,8.1c0-1.9-1.5-3.5-3.4-3.6s-1.1-.4-1.1-1,.4-1.2,1.1-1.2h1.1c1.9,0,3.4,1.5,3.4,3.4v4.2c0,.6.5,1.2,1.2,1.2h0c.6,0,1.2-.5,1.2-1.2v-4.2c0-3.1-2.5-5.7-5.7-5.7h-1c-1.8,0-3.4,1.5-3.5,3.3s1.5,3.5,3.4,3.6,1.1.4,1.1,1-.4,1.2-1.1,1.2h-1.1c-1.9,0-3.4-1.5-3.4-3.4V1.4C2.3.7,1.8.2,1.2.2h0C.5.2,0,.7,0,1.4v4.3c0,3.1,2.5,5.7,5.7,5.7s.7,0,1,0c1.8,0,3.4-1.5,3.5-3.3Z"/>
+    </svg>
+    <p class="footer-line">
+      MIT licensed · <a href="docs.html">Docs</a> ·
+      <a href="https://github.com/MikeDre/squish">GitHub</a> ·
+      <a href="https://crates.io/crates/squish-media-cli">crates.io</a>
+    </p>
+    <p class="footer-tag">Every byte you don't ship is a byte nobody waits for.</p>
+  </footer>
+
+  <script src="shared.js"></script>
+  <script src="docs.js"></script>
+</body>
+</html>

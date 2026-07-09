@@ -177,6 +177,10 @@ a {
   color: var(--ink);
 }
 
+.nav-links a[aria-current='page'] {
+  color: var(--ink);
+}
+
 .nav-actions {
   display: flex;
   align-items: center;
@@ -903,6 +907,10 @@ a {
 
 .c-str {
   color: var(--term-green);
+}
+
+.c-comment {
+  color: var(--term-dim);
 }
 
 /* Finder context-menu mock */

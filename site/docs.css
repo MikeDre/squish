@@ -1,0 +1,228 @@
+/* ================================================================
+   squish docs page — layout layer over style.css
+   ================================================================ */
+
+.docs-layout {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 1fr);
+  gap: 3.5rem;
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2.8rem 1.5rem 0;
+}
+
+/* ---------- sidebar ---------- */
+
+.docs-sidebar {
+  position: sticky;
+  top: 5.5rem;
+  align-self: start;
+  max-height: calc(100vh - 6.5rem);
+  overflow-y: auto;
+}
+
+.toc-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.8rem;
+}
+
+.toc {
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.toc a {
+  display: block;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-left: 2px solid var(--line);
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.toc a:hover {
+  color: var(--ink);
+}
+
+.toc a.is-active {
+  color: var(--brand-deep);
+  border-left-color: var(--brand);
+  font-weight: 600;
+}
+
+/* Mobile TOC — shown only when the sidebar is hidden */
+.docs-toc-mobile {
+  display: none;
+  margin-bottom: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.docs-toc-mobile summary {
+  padding: 0.8rem 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.docs-toc-mobile .toc {
+  padding: 0 1.1rem 1rem;
+}
+
+/* ---------- article ---------- */
+
+.docs-article {
+  padding-bottom: 2rem;
+}
+
+.docs-title {
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  font-variation-settings: 'wdth' 110;
+}
+
+.docs-title .accent {
+  color: var(--brand);
+}
+
+.docs-intro {
+  max-width: 36rem;
+  margin-top: 0.9rem;
+  color: var(--muted);
+  font-size: 1.05rem;
+}
+
+.docs-section {
+  margin-top: 3.2rem;
+}
+
+.docs-h2 {
+  font-size: 1.55rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 6rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid var(--line);
+}
+
+.docs-h3 {
+  margin-top: 1.8rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.docs-section p {
+  margin-top: 0.8rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  max-width: 42rem;
+}
+
+.docs-section p strong {
+  color: var(--ink);
+}
+
+.docs-section p code,
+.docs-section li code {
+  font-size: 0.84rem;
+  background: var(--surface-2);
+  padding: 0.1rem 0.35rem;
+  border-radius: 5px;
+  color: var(--ink);
+}
+
+.docs-section .code-block {
+  margin-top: 1rem;
+  font-size: 0.84rem;
+}
+
+.docs-section ul:not(.toc) {
+  margin: 0.8rem 0 0 1.2rem;
+  font-size: 0.95rem;
+  color: var(--muted);
+  display: grid;
+  gap: 0.35rem;
+}
+
+/* ---------- tables ---------- */
+
+.docs-table-wrap {
+  margin-top: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.docs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.docs-table th {
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--surface-2);
+  padding: 0.6rem 1rem;
+}
+
+.docs-table td {
+  padding: 0.55rem 1rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.docs-table td:first-child {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.docs-table code {
+  font-size: 0.8rem;
+  background: var(--brand-soft);
+  color: var(--brand-deep);
+  padding: 0.08rem 0.35rem;
+  border-radius: 5px;
+}
+
+/* ---------- callout ---------- */
+
+.docs-note {
+  margin-top: 1rem;
+  padding: 0.9rem 1.1rem;
+  border-left: 3px solid var(--brand);
+  border-radius: 0 10px 10px 0;
+  background: var(--brand-soft);
+  font-size: 0.9rem;
+  color: var(--ink);
+  max-width: 42rem;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 52rem) {
+  .docs-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .docs-sidebar {
+    display: none;
+  }
+
+  .docs-toc-mobile {
+    display: block;
+  }
+}
