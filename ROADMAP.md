@@ -4,6 +4,9 @@ Planned work, roughly in priority order. Shipped items live in the
 [CHANGELOG](CHANGELOG.md). This list is intentionally scoped — see
 **Deferred** at the bottom for things considered but parked.
 
+Detailed, self-contained implementation briefs for each item (plus newly
+scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
+
 ## CLI polish (cheap, high-value)
 
 - [ ] **Shell completions** — `squish completions <bash|zsh|fish>` via
