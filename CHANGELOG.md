@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Dependabot.** `.github/dependabot.yml` opens weekly PRs for `cargo` and
+  `github-actions` dependency updates, grouping routine minor/patch bumps into
+  a single PR each. CI gates the resulting PRs as usual.
+
 ## [0.7.0] - 2026-06-15
 
 ### Added

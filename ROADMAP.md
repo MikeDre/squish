@@ -30,7 +30,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 
 - [ ] **Supply-chain CI** — add `cargo-audit` (RUSTSEC advisories) and
   `cargo-deny` (licences + bans + duplicate versions) as a CI job.
-- [ ] **Dependabot** — `.github/dependabot.yml` for both `cargo` and
+- [x] **Dependabot** — `.github/dependabot.yml` for both `cargo` and
   `github-actions` ecosystems, so dependency and Action-version bumps arrive
   as PRs (which CI then gates).
 - [ ] **MSRV CI job** — a dedicated job pinned to Rust 1.95 running
