@@ -47,6 +47,8 @@ cargo install squish-media-cli
 
 This compiles squish from crates.io and places the `squish` binary in `~/.cargo/bin`. You still need the system dependencies for full format support (see below).
 
+With [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) installed, `cargo binstall squish-media-cli` fetches the prebuilt release binary instead of compiling (macOS and Linux only — Windows isn't published yet, see Roadmap).
+
 ### Build from source
 
 **1. Install Rust** (skip if `rustc --version` already works):

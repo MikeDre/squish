@@ -13,6 +13,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Man page.** `squish man` prints the `squish.1` roff source to stdout.
   Included in release tarballs and installed automatically by the Homebrew
   tap.
+- **`cargo binstall` support.** `cargo binstall squish-media-cli` fetches the
+  prebuilt release binary for macOS/Linux instead of compiling from source.
 
 ## [0.7.0] - 2026-06-15
 

@@ -17,7 +17,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 - [x] **Man page** — generate `squish.1` with `clap_mangen` (a build script or
   a hidden `squish --man` subcommand), install it via the formula's
   `man1.install`.
-- [ ] **`cargo binstall` support** — add `[package.metadata.binstall]` to
+- [x] **`cargo binstall` support** — add `[package.metadata.binstall]` to
   `squish-cli` mapping the release artifact naming
   (`squish-vX.Y.Z-<target>.tar.gz`) so `cargo binstall squish-media-cli`
   fetches a prebuilt binary instead of compiling.
