@@ -14,7 +14,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
   clap `Args`, so it stays in sync automatically. Ship install hints in the
   README and, where practical, have the Homebrew formula drop the zsh
   completion into `#{zsh_completion}`.
-- [ ] **Man page** — generate `squish.1` with `clap_mangen` (a build script or
+- [x] **Man page** — generate `squish.1` with `clap_mangen` (a build script or
   a hidden `squish --man` subcommand), install it via the formula's
   `man1.install`.
 - [ ] **`cargo binstall` support** — add `[package.metadata.binstall]` to

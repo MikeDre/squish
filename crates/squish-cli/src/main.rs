@@ -44,6 +44,11 @@ fn real_main() -> Result<u8> {
             );
             return Ok(0);
         }
+        Some(cli::Command::Man) => {
+            let man = clap_mangen::Man::new(cli::Args::command());
+            man.render(&mut std::io::stdout())?;
+            return Ok(0);
+        }
         None => {}
     }
 

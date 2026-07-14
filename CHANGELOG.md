@@ -10,6 +10,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Shell completions.** `squish completions <bash|zsh|fish>` prints a
   completion script to stdout, generated from the CLI's own flag definitions.
   The Homebrew tap installs completions automatically.
+- **Man page.** `squish man` prints the `squish.1` roff source to stdout.
+  Included in release tarballs and installed automatically by the Homebrew
+  tap.
 
 ## [0.7.0] - 2026-06-15
 

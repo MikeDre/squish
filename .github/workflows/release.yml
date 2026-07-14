@@ -69,11 +69,14 @@ jobs:
       - name: Build
         run: cargo build --release -p squish-media-cli
 
+      - name: Generate man page
+        run: target/release/squish man > target/release/squish.1
+
       - name: Package
         run: |
           version="${GITHUB_REF_NAME#v}"
           archive="squish-v${version}-${{ matrix.target }}.tar.gz"
-          tar -czf "$archive" -C target/release squish
+          tar -czf "$archive" -C target/release squish squish.1
           shasum -a 256 "$archive" > "$archive.sha256"
 
       - name: Upload artifacts to release

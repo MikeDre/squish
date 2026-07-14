@@ -56,6 +56,7 @@ class Squish < Formula
 
   def install
     bin.install "squish"
+    man1.install "squish.1"
     generate_completions_from_executable(bin/"squish", "completions")
   end
 

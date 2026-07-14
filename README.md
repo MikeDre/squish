@@ -117,6 +117,14 @@ squish completions fish > ~/.config/fish/completions/squish.fish
 
 Open a new shell (or `exec $SHELL`) afterward. The Homebrew tap installs completions automatically — see below.
 
+### Man page
+
+The Homebrew tap installs `man squish` automatically. Building from source or installing via `cargo install`, generate it yourself:
+
+```bash
+squish man > /usr/local/share/man/man1/squish.1   # then `man squish`
+```
+
 ## Use
 
 ### Images

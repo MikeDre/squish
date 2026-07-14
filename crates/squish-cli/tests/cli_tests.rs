@@ -815,6 +815,19 @@ fn completions_fish_prints_fish_function() {
         .stdout(predicate::str::contains("function __fish_squish"));
 }
 
+// ----- Man page -----
+
+#[test]
+fn man_prints_roff_header() {
+    // clap_mangen/roff emit a two-line quote-escaping preamble before the
+    // `.TH` title macro, so assert `.TH` is present rather than on line 1.
+    bin()
+        .arg("man")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(".TH squish 1"));
+}
+
 #[test]
 fn target_size_flag_fits_image_under_budget() {
     let tmp = TempDir::new().unwrap();

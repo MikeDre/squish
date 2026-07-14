@@ -175,6 +175,9 @@ pub enum Command {
         #[arg(value_enum)]
         shell: clap_complete::Shell,
     },
+    /// Generate the squish.1 man page (writes roff to stdout).
+    #[command(hide = true)]
+    Man,
 }
 
 #[derive(Subcommand, Debug)]
