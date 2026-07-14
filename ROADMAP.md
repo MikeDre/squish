@@ -36,7 +36,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 - [x] **MSRV CI job** — a dedicated job pinned to Rust 1.95 running
   `cargo check --workspace`, so an accidental use of a newer-stable API is
   caught instead of silently raising the real MSRV.
-- [ ] **Compression-ratio regression guard** — golden-number tests asserting
+- [x] **Compression-ratio regression guard** — golden-number tests asserting
   each fixture shrinks by at least a known threshold (e.g. `sample.png ≥ 70%`).
   Catches a dependency bump that quietly *worsens* output — the failure mode
   behind the v0.3.3 usvg→oxvg SVG regression.
