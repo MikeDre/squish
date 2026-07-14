@@ -1575,3 +1575,36 @@ fn exclude_config_key_supplies_default() {
         .success()
         .stdout(predicate::str::contains("Squished 1 files"));
 }
+
+// ----- --keep-metadata -----
+
+/// Cheap byte-level check for the JPEG APP1 EXIF marker signature. The
+/// thorough, structurally-verified checks (parsed tags, orientation) live in
+/// squish-core's own `tests/metadata.rs`; this just proves the CLI flag
+/// actually threads through to the core option end-to-end.
+fn has_exif_marker(bytes: &[u8]) -> bool {
+    bytes.windows(6).any(|w| w == b"Exif\0\0")
+}
+
+#[test]
+fn keep_metadata_flag_preserves_exif_default_strips_it() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.jpg");
+    fs::copy(core_fixture("exif_sample.jpg"), &input).unwrap();
+
+    bin().arg(&input).assert().success();
+    let stripped = fs::read(tmp.path().join("a_squished.jpg")).unwrap();
+    assert!(
+        !has_exif_marker(&stripped),
+        "EXIF should be stripped by default"
+    );
+
+    let input2 = tmp.path().join("b.jpg");
+    fs::copy(core_fixture("exif_sample.jpg"), &input2).unwrap();
+    bin().arg(&input2).arg("--keep-metadata").assert().success();
+    let kept = fs::read(tmp.path().join("b_squished.jpg")).unwrap();
+    assert!(
+        has_exif_marker(&kept),
+        "--keep-metadata should preserve EXIF"
+    );
+}

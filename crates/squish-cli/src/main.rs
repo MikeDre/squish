@@ -218,6 +218,7 @@ fn real_main() -> Result<u8> {
         overwrite: args.overwrite,
         target_size,
         auto,
+        keep_metadata: args.keep_metadata,
     };
 
     let video_opts = VideoOptions {

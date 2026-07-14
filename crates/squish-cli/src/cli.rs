@@ -117,8 +117,18 @@ pub struct Args {
     pub target_size: Option<String>,
 
     /// Strip audio metadata (ID3 tags, album art). Default: preserved.
+    /// (Images work the other way: --keep-metadata preserves EXIF, since
+    /// images strip by default.)
     #[arg(long = "strip-tags")]
     pub strip_tags: bool,
+
+    /// Preserve EXIF and the ICC colour profile in image output (default:
+    /// EXIF stripped, ICC always preserved). Orientation is always applied
+    /// to pixels before encoding either way, so framing is correct
+    /// regardless of this flag. Currently supported for JPEG and PNG only;
+    /// other image formats ignore it.
+    #[arg(long = "keep-metadata")]
+    pub keep_metadata: bool,
 
     /// Code: skip mangling and dead-code elimination (whitespace-only).
     #[arg(long)]

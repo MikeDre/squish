@@ -29,6 +29,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   behavior doesn't change. New `exclude = [...]` `squish.toml` key. Applies to
   `--watch` too. Switched the directory walker from `walkdir` to the `ignore`
   crate.
+- **`--keep-metadata`.** Preserve EXIF and the ICC colour profile in image
+  output where the format supports it (currently JPEG and PNG). Default:
+  EXIF stripped, ICC always preserved (colour correctness). Mirrors
+  `--strip-tags`' naming for audio, inverted — images strip by default.
+  Preserved EXIF has its orientation tag reset to 1, since pixels are always
+  corrected before encoding either way (see the orientation fix below).
 
 ### Fixed
 - **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG

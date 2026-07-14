@@ -273,16 +273,16 @@ Works with `--dry-run` too (every planned file reports `status: "skipped"` with 
 
 Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TIFF.
 
-| Format | Library |
-|---|---|
-| PNG | `oxipng` + `imagequant` |
-| JPEG | `mozjpeg` (progressive, optimised Huffman) |
-| WebP | `libwebp` (static); animated WebP copies through unchanged |
-| AVIF | `ravif` (encode) + `dav1d` (decode) |
-| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) |
-| GIF (static + animated) | `gifsicle -O3` |
-| HEIC | `libheif-rs` |
-| TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output |
+| Format | Library | Metadata |
+|---|---|---|
+| PNG | `oxipng` + `imagequant` | EXIF stripped by default, ICC always kept; `--keep-metadata` preserves EXIF too |
+| JPEG | `mozjpeg` (progressive, optimised Huffman) | EXIF orientation always applied to pixels before re-encoding; EXIF stripped by default, ICC always kept; `--keep-metadata` preserves EXIF too (with the now-redundant orientation tag reset) |
+| WebP | `libwebp` (static); animated WebP copies through unchanged | Always stripped (not yet supported) |
+| AVIF | `ravif` (encode) + `dav1d` (decode) | Always stripped (not yet supported) |
+| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) | N/A (vector format) |
+| GIF (static + animated) | `gifsicle -O3` | Whatever `gifsicle` does by default |
+| HEIC | `libheif-rs` | Always stripped (not yet supported) |
+| TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output | Always stripped (not yet supported) |
 
 ### Video
 
@@ -407,6 +407,9 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --fast                 Video: optimise without re-encoding
       --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
       --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
+      --keep-metadata        Preserve EXIF and the ICC colour profile in image output
+                             (default: EXIF stripped, ICC always kept). Orientation is
+                             always applied to pixels either way. JPEG/PNG only
       --preset <web>         Apply a destination preset of sensible defaults
                              (overridable by explicit flags). Currently: web
       --safe                 Code: skip mangling and DCE (whitespace-only minification)
