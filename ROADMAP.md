@@ -33,7 +33,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 - [x] **Dependabot** — `.github/dependabot.yml` for both `cargo` and
   `github-actions` ecosystems, so dependency and Action-version bumps arrive
   as PRs (which CI then gates).
-- [ ] **MSRV CI job** — a dedicated job pinned to Rust 1.95 running
+- [x] **MSRV CI job** — a dedicated job pinned to Rust 1.95 running
   `cargo check --workspace`, so an accidental use of a newer-stable API is
   caught instead of silently raising the real MSRV.
 - [ ] **Compression-ratio regression guard** — golden-number tests asserting

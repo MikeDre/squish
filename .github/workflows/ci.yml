@@ -105,6 +105,45 @@ jobs:
       - name: rustfmt
         run: cargo fmt --check
 
+  msrv:
+    name: MSRV (1.95)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdav1d-dev nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev
+
+      - name: Cache source-built libheif
+        id: libheif-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/libheif-install
+          key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build libheif from source
+        if: steps.libheif-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.23.0 https://github.com/strukturag/libheif.git /tmp/libheif
+          cmake -S /tmp/libheif -B /tmp/libheif/build -DCMAKE_BUILD_TYPE=Release \
+            -DWITH_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/tmp/libheif-install
+          cmake --build /tmp/libheif/build -j"$(nproc)"
+          cmake --install /tmp/libheif/build
+
+      - name: Install cached libheif
+        run: |
+          sudo cp -r /tmp/libheif-install/* /usr/local/
+          sudo ldconfig
+
+      - uses: dtolnay/rust-toolchain@1.95
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: cargo check
+        run: cargo check --workspace
+
   supply-chain:
     name: Supply chain (cargo-deny)
     runs-on: ubuntu-24.04
