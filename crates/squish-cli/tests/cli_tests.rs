@@ -1888,7 +1888,7 @@ fn gravity_without_crop_is_a_usage_error() {
         .arg("north")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("--crop"));
+        .stderr(predicate::str::contains("--crop"));
 }
 
 #[test]
@@ -1902,19 +1902,28 @@ fn malformed_crop_spec_is_a_usage_error() {
         .arg("nonsense")
         .assert()
         .failure()
-        .stderr(predicates::str::contains("expected an aspect ratio"));
+        .stderr(predicate::str::contains("expected an aspect ratio"));
 }
 
 #[test]
 fn out_of_bounds_crop_is_per_file_error_and_batch_continues() {
     let tmp = tempfile::TempDir::new().unwrap();
+    // A second, valid file alongside the bad crop, so a batch run actually
+    // proves the run continues past the per-file error rather than just
+    // failing the only file present. `sample.png` can't play that role here:
+    // the offset (+9999) is out of bounds for any image of realistic width,
+    // so a second copy of `sample.png` would fail identically. `sample.svg`
+    // is crop-immune (crop is raster-only; SVG compresses unchanged with a
+    // warning), so it reliably succeeds regardless of the batch's --crop flag.
+    fs::copy(core_fixture("sample.svg"), tmp.path().join("ok.svg")).unwrap();
     let input = tmp.path().join("a.png");
     fs::copy(core_fixture("sample.png"), &input).unwrap();
     bin()
-        .arg(&input)
+        .arg(tmp.path())
         .arg("--crop")
         .arg("100x100+9999+0")
         .assert()
         .code(1);
     assert!(!tmp.path().join("a_squished.png").exists());
+    assert!(tmp.path().join("ok_squished.svg").exists());
 }
