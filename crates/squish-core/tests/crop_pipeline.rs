@@ -148,3 +148,39 @@ fn crop_composes_with_quality_auto() {
     let r = squish_file(&input, &opts).unwrap();
     assert_eq!(image::image_dimensions(&r.output_path).unwrap(), (480, 480));
 }
+
+#[test]
+fn gif_exact_crop_via_gifsicle() {
+    let (_tmp, input) = copy_fixture("sample.gif");
+    let r = squish_file(
+        &input,
+        &crop_opts(CropSpec::Exact {
+            w: 100,
+            h: 80,
+            x: 10,
+            y: 10,
+        }),
+    )
+    .unwrap();
+    assert_eq!(image::image_dimensions(&r.output_path).unwrap(), (100, 80));
+}
+
+#[test]
+fn animated_gif_crop_preserves_frames() {
+    use image::AnimationDecoder;
+    let (_tmp, input) = copy_fixture("sample_animated.gif");
+    let r = squish_file(&input, &crop_opts(CropSpec::Aspect { w: 1, h: 1 })).unwrap();
+    // 320x240 → 1:1 → 240x240
+    assert_eq!(image::image_dimensions(&r.output_path).unwrap(), (240, 240));
+    let file = std::fs::File::open(&r.output_path).unwrap();
+    let decoder = image::codecs::gif::GifDecoder::new(std::io::BufReader::new(file)).unwrap();
+    let frames = decoder
+        .into_frames()
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+    assert!(
+        frames.len() > 1,
+        "animation flattened: {} frame(s)",
+        frames.len()
+    );
+}

@@ -14,7 +14,21 @@ pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u
             install_hint: "brew install gifsicle (macOS) / apt install gifsicle (Linux)".into(),
         });
     }
-    optimize_via_gifsicle(input, opts, path)
+    let crop = match opts.crop {
+        None => None,
+        Some(spec) => {
+            let (w, h) = gif_dimensions(input).ok_or_else(|| SquishError::DecodeFailed {
+                path: path.to_path_buf(),
+                source: "could not read GIF dimensions for --crop".into(),
+            })?;
+            spec.resolve(opts.gravity, w, h)
+                .map_err(|reason| SquishError::InvalidCrop {
+                    path: path.to_path_buf(),
+                    reason,
+                })?
+        }
+    };
+    optimize_via_gifsicle(input, opts, path, crop)
 }
 
 /// Encode an already-decoded raster as a single-frame GIF. Used for cross-format
@@ -49,7 +63,8 @@ pub fn encode_raster(
     // If gifsicle is missing, return the unoptimized GIF rather than failing —
     // the caller explicitly asked for GIF, so we shouldn't block on a missing tool.
     if which_binary("gifsicle").is_some() {
-        optimize_via_gifsicle(&gif_bytes, opts, path)
+        // Crop (if any) was already applied to the decoded raster upstream.
+        optimize_via_gifsicle(&gif_bytes, opts, path, None)
     } else {
         Ok(gif_bytes)
     }
@@ -59,6 +74,7 @@ fn optimize_via_gifsicle(
     input: &[u8],
     opts: &SquishOptions,
     path: &Path,
+    crop: Option<crate::crop::CropRect>,
 ) -> Result<Vec<u8>, SquishError> {
     let mut cmd = Command::new("gifsicle");
     cmd.arg("-O3")
@@ -71,6 +87,11 @@ fn optimize_via_gifsicle(
         let q = opts.effective_quality(crate::format::Format::Gif);
         let lossy = (100 - q as u32) * 2;
         cmd.arg(format!("--lossy={lossy}"));
+    }
+
+    if let Some(r) = crop {
+        // gifsicle crops every input named after the flag; stdin counts.
+        cmd.arg(format!("--crop={},{}+{}x{}", r.x, r.y, r.w, r.h));
     }
 
     cmd.stdin(Stdio::piped())
@@ -110,6 +131,21 @@ fn optimize_via_gifsicle(
     Ok(output.stdout)
 }
 
+/// Read the logical-screen dimensions from a GIF header (bytes 6..10,
+/// two little-endian u16s). Returns None for anything too short or not GIF.
+fn gif_dimensions(input: &[u8]) -> Option<(u32, u32)> {
+    if input.len() < 10 || !input.starts_with(b"GIF") {
+        return None;
+    }
+    let w = u16::from_le_bytes([input[6], input[7]]) as u32;
+    let h = u16::from_le_bytes([input[8], input[9]]) as u32;
+    if w == 0 || h == 0 {
+        None
+    } else {
+        Some((w, h))
+    }
+}
+
 /// Cross-platform `which` — return Some(path) if binary is on PATH.
 fn which_binary(name: &str) -> Option<std::path::PathBuf> {
     let path_var = std::env::var_os("PATH")?;
@@ -127,4 +163,25 @@ fn which_binary(name: &str) -> Option<std::path::PathBuf> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gif_dimensions_reads_logical_screen() {
+        // GIF89a header, 640x480 logical screen (little-endian u16 pairs).
+        let mut header = b"GIF89a".to_vec();
+        header.extend_from_slice(&640u16.to_le_bytes());
+        header.extend_from_slice(&480u16.to_le_bytes());
+        header.extend_from_slice(&[0, 0, 0]); // rest of the descriptor
+        assert_eq!(gif_dimensions(&header), Some((640, 480)));
+    }
+
+    #[test]
+    fn gif_dimensions_rejects_non_gif() {
+        assert_eq!(gif_dimensions(b"PNG whatever"), None);
+        assert_eq!(gif_dimensions(b"GIF89a"), None); // too short
+    }
 }
