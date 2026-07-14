@@ -1843,3 +1843,78 @@ fn target_size_larger_than_input_does_not_grow_audio() {
     let out = tmp.path().join("sine_squished.mp3");
     assert_eq!(fs::read(&out).unwrap(), input_bytes);
 }
+// ----- Crop / gravity integration tests -----
+
+#[test]
+fn crop_aspect_square() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin()
+        .arg(&input)
+        .arg("--crop")
+        .arg("1:1")
+        .assert()
+        .success();
+    let out = tmp.path().join("a_squished.png");
+    assert_eq!(image::image_dimensions(&out).unwrap(), (480, 480));
+}
+
+#[test]
+fn crop_exact_rect_with_gravity_flag_combo() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin()
+        .arg(&input)
+        .arg("--crop")
+        .arg("16:9")
+        .arg("--gravity")
+        .arg("north")
+        .assert()
+        .success();
+    let out = tmp.path().join("a_squished.png");
+    assert_eq!(image::image_dimensions(&out).unwrap(), (640, 360));
+}
+
+#[test]
+fn gravity_without_crop_is_a_usage_error() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin()
+        .arg(&input)
+        .arg("--gravity")
+        .arg("north")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("--crop"));
+}
+
+#[test]
+fn malformed_crop_spec_is_a_usage_error() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin()
+        .arg(&input)
+        .arg("--crop")
+        .arg("nonsense")
+        .assert()
+        .failure()
+        .stderr(predicates::str::contains("expected an aspect ratio"));
+}
+
+#[test]
+fn out_of_bounds_crop_is_per_file_error_and_batch_continues() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin()
+        .arg(&input)
+        .arg("--crop")
+        .arg("100x100+9999+0")
+        .assert()
+        .code(1);
+    assert!(!tmp.path().join("a_squished.png").exists());
+}

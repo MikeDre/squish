@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use squish_core::{CropSpec, Gravity};
 use std::path::PathBuf;
 
 /// Value of `--quality`: a fixed 0–100 number, or `auto` (perceptual
@@ -95,6 +96,18 @@ pub struct Args {
     /// Maximum output height in pixels (scales down proportionally).
     #[arg(long)]
     pub max_height: Option<u32>,
+
+    /// Crop images before compressing (applied before --max-width/height).
+    /// Aspect ratio, anchored by --gravity: 1:1, 16:9, 4:3, ...
+    /// Or an exact pixel rect: WxH+X+Y, e.g. 800x600+120+40. Images only;
+    /// deliberately not a squish.toml key.
+    #[arg(long, value_parser = CropSpec::parse)]
+    pub crop: Option<CropSpec>,
+
+    /// Anchor for an aspect-ratio --crop: center, north, south, east, west,
+    /// northwest, northeast, southwest, southeast.
+    #[arg(long, value_parser = Gravity::parse, default_value = "center", requires = "crop")]
+    pub gravity: Gravity,
 
     /// Codec: video=h264|h265|av1|vp9, audio=mp3|aac|opus|vorbis|flac|alac (default: kind-specific).
     #[arg(long)]

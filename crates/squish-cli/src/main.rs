@@ -219,6 +219,8 @@ fn real_main() -> Result<u8> {
         target_size,
         auto,
         keep_metadata: args.keep_metadata,
+        crop: args.crop,
+        gravity: args.gravity,
     };
 
     let video_opts = VideoOptions {

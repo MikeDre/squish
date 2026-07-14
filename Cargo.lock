@@ -3793,6 +3793,7 @@ dependencies = [
  "dirs",
  "humantime",
  "ignore",
+ "image",
  "indicatif",
  "notify",
  "notify-debouncer-mini",

@@ -258,6 +258,14 @@ source-map = false
     }
 
     #[test]
+    fn crop_is_deliberately_not_a_config_key() {
+        // Spec decision (2026-07-14-image-crop-design.md): a persisted default
+        // crop would silently maim batch runs, so `crop` must stay CLI-only.
+        assert!(parse_config("crop = \"16:9\"").is_err());
+        assert!(parse_config("gravity = \"north\"").is_err());
+    }
+
+    #[test]
     fn unknown_table_key_is_an_error() {
         let err = parse_config("[video]\nbitrate = \"1M\"\n").unwrap_err();
         assert!(
