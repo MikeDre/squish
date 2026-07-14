@@ -553,6 +553,10 @@ mod tests {
             code_results: Vec::new(),
             errors: Vec::new(),
             skipped_unknown: Vec::new(),
+            already_optimal_images: Vec::new(),
+            already_optimal_video: Vec::new(),
+            already_optimal_audio: Vec::new(),
+            already_optimal_code: Vec::new(),
             total_wall: Duration::from_millis(0),
         };
         let rec = build_record(&report);

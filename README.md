@@ -502,6 +502,10 @@ reinstalling squish.
 
 If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `_3`, etc. Pass `--force` to overwrite instead.
 
+## Never-grow guarantee
+
+squish never writes an output larger than its input — if encoding wouldn't help (the file is already optimal) and no `--format` conversion, resize, or codec change was requested, the encode is discarded and the output is left byte-identical to the input, reported as "skipped (already optimal)" rather than a (non-)saving. This applies with `--overwrite` too: the original is safely preserved even though the encoder writes in place. When a conversion *is* requested, growth is allowed (a tiny PNG icon converted to AVIF can legitimately grow) — `--verbose` prints a note when that happens.
+
 ## Development
 
 ```bash

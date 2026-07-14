@@ -42,6 +42,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   photos) decoded as raw upright pixels and re-encoded with no orientation
   tag, baking in the wrong visual framing. Orientation is now always read
   and applied to pixels before encoding.
+- **Never-grow guarantee.** squish could silently write an output larger
+  than its input (a size guard already existed for SVG only, see v0.3.3).
+  Now applies uniformly to images, video, audio, and code: if the encode
+  doesn't help and no `--format`/resize/codec conversion was requested, it's
+  discarded and the output is left byte-identical to the input, reported as
+  "skipped (already optimal)" in the summary and `--json` (`status:
+  "skipped"`) instead of a (non-)saving. Safe under `--overwrite` too — the
+  original is never lost even though encoders write in place. When a
+  conversion *is* requested, growth is allowed (e.g. a tiny PNG icon
+  converted to AVIF can legitimately grow), with a `--verbose` note.
 
 ## [0.7.0] - 2026-06-15
 

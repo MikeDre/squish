@@ -139,6 +139,46 @@ pub fn build(report: &RunReport) -> JsonReport {
             status: "skipped".to_string(),
         });
     }
+    for r in &report.already_optimal_images {
+        push_already_optimal(
+            &mut files,
+            "image",
+            &r.input_path,
+            &r.output_path,
+            Some(r.format_out.extension()),
+            r.input_bytes,
+        );
+    }
+    for r in &report.already_optimal_video {
+        push_already_optimal(
+            &mut files,
+            "video",
+            &r.input_path,
+            &r.output_path,
+            Some(r.format_out.extension()),
+            r.input_bytes,
+        );
+    }
+    for r in &report.already_optimal_audio {
+        push_already_optimal(
+            &mut files,
+            "audio",
+            &r.input_path,
+            &r.output_path,
+            Some(r.format_out.extension()),
+            r.input_bytes,
+        );
+    }
+    for r in &report.already_optimal_code {
+        push_already_optimal(
+            &mut files,
+            "code",
+            &r.input_path,
+            &r.output_path,
+            Some(r.format.extension()),
+            r.input_bytes,
+        );
+    }
 
     let bytes_in = report.input_bytes();
     let bytes_out = report.output_bytes();
@@ -192,6 +232,31 @@ fn push_squished(
     kt.files += 1;
     kt.bytes_in += bytes_in;
     kt.bytes_out += bytes_out;
+}
+
+/// A file the never-grow guarantee (Brief 12) discarded the encode for:
+/// output was left byte-identical to input, so `bytes_in == bytes_out` and
+/// `saving_pct` is 0. Deliberately excluded from `totals` — the totals
+/// reflect genuine squishes, matching "Squished N files" in the human
+/// summary not counting these either.
+fn push_already_optimal(
+    files: &mut Vec<FileEntry>,
+    kind: &str,
+    input: &Path,
+    output: &Path,
+    format: Option<&str>,
+    bytes: u64,
+) {
+    files.push(FileEntry {
+        input: input.display().to_string(),
+        output: Some(output.display().to_string()),
+        kind: kind.to_string(),
+        format: format.map(str::to_string),
+        bytes_in: bytes,
+        bytes_out: bytes,
+        saving_pct: 0.0,
+        status: "skipped".to_string(),
+    });
 }
 
 /// Build the report for a `--dry-run` (nothing was actually written, so

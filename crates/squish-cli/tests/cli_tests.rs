@@ -203,11 +203,12 @@ fn single_mp4_produces_squished_sibling() {
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin()
-        .arg(&input)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Squished 1 files"));
+    // Whether this tiny fixture actually shrinks under default re-encode
+    // settings varies by ffmpeg build/version (the never-grow guarantee,
+    // Brief 12, reports it as "already optimal" instead of "Squished" when
+    // it doesn't) — the thing this test actually cares about is that the
+    // run succeeds and produces a sibling output either way.
+    bin().arg(&input).assert().success();
 
     assert!(tmp.path().join("sample_squished.mp4").exists());
 }
@@ -221,12 +222,12 @@ fn mixed_batch_images_and_videos() {
     fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("b.mp4")).unwrap();
 
-    bin()
-        .arg(tmp.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("images"))
-        .stdout(predicate::str::contains("videos"));
+    // No stdout wording assertion: whether the video shows up under
+    // "Squished" or "Skipped (already optimal)" depends on whether this tiny
+    // fixture happens to shrink under this ffmpeg build (see the never-grow
+    // guarantee, Brief 12) — the sibling files existing either way is what
+    // this test actually cares about.
+    bin().arg(tmp.path()).assert().success();
 
     assert!(tmp.path().join("a_squished.png").exists());
     assert!(tmp.path().join("b_squished.mp4").exists());
@@ -273,11 +274,12 @@ fn video_in_directory_walk() {
     let tmp = TempDir::new().unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("v.mp4")).unwrap();
 
-    bin()
-        .arg(tmp.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Squished 1 files"));
+    // Whether this tiny fixture actually shrinks under default re-encode
+    // settings varies by ffmpeg build/version (the never-grow guarantee,
+    // Brief 12, reports it as "already optimal" instead of "Squished" when
+    // it doesn't) — the thing this test actually cares about is that the
+    // directory walk finds the video and produces a sibling output either way.
+    bin().arg(tmp.path()).assert().success();
 
     assert!(tmp.path().join("v_squished.mp4").exists());
 }
@@ -1607,4 +1609,117 @@ fn keep_metadata_flag_preserves_exif_default_strips_it() {
         has_exif_marker(&kept),
         "--keep-metadata should preserve EXIF"
     );
+}
+
+// ----- Never-grow guarantee -----
+
+#[test]
+fn already_optimal_file_is_skipped_byte_identical_on_second_run() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    // First pass: oxipng (--lossless, no quantization search) genuinely
+    // compresses it.
+    bin()
+        .arg(&input)
+        .arg("--lossless")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+    let once = tmp.path().join("a_squished.png");
+    assert!(once.exists());
+    let bytes_after_first_pass = fs::read(&once).unwrap();
+
+    // Second pass, re-squishing the already-optimized output: oxipng at max
+    // compression is deterministic, so a second lossless pass over its own
+    // output finds nothing further to gain — must report "skipped", not a
+    // (non-)saving, and the result must be byte-identical, not merely the
+    // same size.
+    bin()
+        .arg(&once)
+        .arg("--lossless")
+        .assert()
+        .success()
+        .code(0)
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+    let twice = tmp.path().join("a_squished_squished.png");
+    assert_eq!(fs::read(&twice).unwrap(), bytes_after_first_pass);
+}
+
+#[test]
+fn format_conversion_is_allowed_to_grow() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin().arg(&input).arg("--lossless").assert().success();
+    let optimized = tmp.path().join("a_squished.png");
+
+    // Converting an already-optimal PNG to TIFF (no compression) reliably
+    // grows it — an explicit --format conversion must be allowed to do
+    // that, not silently discarded by the never-grow guard.
+    bin()
+        .arg(&optimized)
+        .args(["--format", "tiff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    let converted = tmp.path().join("a_squished_squished.tiff");
+    let out_size = fs::metadata(&converted).unwrap().len();
+    let in_size = fs::metadata(&optimized).unwrap().len();
+    assert!(
+        out_size > in_size,
+        "expected TIFF conversion to grow the file: {in_size} -> {out_size}"
+    );
+}
+
+#[test]
+fn already_optimal_reports_skipped_status_in_json() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin().arg(&input).arg("--lossless").assert().success();
+    let optimized = tmp.path().join("a_squished.png");
+
+    let assert = bin()
+        .arg(&optimized)
+        .args(["--lossless", "--json"])
+        .assert()
+        .success();
+    let v = parse_json_stdout(&assert);
+
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["status"], "skipped");
+    assert_eq!(files[0]["kind"], "image");
+    assert_eq!(files[0]["bytes_in"], files[0]["bytes_out"]);
+    // Already-optimal skips don't count toward "squished" totals.
+    assert_eq!(v["totals"]["files"], 0);
+}
+
+#[test]
+fn overwrite_mode_already_optimal_restores_original_bytes_safely() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--lossless", "--overwrite"])
+        .assert()
+        .success();
+    let after_first = fs::read(&input).unwrap();
+
+    // Second in-place pass: the encoder overwrites `input` directly (no
+    // temp+rename for images), so if the never-grow guard didn't cache the
+    // original bytes *before* encoding, there would be nothing left to
+    // restore. Verify the file is still intact and byte-identical.
+    bin()
+        .arg(&input)
+        .args(["--lossless", "--overwrite"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+    assert_eq!(fs::read(&input).unwrap(), after_first);
 }
