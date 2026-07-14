@@ -170,6 +170,11 @@ pub enum Command {
     },
     /// Report which formats and external tools are available on this machine.
     Doctor,
+    /// Generate a shell completion script (writes to stdout).
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Subcommand, Debug)]

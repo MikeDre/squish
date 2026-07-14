@@ -23,6 +23,7 @@ squish-code = { workspace = true }
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 dirs = "5"
 humantime = "2"
 indicatif = "0.17"

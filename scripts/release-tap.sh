@@ -56,6 +56,7 @@ class Squish < Formula
 
   def install
     bin.install "squish"
+    generate_completions_from_executable(bin/"squish", "completions")
   end
 
   def caveats

@@ -99,6 +99,24 @@ GIF and HEIC support require external libraries. Install them for full format co
 
 If a dependency is missing when you need it, squish tells you exactly what to install.
 
+### Shell completions
+
+`squish completions <shell>` prints a completion script to stdout for `bash`, `zsh`, or `fish`, generated from the CLI's own flag definitions so it never drifts out of sync.
+
+```bash
+# zsh
+squish completions zsh > "${fpath[1]}/_squish"
+
+# bash (requires bash-completion)
+squish completions bash > /usr/local/etc/bash_completion.d/squish   # macOS (Homebrew)
+squish completions bash | sudo tee /etc/bash_completion.d/squish    # Linux
+
+# fish
+squish completions fish > ~/.config/fish/completions/squish.fish
+```
+
+Open a new shell (or `exec $SHELL`) afterward. The Homebrew tap installs completions automatically — see below.
+
 ## Use
 
 ### Images
@@ -356,6 +374,8 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
                              (overridable by explicit flags). Currently: web
       --safe                 Code: skip mangling and DCE (whitespace-only minification)
       --source-map           Code: emit a .map file alongside output (JS/TS/CSS only)
+
+  completions <bash|zsh|fish>  Print a shell completion script to stdout
 ```
 
 ## Config file

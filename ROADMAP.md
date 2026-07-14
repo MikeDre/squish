@@ -9,7 +9,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 
 ## CLI polish (cheap, high-value)
 
-- [ ] **Shell completions** — `squish completions <bash|zsh|fish>` via
+- [x] **Shell completions** — `squish completions <bash|zsh|fish>` via
   `clap_complete`. zsh is the priority target. Generated from the existing
   clap `Args`, so it stays in sync automatically. Ship install hints in the
   README and, where practical, have the Homebrew formula drop the zsh

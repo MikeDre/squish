@@ -12,7 +12,7 @@ mod walker;
 mod watch;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use squish_audio::{AudioFormat, AudioOptions};
 use squish_code::CodeOptions;
 use squish_core::SquishOptions;
@@ -35,6 +35,15 @@ fn real_main() -> Result<u8> {
         Some(cli::Command::FinderAction(cmd)) => return finder_action::run(cmd),
         Some(cli::Command::Config { local }) => return config_wizard::run(*local),
         Some(cli::Command::Doctor) => return doctor::run(),
+        Some(cli::Command::Completions { shell }) => {
+            clap_complete::generate(
+                *shell,
+                &mut cli::Args::command(),
+                "squish",
+                &mut std::io::stdout(),
+            );
+            return Ok(0);
+        }
         None => {}
     }
 

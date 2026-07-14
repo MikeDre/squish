@@ -786,6 +786,35 @@ fn no_direct_cargo_bin_calls_in_this_file() {
     );
 }
 
+// ----- Shell completions -----
+
+#[test]
+fn completions_zsh_prints_compdef() {
+    bin()
+        .args(["completions", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("#compdef squish"));
+}
+
+#[test]
+fn completions_bash_prints_complete_dash_f() {
+    bin()
+        .args(["completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete -F"));
+}
+
+#[test]
+fn completions_fish_prints_fish_function() {
+    bin()
+        .args(["completions", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("function __fish_squish"));
+}
+
 #[test]
 fn target_size_flag_fits_image_under_budget() {
     let tmp = TempDir::new().unwrap();
