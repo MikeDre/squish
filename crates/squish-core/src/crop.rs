@@ -38,8 +38,9 @@ impl CropSpec {
     /// Parse a `--crop` value: `W:H` (aspect, e.g. `16:9`) or `WxH+X+Y`
     /// (exact rect, e.g. `800x600+120+40`).
     pub fn parse(s: &str) -> Result<CropSpec, String> {
-        let err =
-            || format!("expected an aspect ratio like 16:9 or a rect like 800x600+120+40, got \"{s}\"");
+        let err = || {
+            format!("expected an aspect ratio like 16:9 or a rect like 800x600+120+40, got \"{s}\"")
+        };
         if let Some((w, h)) = s.split_once(':') {
             let w: u32 = w.parse().map_err(|_| err())?;
             let h: u32 = h.parse().map_err(|_| err())?;
@@ -75,6 +76,9 @@ impl CropSpec {
         }
         match *self {
             CropSpec::Aspect { w, h } => {
+                if w == 0 || h == 0 {
+                    return Err(format!("aspect ratio sides must be non-zero, got {w}:{h}"));
+                }
                 // Largest w:h rect inside img_w × img_h, via u64 cross-products
                 // so there is no float drift.
                 let (rw, rh) = (w as u64, h as u64);
@@ -155,22 +159,47 @@ mod tests {
 
     #[test]
     fn parses_aspect_ratio() {
-        assert_eq!(CropSpec::parse("16:9").unwrap(), CropSpec::Aspect { w: 16, h: 9 });
-        assert_eq!(CropSpec::parse("1:1").unwrap(), CropSpec::Aspect { w: 1, h: 1 });
+        assert_eq!(
+            CropSpec::parse("16:9").unwrap(),
+            CropSpec::Aspect { w: 16, h: 9 }
+        );
+        assert_eq!(
+            CropSpec::parse("1:1").unwrap(),
+            CropSpec::Aspect { w: 1, h: 1 }
+        );
     }
 
     #[test]
     fn parses_exact_rect() {
         assert_eq!(
             CropSpec::parse("800x600+120+40").unwrap(),
-            CropSpec::Exact { w: 800, h: 600, x: 120, y: 40 }
+            CropSpec::Exact {
+                w: 800,
+                h: 600,
+                x: 120,
+                y: 40
+            }
         );
     }
 
     #[test]
     fn rejects_malformed_specs() {
-        for bad in ["", "16", "16:", ":9", "0:9", "16:0", "800x600", "800x600+5",
-                    "x600+1+1", "800x+1+1", "0x600+1+1", "800x0+1+1", "16:9:4", "a:b"] {
+        for bad in [
+            "",
+            "16",
+            "16:",
+            ":9",
+            "0:9",
+            "16:0",
+            "800x600",
+            "800x600+5",
+            "x600+1+1",
+            "800x+1+1",
+            "0x600+1+1",
+            "800x0+1+1",
+            "16:9:4",
+            "a:b",
+        ] {
             assert!(CropSpec::parse(bad).is_err(), "should reject {bad:?}");
         }
     }
@@ -188,26 +217,34 @@ mod tests {
     #[test]
     fn aspect_square_on_landscape_crops_width() {
         let r = CropSpec::Aspect { w: 1, h: 1 }
-            .resolve(Gravity::Center, 640, 480).unwrap().unwrap();
+            .resolve(Gravity::Center, 640, 480)
+            .unwrap()
+            .unwrap();
         assert_eq!((r.x, r.y, r.w, r.h), (80, 0, 480, 480));
     }
 
     #[test]
     fn aspect_16_9_on_4_3_crops_height() {
         let r = CropSpec::Aspect { w: 16, h: 9 }
-            .resolve(Gravity::Center, 640, 480).unwrap().unwrap();
+            .resolve(Gravity::Center, 640, 480)
+            .unwrap()
+            .unwrap();
         assert_eq!((r.x, r.y, r.w, r.h), (0, 60, 640, 360));
     }
 
     #[test]
     fn aspect_matching_image_is_noop() {
         assert_eq!(
-            CropSpec::Aspect { w: 4, h: 3 }.resolve(Gravity::Center, 640, 480).unwrap(),
+            CropSpec::Aspect { w: 4, h: 3 }
+                .resolve(Gravity::Center, 640, 480)
+                .unwrap(),
             None
         );
         // Equivalent ratio, different terms
         assert_eq!(
-            CropSpec::Aspect { w: 8, h: 6 }.resolve(Gravity::Center, 640, 480).unwrap(),
+            CropSpec::Aspect { w: 8, h: 6 }
+                .resolve(Gravity::Center, 640, 480)
+                .unwrap(),
             None
         );
     }
@@ -221,40 +258,91 @@ mod tests {
         assert_eq!((at(Gravity::Center).x, at(Gravity::Center).y), (80, 0));
         // Vertical slack: 16:9 on 640x480 → 640x360, slack_y=120
         let tall = CropSpec::Aspect { w: 16, h: 9 };
-        assert_eq!(tall.resolve(Gravity::North, 640, 480).unwrap().unwrap().y, 0);
-        assert_eq!(tall.resolve(Gravity::South, 640, 480).unwrap().unwrap().y, 120);
-        assert_eq!(tall.resolve(Gravity::SouthEast, 640, 480).unwrap().unwrap().y, 120);
+        assert_eq!(
+            tall.resolve(Gravity::North, 640, 480).unwrap().unwrap().y,
+            0
+        );
+        assert_eq!(
+            tall.resolve(Gravity::South, 640, 480).unwrap().unwrap().y,
+            120
+        );
+        assert_eq!(
+            tall.resolve(Gravity::SouthEast, 640, 480)
+                .unwrap()
+                .unwrap()
+                .y,
+            120
+        );
+    }
+
+    #[test]
+    fn aspect_zero_zero_is_error_not_panic() {
+        assert!(CropSpec::Aspect { w: 0, h: 0 }
+            .resolve(Gravity::Center, 640, 480)
+            .is_err());
     }
 
     // --- exact resolution ---
 
     #[test]
     fn exact_rect_passes_through_in_bounds() {
-        let r = CropSpec::Exact { w: 300, h: 200, x: 10, y: 20 }
-            .resolve(Gravity::Center, 640, 480).unwrap().unwrap();
+        let r = CropSpec::Exact {
+            w: 300,
+            h: 200,
+            x: 10,
+            y: 20,
+        }
+        .resolve(Gravity::Center, 640, 480)
+        .unwrap()
+        .unwrap();
         assert_eq!((r.x, r.y, r.w, r.h), (10, 20, 300, 200));
     }
 
     #[test]
     fn exact_rect_clamps_overhang() {
-        let r = CropSpec::Exact { w: 9999, h: 9999, x: 600, y: 400 }
-            .resolve(Gravity::Center, 640, 480).unwrap().unwrap();
+        let r = CropSpec::Exact {
+            w: 9999,
+            h: 9999,
+            x: 600,
+            y: 400,
+        }
+        .resolve(Gravity::Center, 640, 480)
+        .unwrap()
+        .unwrap();
         assert_eq!((r.x, r.y, r.w, r.h), (600, 400, 40, 80));
     }
 
     #[test]
     fn exact_rect_outside_image_is_error() {
-        assert!(CropSpec::Exact { w: 10, h: 10, x: 640, y: 0 }
-            .resolve(Gravity::Center, 640, 480).is_err());
-        assert!(CropSpec::Exact { w: 10, h: 10, x: 0, y: 480 }
-            .resolve(Gravity::Center, 640, 480).is_err());
+        assert!(CropSpec::Exact {
+            w: 10,
+            h: 10,
+            x: 640,
+            y: 0
+        }
+        .resolve(Gravity::Center, 640, 480)
+        .is_err());
+        assert!(CropSpec::Exact {
+            w: 10,
+            h: 10,
+            x: 0,
+            y: 480
+        }
+        .resolve(Gravity::Center, 640, 480)
+        .is_err());
     }
 
     #[test]
     fn exact_full_image_is_noop() {
         assert_eq!(
-            CropSpec::Exact { w: 640, h: 480, x: 0, y: 0 }
-                .resolve(Gravity::Center, 640, 480).unwrap(),
+            CropSpec::Exact {
+                w: 640,
+                h: 480,
+                x: 0,
+                y: 0
+            }
+            .resolve(Gravity::Center, 640, 480)
+            .unwrap(),
             None
         );
     }
@@ -262,7 +350,9 @@ mod tests {
     #[test]
     fn zero_sized_image_is_noop() {
         assert_eq!(
-            CropSpec::Aspect { w: 1, h: 1 }.resolve(Gravity::Center, 0, 480).unwrap(),
+            CropSpec::Aspect { w: 1, h: 1 }
+                .resolve(Gravity::Center, 0, 480)
+                .unwrap(),
             None
         );
     }
