@@ -21,6 +21,7 @@ pub struct RunConfig {
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
+    pub json: bool,
     pub overwrite: bool,
     pub kinds: KindFilter,
     /// When true (a preset is active), skip the "--format specifies X but no X
@@ -54,7 +55,6 @@ impl RunReport {
         let cod: u64 = self.code_results.iter().map(|r| r.output_bytes).sum();
         img + vid + aud + cod
     }
-    #[allow(dead_code)]
     pub fn total_files(&self) -> usize {
         self.results.len()
             + self.video_results.len()
@@ -321,20 +321,31 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     }
 
     if cfg.dry_run {
-        for p in &image_files {
-            println!("{}", dry_run_action(cfg.overwrite, "image", p));
-        }
-        for p in &video_files {
-            println!("{}", dry_run_action(cfg.overwrite, "video", p));
-        }
-        for p in &audio_files {
-            println!("{}", dry_run_action(cfg.overwrite, "audio", p));
-        }
-        for p in &code_files {
-            println!("{}", dry_run_action(cfg.overwrite, "code", p));
-        }
-        for p in &skipped_unknown {
-            println!("would skip (unrecognized): {}", p.display());
+        if cfg.json {
+            let report = crate::json_report::build_dry_run(
+                &image_files,
+                &video_files,
+                &audio_files,
+                &code_files,
+                &skipped_unknown,
+            );
+            crate::json_report::print(&report);
+        } else {
+            for p in &image_files {
+                println!("{}", dry_run_action(cfg.overwrite, "image", p));
+            }
+            for p in &video_files {
+                println!("{}", dry_run_action(cfg.overwrite, "video", p));
+            }
+            for p in &audio_files {
+                println!("{}", dry_run_action(cfg.overwrite, "audio", p));
+            }
+            for p in &code_files {
+                println!("{}", dry_run_action(cfg.overwrite, "code", p));
+            }
+            for p in &skipped_unknown {
+                println!("would skip (unrecognized): {}", p.display());
+            }
         }
         return Ok(RunReport {
             results: Vec::new(),
@@ -525,7 +536,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         total_wall: start.elapsed(),
     };
 
-    if !cfg.quiet {
+    if cfg.json {
+        crate::json_report::print(&crate::json_report::build(&report));
+    } else if !cfg.quiet {
         print_summary(&report);
     }
 
@@ -533,7 +546,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
 }
 
 fn build_progress_bar(total: u64, cfg: &RunConfig) -> Option<ProgressBar> {
-    if cfg.quiet || cfg.verbose || total == 0 {
+    if cfg.quiet || cfg.verbose || cfg.json || total == 0 {
         return None;
     }
     let pb = ProgressBar::with_draw_target(Some(total), ProgressDrawTarget::stderr());

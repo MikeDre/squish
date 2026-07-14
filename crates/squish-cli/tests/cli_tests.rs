@@ -1372,3 +1372,92 @@ fn preset_bogus_value_errors() {
         .code(2)
         .stderr(predicate::str::contains("web"));
 }
+
+// ----- --json output mode -----
+
+/// Parses stdout as JSON, asserting it is *only* JSON (no leading/trailing
+/// human text mixed in) from the first byte to the last.
+fn parse_json_stdout(assert: &assert_cmd::assert::Assert) -> serde_json::Value {
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    serde_json::from_str(stdout.trim_end()).unwrap_or_else(|e| {
+        panic!("stdout is not pure JSON ({e}); got:\n{stdout}");
+    })
+}
+
+#[test]
+fn json_reports_schema_fields_and_totals() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::copy(core_fixture("sample.jpg"), tmp.path().join("b.jpg")).unwrap();
+
+    let assert = bin().arg(tmp.path()).arg("--json").assert().success();
+    let v = parse_json_stdout(&assert);
+
+    assert_eq!(v["version"], 1);
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    for f in files {
+        assert_eq!(f["status"], "squished");
+        assert_eq!(f["kind"], "image");
+        assert!(f["bytes_in"].as_u64().unwrap() > 0);
+        assert!(f["bytes_out"].as_u64().unwrap() > 0);
+        assert!(f["output"].is_string());
+        assert!(f["format"].is_string());
+    }
+
+    let bytes_in: u64 = files.iter().map(|f| f["bytes_in"].as_u64().unwrap()).sum();
+    let bytes_out: u64 = files.iter().map(|f| f["bytes_out"].as_u64().unwrap()).sum();
+    assert_eq!(v["totals"]["files"], 2);
+    assert_eq!(v["totals"]["bytes_in"], bytes_in);
+    assert_eq!(v["totals"]["bytes_out"], bytes_out);
+    assert_eq!(v["totals"]["by_kind"]["image"]["files"], 2);
+    assert!(v["errors"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn json_dry_run_lists_planned_files_without_writing() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+
+    let assert = bin()
+        .arg(tmp.path())
+        .args(["--dry-run", "--json"])
+        .assert()
+        .success();
+    let v = parse_json_stdout(&assert);
+
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["status"], "skipped");
+    assert_eq!(files[0]["kind"], "image");
+    assert!(files[0]["output"].is_null());
+    assert!(!tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn json_batch_with_one_failing_file_reports_error_and_exit_code() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("ok.png")).unwrap();
+    fs::write(tmp.path().join("corrupt.png"), b"not actually a PNG").unwrap();
+
+    let assert = bin().arg(tmp.path()).arg("--json").assert().code(1);
+    let v = parse_json_stdout(&assert);
+
+    assert_eq!(v["files"].as_array().unwrap().len(), 1);
+    let errors = v["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0]["input"].as_str().unwrap().contains("corrupt.png"));
+    assert!(!errors[0]["message"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn json_conflicts_with_verbose_quiet_watch_stats() {
+    for flag in ["--verbose", "--quiet", "--watch", "--stats"] {
+        bin()
+            .arg(core_fixture("sample.png"))
+            .args(["--json", flag])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+}

@@ -251,6 +251,22 @@ Images and code minification work out of the box. Video and audio need
 `ffmpeg`, and GIF needs `gifsicle`; `doctor` shows what's present (with
 versions) and how to install anything missing. It always exits 0.
 
+### Scripting
+
+`--json` prints a single machine-readable report to stdout instead of the human summary — nothing else goes to stdout, so it's safe to pipe straight into `jq` or parse in CI:
+
+```bash
+squish photos/ -r --json | jq '.totals'
+# { "files": 8, "bytes_in": 12345678, "bytes_out": 3456789, "saving_pct": 72.0, "by_kind": {...} }
+
+squish photos/ -r --json | jq -r '.files[] | select(.status == "squished") | "\(.input) -> \(.output)"'
+
+# Exit code is unaffected by --json: 0 clean, 1 if any file errored.
+squish photos/ -r --json > report.json || jq '.errors' report.json
+```
+
+Works with `--dry-run` too (every planned file reports `status: "skipped"` with no `output`, since nothing is written).
+
 ## Formats
 
 ### Images
@@ -373,6 +389,9 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
                              separated: image, video, audio, code (default: all)
       --stats                Print usage report (this month + all-time) and exit
       --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
+      --json                 Print a single machine-readable JSON report to stdout
+                             instead of the human summary. Conflicts with
+                             --verbose/--quiet/--watch/--stats; works with --dry-run
   -j, --jobs <N>             Parallelism (default: num CPUs)
   -v, --verbose              Per-file output
       --quiet                Errors only

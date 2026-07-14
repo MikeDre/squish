@@ -21,7 +21,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
   `squish-cli` mapping the release artifact naming
   (`squish-vX.Y.Z-<target>.tar.gz`) so `cargo binstall squish-media-cli`
   fetches a prebuilt binary instead of compiling.
-- [ ] **`--json` output mode** — machine-readable run summary (per-file and
+- [x] **`--json` output mode** — machine-readable run summary (per-file and
   totals: bytes in/out, format, saving, errors). Pairs with the GitHub Action
   so workflows can post a "saved X MB" PR comment, and makes squish
   scriptable.

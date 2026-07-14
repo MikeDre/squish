@@ -146,6 +146,13 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["dry_run", "stats"])]
     pub watch: bool,
 
+    /// Print a single machine-readable JSON report to stdout instead of the
+    /// normal human summary. Suppresses stdout progress/summary output
+    /// (warnings and per-file logs, if any, still go to stderr). Works with
+    /// --dry-run. Exit code is unaffected.
+    #[arg(long, conflicts_with_all = ["verbose", "quiet", "watch", "stats"])]
+    pub json: bool,
+
     /// Restrict the run to these file kinds, comma-separated.
     /// Kinds: image, video, audio, code. Default: all kinds.
     #[arg(long, value_name = "KINDS")]

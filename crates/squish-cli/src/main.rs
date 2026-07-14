@@ -4,6 +4,7 @@ mod config_wizard;
 mod doctor;
 mod finder_action;
 mod format_request;
+mod json_report;
 mod preset;
 mod runner;
 mod stats;
@@ -253,6 +254,7 @@ fn real_main() -> Result<u8> {
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
+        json: args.json,
         overwrite: args.overwrite,
         kinds,
         skip_format_kind_check: args.preset.is_some(),

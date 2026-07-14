@@ -15,6 +15,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tap.
 - **`cargo binstall` support.** `cargo binstall squish-media-cli` fetches the
   prebuilt release binary for macOS/Linux instead of compiling from source.
+- **`--json` output mode.** Prints a single machine-readable report (per-file
+  bytes in/out, format, saving %, status; totals by kind; errors) to stdout
+  instead of the human summary — nothing else touches stdout, so it's safe to
+  pipe into `jq` or parse in CI. Works with `--dry-run`. Conflicts with
+  `--verbose`/`--quiet`/`--watch`/`--stats`. Exit codes unchanged.
 
 ## [0.7.0] - 2026-06-15
 
