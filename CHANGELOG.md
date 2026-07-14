@@ -30,6 +30,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--watch` too. Switched the directory walker from `walkdir` to the `ignore`
   crate.
 
+### Fixed
+- **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG
+  (the overwhelming majority of real-world EXIF-orientation use — camera
+  photos) decoded as raw upright pixels and re-encoded with no orientation
+  tag, baking in the wrong visual framing. Orientation is now always read
+  and applied to pixels before encoding.
+
 ## [0.7.0] - 2026-06-15
 
 ### Added

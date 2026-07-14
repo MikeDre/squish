@@ -1,18 +1,33 @@
 use crate::error::SquishError;
 use crate::options::SquishOptions;
+use image::metadata::Orientation;
 use image::{DynamicImage, GenericImageView};
+use mozjpeg::Marker;
 use std::path::Path;
+
+/// JPEG APP1 markers carrying EXIF are prefixed with this literal before the
+/// TIFF-structured payload that `image::metadata::Orientation` parses.
+const EXIF_PREFIX: &[u8] = b"Exif\0\0";
 
 /// Compress a JPEG. Uses mozjpeg — its default settings are already a 15-25%
 /// improvement over libjpeg-turbo at the same visual quality.
+///
+/// EXIF orientation is always applied to the pixels before re-encoding: a
+/// rotated/flipped source (the overwhelming majority of real-world EXIF
+/// orientation use is camera photos) must never come out visually wrong just
+/// because nothing reads or preserves its orientation tag. EXIF/ICC
+/// themselves are not yet preserved in the output at all — that's a
+/// separate, following change.
 pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u8>, SquishError> {
     let quality = opts.effective_quality(crate::format::Format::Jpeg);
 
-    // Decode the input to RGB with mozjpeg's decoder.
-    let decomp = mozjpeg::Decompress::new_mem(input).map_err(|e| SquishError::DecodeFailed {
-        path: path.to_path_buf(),
-        source: Box::new(e),
-    })?;
+    let decomp = mozjpeg::Decompress::with_markers(&[Marker::APP(1)])
+        .from_mem(input)
+        .map_err(|e| SquishError::DecodeFailed {
+            path: path.to_path_buf(),
+            source: Box::new(e),
+        })?;
+    let orientation = read_orientation(&decomp);
 
     let mut started = decomp.rgb().map_err(|e| SquishError::DecodeFailed {
         path: path.to_path_buf(),
@@ -32,7 +47,34 @@ pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u
         source: Box::new(e),
     })?;
 
+    let (width, height, pixels) = if orientation == Orientation::NoTransforms {
+        (width, height, pixels)
+    } else {
+        let mut img = DynamicImage::ImageRgb8(
+            image::RgbImage::from_raw(width as u32, height as u32, pixels).ok_or_else(|| {
+                SquishError::DecodeFailed {
+                    path: path.to_path_buf(),
+                    source: "decoded JPEG pixel buffer size mismatch".into(),
+                }
+            })?,
+        );
+        img.apply_orientation(orientation);
+        let (w, h) = img.dimensions();
+        (w as usize, h as usize, img.into_rgb8().into_raw())
+    };
+
     encode_rgb_pixels(&pixels, width, height, quality, path)
+}
+
+/// Reads the EXIF orientation tag from a `Decompress` constructed with
+/// `with_markers(&[Marker::APP(1)])`. Defaults to `NoTransforms` if there's
+/// no EXIF, or it doesn't parse.
+fn read_orientation(decomp: &mozjpeg::Decompress<&[u8]>) -> Orientation {
+    decomp
+        .markers()
+        .find(|m| m.marker == Marker::APP(1) && m.data.starts_with(EXIF_PREFIX))
+        .and_then(|m| Orientation::from_exif_chunk(&m.data[EXIF_PREFIX.len()..]))
+        .unwrap_or(Orientation::NoTransforms)
 }
 
 /// Encode an already-decoded raster as JPEG. Used for cross-format conversions.
