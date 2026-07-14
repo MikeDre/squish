@@ -122,13 +122,33 @@ pub fn squish_file(input: &Path, opts: &SquishOptions) -> Result<SquishResult, S
     })
 }
 
+/// Apply the requested crop (if any) to a decoded image. A resolved no-op
+/// returns the image unchanged; a rect outside the image is `InvalidCrop`.
+fn apply_crop(
+    img: DynamicImage,
+    opts: &SquishOptions,
+    path: &Path,
+) -> Result<DynamicImage, SquishError> {
+    let Some(spec) = opts.crop else {
+        return Ok(img);
+    };
+    match spec.resolve(opts.gravity, img.width(), img.height()) {
+        Ok(Some(r)) => Ok(img.crop_imm(r.x, r.y, r.w, r.h)),
+        Ok(None) => Ok(img),
+        Err(reason) => Err(SquishError::InvalidCrop {
+            path: path.to_path_buf(),
+            reason,
+        }),
+    }
+}
+
 /// One full encode pass at the quality carried in `opts`.
 ///
-/// If resize is requested and format supports it, decode → resize → encode.
-/// SVG is skipped (vector). Animated WebP is also skipped — the webp codec
-/// cannot resize animations; webp::compress emits a warning and passes through.
-/// For same-format paths that normally skip decode, resize forces the
-/// decode → resize → encode path.
+/// If crop or resize is requested and format supports it, decode → crop →
+/// resize → encode. SVG is skipped (vector). Animated WebP is also skipped —
+/// the webp codec cannot resize animations; webp::compress emits a warning
+/// and passes through. For same-format paths that normally skip decode,
+/// resize forces the decode → resize → encode path.
 fn encode_once(
     format_in: Format,
     format_out: Format,
@@ -137,15 +157,43 @@ fn encode_once(
     path: &Path,
     is_animated_webp: bool,
 ) -> Result<(Vec<u8>, Vec<String>), SquishError> {
-    if opts.needs_resize() && format_in != Format::Svg && !is_animated_webp {
+    // Crop is raster-only: SVG (vector) and animated WebP compress unchanged
+    // with a warning. GIF→GIF crops natively via gifsicle inside formats::gif
+    // so animation frames survive (unless a resize forces the decode path,
+    // which flattens animation exactly as resize alone does today).
+    let mut crop = opts.crop;
+    let mut warnings = Vec::new();
+    if crop.is_some() && (format_in == Format::Svg || is_animated_webp) {
+        let what = if is_animated_webp {
+            "animated WebP"
+        } else {
+            "SVG"
+        };
+        warnings.push(format!(
+            "{}: --crop is not supported for {what}; compressed without cropping",
+            path.display()
+        ));
+        crop = None;
+    }
+    let gif_native_crop =
+        format_in == Format::Gif && format_out == Format::Gif && !opts.needs_resize();
+
+    if (opts.needs_resize() || (crop.is_some() && !gif_native_crop))
+        && format_in != Format::Svg
+        && !is_animated_webp
+    {
         let mut img = decode_to_dynamic_image(format_in, input_bytes, path)?;
+        img = apply_crop(img, opts, path)?;
         if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
             img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
         }
         let bytes = dispatch_encode_raster(format_out, &img, opts, path)?;
-        Ok((bytes, Vec::new()))
+        Ok((bytes, warnings))
     } else {
-        dispatch_compress_with_conversion(format_in, format_out, input_bytes, opts, path)
+        let (bytes, mut all) =
+            dispatch_compress_with_conversion(format_in, format_out, input_bytes, opts, path)?;
+        all.extend(warnings);
+        Ok((bytes, all))
     }
 }
 
@@ -179,7 +227,7 @@ fn compress_to_visually_lossless(
     is_animated_webp: bool,
 ) -> Result<(Vec<u8>, Vec<String>), SquishError> {
     let src_rgb = match decode_to_dynamic_image(format_in, input_bytes, path) {
-        Ok(img) => img.to_rgb8(),
+        Ok(img) => apply_crop(img, opts, path)?.to_rgb8(),
         Err(_) => {
             return encode_once(
                 format_in,
