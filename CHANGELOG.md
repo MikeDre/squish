@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--crop`.** Crop images while compressing: an aspect ratio (`--crop 16:9`,
+  `--crop 1:1` — largest fit, anchored by `--gravity`, default centre) or an
+  exact pixel rect (`--crop 800x600+120+40`). Applied before
+  `--max-width`/`--max-height`; composes with `--format`, `--quality`, and
+  `--target-size`. GIF crops run through gifsicle and preserve animation. SVG
+  and animated WebP compress unchanged with a warning. Deliberately not a
+  `squish.toml` key.
 - **`--quality auto` for video.** Extends perceptual auto-quality to video:
   binary-searches the same 1–100 quality dial images use for the lowest CRF
   whose output stays visually lossless, measured via VMAF (threshold 95) on

@@ -151,6 +151,15 @@ squish photos/ -r --max-width 2000
 # Fit within a box
 squish hero.jpg --max-width 1920 --max-height 1080
 
+# Crop to a preset aspect ratio (largest centred fit), then compress
+squish hero.jpg --crop 16:9
+
+# Square-crop a whole folder, anchored to the top of each image
+squish avatars/ -r --crop 1:1 --gravity north
+
+# Crop an exact pixel region: WxH+X+Y
+squish scan.png --crop 800x600+120+40
+
 # Compress to a size budget (highest quality that fits)
 squish hero.jpg --target-size 500k
 
@@ -375,6 +384,15 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
+      --crop <SPEC>          Crop images before compressing (applied before
+                             max-width/height). Aspect ratio like 16:9 or 1:1
+                             (largest fit, anchored by --gravity), or an exact
+                             pixel rect WxH+X+Y, e.g. 800x600+120+40. Images
+                             only; GIF crops preserve animation. Not read from
+                             squish.toml
+      --gravity <POS>        Anchor for an aspect-ratio --crop: center
+                             (default), north, south, east, west, northwest,
+                             northeast, southwest, southeast
       --target-size <SIZE>   Per-file output size budget, e.g. 500k, 1.5M, 2g (decimal
                              units). Images pick the highest quality that fits; video/
                              audio compute a bitrate from the input's duration. Conflicts
