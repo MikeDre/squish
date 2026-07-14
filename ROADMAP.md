@@ -28,7 +28,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 
 ## Maintenance & hygiene
 
-- [ ] **Supply-chain CI** — add `cargo-audit` (RUSTSEC advisories) and
+- [x] **Supply-chain CI** — add `cargo-audit` (RUSTSEC advisories) and
   `cargo-deny` (licences + bans + duplicate versions) as a CI job.
 - [x] **Dependabot** — `.github/dependabot.yml` for both `cargo` and
   `github-actions` ecosystems, so dependency and Action-version bumps arrive
