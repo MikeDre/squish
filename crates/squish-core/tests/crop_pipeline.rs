@@ -78,6 +78,24 @@ fn crop_composes_with_format_conversion() {
 }
 
 #[test]
+fn crop_composes_with_target_size() {
+    // 640x480 → crop 1:1 → 480x480, then quality search must fit the budget.
+    let (_tmp, input) = copy_fixture("sample.jpg");
+    let opts = SquishOptions {
+        crop: Some(CropSpec::Aspect { w: 1, h: 1 }),
+        target_size: Some(12_000),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(image::image_dimensions(&r.output_path).unwrap(), (480, 480));
+    assert!(
+        r.output_bytes <= 12_000,
+        "output {} exceeds target 12000",
+        r.output_bytes
+    );
+}
+
+#[test]
 fn gravity_west_keeps_left_content() {
     // Left half red, right half blue; 1:1 west crop must be all red.
     let tmp = TempDir::new().unwrap();
