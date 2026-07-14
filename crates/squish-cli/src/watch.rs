@@ -8,6 +8,7 @@
 //!    is swallowed once (covers `--overwrite`, where output == input).
 
 use crate::runner::{self, RunConfig};
+use crate::walker::{self, ExcludeOptions};
 use anyhow::Result;
 use notify::RecursiveMode;
 use notify_debouncer_mini::new_debouncer;
@@ -47,15 +48,31 @@ pub fn is_squish_output(path: &Path, suffix: &str) -> bool {
 
 /// Decide whether a watch event for `path` should trigger a squish.
 /// `written` is the set of paths squish itself produced; a hit consumes the
-/// entry (skip once, react to later genuine edits).
-pub fn should_process(path: &Path, suffix: &str, written: &mut HashSet<PathBuf>) -> bool {
+/// entry (skip once, react to later genuine edits). `roots` are the
+/// user-supplied watch paths, used to root `--exclude` glob matching the
+/// same way the initial directory walk does (see `walker::is_excluded`).
+pub fn should_process(
+    path: &Path,
+    suffix: &str,
+    written: &mut HashSet<PathBuf>,
+    roots: &[PathBuf],
+    excludes: &ExcludeOptions,
+) -> bool {
     if written.remove(path) {
         return false;
     }
     if is_squish_output(path, suffix) {
         return false;
     }
-    path.is_file()
+    if !path.is_file() {
+        return false;
+    }
+    let root: &Path = roots
+        .iter()
+        .map(PathBuf::as_path)
+        .find(|r| path.starts_with(r))
+        .unwrap_or_else(|| roots.first().map(PathBuf::as_path).unwrap_or(path));
+    !walker::is_excluded(path, root, excludes)
 }
 
 /// Run an initial pass over `paths`, then watch them forever, squishing
@@ -65,6 +82,7 @@ pub fn run_watch(
     cfg: &RunConfig,
     recursive: bool,
     no_stats: bool,
+    excludes: &ExcludeOptions,
 ) -> Result<()> {
     let suffix = cfg
         .opts
@@ -74,7 +92,7 @@ pub fn run_watch(
     let mut written: HashSet<PathBuf> = HashSet::new();
 
     // Initial pass over whatever already exists.
-    let worklist = crate::walker::collect_worklist(paths, recursive);
+    let worklist = walker::collect_worklist(paths, recursive, excludes);
     if !worklist.is_empty() {
         let report = runner::run(&worklist, cfg)?;
         crate::stats::append_batch(&report, cfg.dry_run, no_stats);
@@ -106,7 +124,7 @@ pub fn run_watch(
         let batch: Vec<PathBuf> = events
             .into_iter()
             .map(|e| e.path)
-            .filter(|p| should_process(p, &suffix, &mut written))
+            .filter(|p| should_process(p, &suffix, &mut written, paths, excludes))
             .collect();
         if batch.is_empty() {
             continue;
@@ -179,12 +197,26 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let file = tmp.path().join("dog.png");
         std::fs::write(&file, b"x").unwrap();
+        let roots = [tmp.path().to_path_buf()];
+        let excludes = ExcludeOptions::default();
 
         written.insert(file.clone());
         // First event after our own write: swallowed, entry consumed.
-        assert!(!should_process(&file, "squished", &mut written));
+        assert!(!should_process(
+            &file,
+            "squished",
+            &mut written,
+            &roots,
+            &excludes
+        ));
         // Next event is a genuine edit: processed.
-        assert!(should_process(&file, "squished", &mut written));
+        assert!(should_process(
+            &file,
+            "squished",
+            &mut written,
+            &roots,
+            &excludes
+        ));
     }
 
     #[test]
@@ -193,11 +225,25 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let out = tmp.path().join("dog_squished.png");
         std::fs::write(&out, b"x").unwrap();
-        assert!(!should_process(&out, "squished", &mut written));
+        let roots = [tmp.path().to_path_buf()];
+        let excludes = ExcludeOptions::default();
+        assert!(!should_process(
+            &out,
+            "squished",
+            &mut written,
+            &roots,
+            &excludes
+        ));
 
         // Deleted/missing paths produce events too; never process them.
         let gone = tmp.path().join("gone.png");
-        assert!(!should_process(&gone, "squished", &mut written));
+        assert!(!should_process(
+            &gone,
+            "squished",
+            &mut written,
+            &roots,
+            &excludes
+        ));
     }
 
     #[test]
@@ -206,6 +252,14 @@ mod tests {
         let tmp = tempfile::TempDir::new().unwrap();
         let file = tmp.path().join("dog.png");
         std::fs::write(&file, b"x").unwrap();
-        assert!(should_process(&file, "squished", &mut written));
+        let roots = [tmp.path().to_path_buf()];
+        let excludes = ExcludeOptions::default();
+        assert!(should_process(
+            &file,
+            "squished",
+            &mut written,
+            &roots,
+            &excludes
+        ));
     }
 }

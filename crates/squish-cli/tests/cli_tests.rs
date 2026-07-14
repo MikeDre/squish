@@ -1461,3 +1461,117 @@ fn json_conflicts_with_verbose_quiet_watch_stats() {
             .stderr(predicate::str::contains("cannot be used with"));
     }
 }
+
+// ----- --exclude / --gitignore / --no-default-excludes -----
+
+#[test]
+fn exclude_glob_skips_matching_files_in_a_directory_walk() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::create_dir(tmp.path().join("vendor")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("vendor/b.png")).unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--exclude", "vendor/**"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(!tmp.path().join("vendor/b_squished.png").exists());
+}
+
+#[test]
+fn explicit_file_argument_is_never_excluded() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--exclude", "*.png"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn default_excludes_prune_git_node_modules_target() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    for dir in [".git", "node_modules", "target"] {
+        fs::create_dir(tmp.path().join(dir)).unwrap();
+        fs::copy(
+            core_fixture("sample.png"),
+            tmp.path().join(dir).join("b.png"),
+        )
+        .unwrap();
+    }
+
+    bin()
+        .arg(tmp.path())
+        .arg("-r")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+}
+
+#[test]
+fn no_default_excludes_flag_walks_into_node_modules() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir(tmp.path().join("node_modules")).unwrap();
+    fs::copy(
+        core_fixture("sample.png"),
+        tmp.path().join("node_modules/a.png"),
+    )
+    .unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--no-default-excludes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("node_modules/a_squished.png").exists());
+}
+
+#[test]
+fn gitignore_flag_respects_dotgitignore_file() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join(".gitignore"), "ignored.png\n").unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("ignored.png")).unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--gitignore"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(!tmp.path().join("ignored_squished.png").exists());
+}
+
+#[test]
+fn exclude_config_key_supplies_default() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(
+        tmp.path().join("squish.toml"),
+        "exclude = [\"vendor/**\"]\n",
+    )
+    .unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::create_dir(tmp.path().join("vendor")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("vendor/b.png")).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .args([".", "-r"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+}

@@ -139,7 +139,12 @@ fn real_main() -> Result<u8> {
     // (None when auto, so the codec default applies).
     let av_quality = image_quality;
 
-    let worklist = walker::collect_worklist(&args.paths, args.recursive);
+    let exclude_opts = walker::ExcludeOptions {
+        globs: args.exclude.clone(),
+        gitignore: args.gitignore,
+        no_default_excludes: args.no_default_excludes,
+    };
+    let worklist = walker::collect_worklist(&args.paths, args.recursive, &exclude_opts);
 
     // Classify worklist to determine which kinds are present (for codec validation).
     let mut has_video = false;
@@ -260,7 +265,13 @@ fn real_main() -> Result<u8> {
         skip_format_kind_check: args.preset.is_some(),
     };
     if args.watch {
-        watch::run_watch(&args.paths, &cfg, args.recursive, args.no_stats)?;
+        watch::run_watch(
+            &args.paths,
+            &cfg,
+            args.recursive,
+            args.no_stats,
+            &exclude_opts,
+        )?;
         return Ok(0);
     }
 
@@ -340,6 +351,9 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
     }
     if args.max_height.is_none() {
         args.max_height = cfg.max_height;
+    }
+    if args.exclude.is_empty() {
+        args.exclude = cfg.exclude.clone().unwrap_or_default();
     }
     if !args.strip_tags {
         args.strip_tags = cfg.audio.strip_tags.unwrap_or(false);

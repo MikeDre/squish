@@ -20,6 +20,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of the human summary — nothing else touches stdout, so it's safe to
   pipe into `jq` or parse in CI. Works with `--dry-run`. Conflicts with
   `--verbose`/`--quiet`/`--watch`/`--stats`. Exit codes unchanged.
+- **`--exclude` globs and ignore-aware walking.** `--exclude <GLOB>`
+  (repeatable) skips matching files/dirs during a directory walk, rooted at
+  each input path; explicit file arguments are never excluded. `.git`,
+  `node_modules`, and `target` are pruned by default (`--no-default-excludes`
+  to disable). `--gitignore` opts into also respecting `.gitignore` (and
+  `.git/info/exclude`, and the global gitignore) — off by default so existing
+  behavior doesn't change. New `exclude = [...]` `squish.toml` key. Applies to
+  `--watch` too. Switched the directory walker from `walkdir` to the `ignore`
+  crate.
 
 ## [0.7.0] - 2026-06-15
 

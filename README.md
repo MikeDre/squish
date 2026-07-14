@@ -387,6 +387,14 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --no-config            Ignore squish.toml config files for this run
       --kinds <KINDS>        Restrict the run to these file kinds, comma-
                              separated: image, video, audio, code (default: all)
+      --exclude <GLOB>       Skip files/dirs matching this glob during a directory
+                             walk (repeatable). Relative to each input path's own
+                             root. Explicit file arguments are never excluded
+      --gitignore            Also respect .gitignore (and .git/info/exclude, and
+                             the global gitignore) while walking directories.
+                             Off by default
+      --no-default-excludes  Don't prune .git, node_modules, and target while
+                             walking directories (pruned by default)
       --stats                Print usage report (this month + all-time) and exit
       --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
       --json                 Print a single machine-readable JSON report to stdout
@@ -417,6 +425,7 @@ quality = 75          # or "auto" — perceptual visually-lossless (images only)
 format = "webp"
 recursive = true
 max-width = 2000
+exclude = ["*.min.js", "vendor/**"]
 # Replace originals in place instead of writing _squished siblings.
 # Destructive — no copy is kept. CLI flags still override this.
 overwrite = false

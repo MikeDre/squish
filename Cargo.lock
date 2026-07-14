@@ -3792,6 +3792,7 @@ dependencies = [
  "clap_mangen",
  "dirs",
  "humantime",
+ "ignore",
  "indicatif",
  "notify",
  "notify-debouncer-mini",
@@ -3805,7 +3806,6 @@ dependencies = [
  "squish-video",
  "tempfile",
  "toml 0.8.23",
- "walkdir",
 ]
 
 [[package]]

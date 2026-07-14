@@ -158,6 +158,22 @@ pub struct Args {
     #[arg(long, value_name = "KINDS")]
     pub kinds: Option<String>,
 
+    /// Skip files/dirs matching this glob during a directory walk (repeatable).
+    /// Matched relative to each input path's own root. Explicit file
+    /// arguments are never excluded, even if they match.
+    #[arg(long, value_name = "GLOB")]
+    pub exclude: Vec<String>,
+
+    /// Also respect .gitignore (and .git/info/exclude, and the global
+    /// gitignore) while walking directories. Off by default.
+    #[arg(long)]
+    pub gitignore: bool,
+
+    /// Don't prune .git, node_modules, and target while walking directories
+    /// (pruned by default).
+    #[arg(long = "no-default-excludes")]
+    pub no_default_excludes: bool,
+
     /// Apply a destination preset of sensible defaults (overridable by explicit
     /// flags). Values: web.
     #[arg(long, value_enum)]
