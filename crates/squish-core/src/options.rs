@@ -1,3 +1,4 @@
+use crate::crop::{CropSpec, Gravity};
 use crate::format::Format;
 
 /// Compression options. None fields mean "use format default".
@@ -51,6 +52,14 @@ pub struct SquishOptions {
     /// pixels before stripping it, so color and framing stay correct either
     /// way — this flag only affects whether EXIF metadata itself survives.
     pub keep_metadata: bool,
+
+    /// Optional crop applied to the decoded image before any resize.
+    /// Deliberately not a config-file key — a persisted default crop would
+    /// silently maim batch runs.
+    pub crop: Option<CropSpec>,
+
+    /// Anchor for aspect-ratio crops. Ignored for exact rects.
+    pub gravity: Gravity,
 }
 
 impl SquishOptions {

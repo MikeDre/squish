@@ -32,6 +32,9 @@ pub enum SquishError {
         from: String,
         to: String,
     },
+
+    #[error("invalid crop for {path}: {reason}")]
+    InvalidCrop { path: PathBuf, reason: String },
 }
 
 #[cfg(test)]

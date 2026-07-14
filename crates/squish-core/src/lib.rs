@@ -1,6 +1,7 @@
 //! Core image compression library for squish.
 
 mod auto_quality;
+pub mod crop;
 pub mod error;
 pub mod format;
 pub mod formats;
@@ -8,6 +9,7 @@ pub mod naming;
 pub mod options;
 pub mod result;
 
+pub use crop::{CropRect, CropSpec, Gravity};
 pub use error::SquishError;
 pub use format::{detect_format, Format};
 pub use naming::{
