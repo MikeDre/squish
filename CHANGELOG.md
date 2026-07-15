@@ -35,6 +35,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--strip-tags`' naming for audio, inverted — images strip by default.
   Preserved EXIF has its orientation tag reset to 1, since pixels are always
   corrected before encoding either way (see the orientation fix below).
+- **`--preset web` now bounds image height too.** Previously only
+  `max-width 1920` was set, so a portrait photo (taller than it is wide)
+  passed through unresized. The preset now also sets `max-height 1920`,
+  bounding images to a 1920×1920 box on either axis regardless of
+  orientation.
 
 ### Fixed
 - **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG

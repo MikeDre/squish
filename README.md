@@ -157,7 +157,7 @@ squish hero.jpg --target-size 500k
 # Compress as hard as possible with no visible loss (perceptual auto-quality)
 squish photo.jpg --quality auto
 
-# Web-optimize: resize to 1920px, convert to WebP, visually-lossless quality (H.264 for video)
+# Web-optimize: resize to fit within 1920x1920 (portrait or landscape), convert to WebP, visually-lossless quality (H.264 for video)
 squish ./assets -r --preset web
 
 # Preview without writing
