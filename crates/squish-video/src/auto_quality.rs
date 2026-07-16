@@ -59,6 +59,38 @@ pub(crate) fn parse_vmaf_json(json_text: &str) -> Option<f64> {
     v.get("pooled_metrics")?.get("vmaf")?.get("mean")?.as_f64()
 }
 
+/// Check that the installed ffmpeg's `-filters` output lists `libvmaf` — a
+/// compile-time filter, not a standalone executable, so this can't reuse the
+/// simpler "run `<tool> -version`" shape `squish_media::check_ffmpeg` uses.
+pub(crate) fn check_libvmaf() -> Result<(), VideoError> {
+    let output = std::process::Command::new("ffmpeg")
+        .arg("-filters")
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                VideoError::MissingDependency {
+                    name: "ffmpeg".into(),
+                    install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)"
+                        .into(),
+                }
+            } else {
+                VideoError::Io(e)
+            }
+        })?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    if output.status.success() && stdout.contains("libvmaf") {
+        Ok(())
+    } else {
+        Err(VideoError::MissingDependency {
+            name: "libvmaf".into(),
+            install_hint: "reinstall/upgrade ffmpeg with libvmaf support (Homebrew's ffmpeg \
+                           formula includes it by default: brew reinstall ffmpeg)"
+                .into(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -131,5 +163,70 @@ mod tests {
     fn missing_vmaf_mean_field_returns_none() {
         let json = r#"{"pooled_metrics": {"vmaf": {"min": 90.0}}}"#;
         assert_eq!(parse_vmaf_json(json), None);
+    }
+
+    #[test]
+    fn check_libvmaf_reports_missing_ffmpeg_when_binary_absent() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let original_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", tmp.path());
+
+        let result = check_libvmaf();
+
+        match original_path {
+            Some(p) => std::env::set_var("PATH", p),
+            None => std::env::remove_var("PATH"),
+        }
+
+        assert!(matches!(
+            result,
+            Err(VideoError::MissingDependency { ref name, .. }) if name == "ffmpeg"
+        ));
+    }
+
+    #[test]
+    fn check_libvmaf_errors_when_filter_absent_from_ffmpeg_output() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let fake_ffmpeg = tmp.path().join("ffmpeg");
+        std::fs::write(
+            &fake_ffmpeg,
+            "#!/bin/sh\necho ' .. someotherfilter    Some other filter.'\nexit 0\n",
+        )
+        .unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&fake_ffmpeg).unwrap().permissions();
+            perms.set_mode(0o755);
+            std::fs::set_permissions(&fake_ffmpeg, perms).unwrap();
+        }
+
+        let original_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", tmp.path());
+
+        let result = check_libvmaf();
+
+        match original_path {
+            Some(p) => std::env::set_var("PATH", p),
+            None => std::env::remove_var("PATH"),
+        }
+
+        assert!(matches!(
+            result,
+            Err(VideoError::MissingDependency { ref name, .. }) if name == "libvmaf"
+        ));
+    }
+
+    #[test]
+    fn check_libvmaf_ok_when_present() {
+        if std::process::Command::new("ffmpeg")
+            .arg("-filters")
+            .output()
+            .map(|o| o.status.success() && String::from_utf8_lossy(&o.stdout).contains("libvmaf"))
+            .unwrap_or(false)
+        {
+            assert!(check_libvmaf().is_ok());
+        } else {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+        }
     }
 }
