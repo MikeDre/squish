@@ -241,14 +241,13 @@ pub(crate) fn find_visually_lossless_quality(
     input: &Path,
     codec: VideoCodec,
 ) -> Result<(u8, bool), VideoError> {
-    let duration = crate::ffmpeg::ffprobe_duration_secs(input)?.ok_or_else(|| {
-        VideoError::InvalidOption {
+    let duration =
+        crate::ffmpeg::ffprobe_duration_secs(input)?.ok_or_else(|| VideoError::InvalidOption {
             reason: format!(
                 "--quality auto requires a known duration for {}",
                 input.display()
             ),
-        }
-    })?;
+        })?;
 
     let segments = sample_segments(duration);
     let tmp = tempfile::tempdir()?;
@@ -295,7 +294,13 @@ mod tests {
     fn short_clip_yields_one_whole_segment() {
         let segs = sample_segments(2.0);
         assert_eq!(segs.len(), 1);
-        assert_eq!(segs[0], Segment { start_secs: 0.0, len_secs: 2.0 });
+        assert_eq!(
+            segs[0],
+            Segment {
+                start_secs: 0.0,
+                len_secs: 2.0
+            }
+        );
     }
 
     #[test]
@@ -436,8 +441,15 @@ mod tests {
         let input = tmp.path().join("source.mp4");
         let gen = std::process::Command::new("ffmpeg")
             .args([
-                "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=3",
-                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=320x240:rate=30:duration=3",
+                "-c:v",
+                "libx264",
+                "-pix_fmt",
+                "yuv420p",
             ])
             .arg(&input)
             .output()
@@ -447,7 +459,10 @@ mod tests {
         let out = tmp.path().join("ref-0.mkv");
         extract_reference_segment(
             &input,
-            Segment { start_secs: 0.5, len_secs: 1.0 },
+            Segment {
+                start_secs: 0.5,
+                len_secs: 1.0,
+            },
             &out,
         )
         .unwrap();
@@ -467,8 +482,17 @@ mod tests {
         let reference = tmp.path().join("ref.mkv");
         let gen = std::process::Command::new("ffmpeg")
             .args([
-                "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=1",
-                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=size=320x240:rate=30:duration=1",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "0",
+                "-pix_fmt",
+                "yuv420p",
             ])
             .arg(&reference)
             .output()
@@ -496,8 +520,17 @@ mod tests {
         let reference = tmp.path().join("ref.mkv");
         let gen = std::process::Command::new("ffmpeg")
             .args([
-                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=1",
-                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=30:duration=1",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "0",
+                "-pix_fmt",
+                "yuv420p",
             ])
             .arg(&reference)
             .output()
@@ -529,8 +562,17 @@ mod tests {
         let reference = tmp.path().join("ref.mkv");
         let gen = std::process::Command::new("ffmpeg")
             .args([
-                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=1",
-                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=30:duration=1",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "0",
+                "-pix_fmt",
+                "yuv420p",
             ])
             .arg(&reference)
             .output()
@@ -594,16 +636,24 @@ mod tests {
         let input = tmp.path().join("source.mp4");
         let gen = std::process::Command::new("ffmpeg")
             .args([
-                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=3",
-                "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc2=size=320x240:rate=30:duration=3",
+                "-c:v",
+                "libx264",
+                "-crf",
+                "18",
+                "-pix_fmt",
+                "yuv420p",
             ])
             .arg(&input)
             .output()
             .unwrap();
         assert!(gen.status.success(), "fixture generation failed");
 
-        let (quality, _reached) =
-            find_visually_lossless_quality(&input, VideoCodec::H264).unwrap();
+        let (quality, _reached) = find_visually_lossless_quality(&input, VideoCodec::H264).unwrap();
         assert!((1..=100).contains(&quality));
     }
 }

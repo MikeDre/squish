@@ -493,8 +493,17 @@ fn quality_auto_produces_valid_output() {
     let input = tmp.path().join("clip.mp4");
     let gen = std::process::Command::new("ffmpeg")
         .args([
-            "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=3",
-            "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=30:duration=3",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "10",
+            "-pix_fmt",
+            "yuv420p",
         ])
         .arg(&input)
         .output()
