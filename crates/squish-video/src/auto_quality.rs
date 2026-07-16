@@ -150,16 +150,14 @@ pub(crate) fn vmaf_score(
 ) -> Result<Option<f64>, VideoError> {
     let log_path = tmp_dir.join("vmaf.json");
     let mut cmd = std::process::Command::new("ffmpeg");
-    cmd.arg("-y")
+    cmd.current_dir(tmp_dir)
+        .arg("-y")
         .arg("-i")
         .arg(candidate)
         .arg("-i")
         .arg(reference)
         .arg("-lavfi")
-        .arg(format!(
-            "libvmaf=log_fmt=json:log_path={}",
-            log_path.display()
-        ))
+        .arg("libvmaf=log_fmt=json:log_path=vmaf.json")
         .arg("-f")
         .arg("null")
         .arg("-");
@@ -282,6 +280,13 @@ pub(crate) fn find_visually_lossless_quality(
 mod tests {
     use super::*;
 
+    // Real ffmpeg subprocess tests and the PATH-mutation tests below cannot
+    // run concurrently: while PATH is pointed at a fake/empty dir, any other
+    // test in this file that shells out to the real `ffmpeg` binary would
+    // fail to find it. This mutex serializes every test in this module that
+    // either mutates PATH or spawns a real ffmpeg process.
+    static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn has_ffmpeg() -> bool {
         std::process::Command::new("ffmpeg")
             .arg("-version")
@@ -368,6 +373,7 @@ mod tests {
 
     #[test]
     fn check_libvmaf_reports_missing_ffmpeg_when_binary_absent() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         let tmp = tempfile::TempDir::new().unwrap();
         let original_path = std::env::var_os("PATH");
         std::env::set_var("PATH", tmp.path());
@@ -387,6 +393,7 @@ mod tests {
 
     #[test]
     fn check_libvmaf_errors_when_filter_absent_from_ffmpeg_output() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         let tmp = tempfile::TempDir::new().unwrap();
         let fake_ffmpeg = tmp.path().join("ffmpeg");
         std::fs::write(
@@ -419,6 +426,7 @@ mod tests {
 
     #[test]
     fn check_libvmaf_ok_when_present() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if std::process::Command::new("ffmpeg")
             .arg("-filters")
             .output()
@@ -433,6 +441,7 @@ mod tests {
 
     #[test]
     fn extract_reference_segment_produces_a_clip_of_the_requested_length() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !has_ffmpeg() {
             eprintln!("skipping: ffmpeg not present");
             return;
@@ -474,6 +483,7 @@ mod tests {
 
     #[test]
     fn encode_segment_at_quality_produces_output() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !has_ffmpeg() {
             eprintln!("skipping: ffmpeg not present");
             return;
@@ -508,6 +518,7 @@ mod tests {
 
     #[test]
     fn vmaf_score_of_identical_content_is_near_100() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !has_ffmpeg() {
             eprintln!("skipping: ffmpeg not present");
             return;
@@ -550,6 +561,7 @@ mod tests {
 
     #[test]
     fn vmaf_score_drops_with_lower_quality() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !has_ffmpeg() {
             eprintln!("skipping: ffmpeg not present");
             return;
@@ -624,6 +636,7 @@ mod tests {
 
     #[test]
     fn find_visually_lossless_quality_converges_within_range() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !has_ffmpeg() {
             eprintln!("skipping: ffmpeg not present");
             return;
