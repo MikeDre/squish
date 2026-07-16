@@ -252,6 +252,10 @@ pub fn ffprobe_audio_bitrate_kbps(path: &Path) -> Result<u32, VideoError> {
 mod tests {
     use super::*;
     use crate::options::{VideoCodec, VideoOptions};
+    // See `crate::FFMPEG_TEST_LOCK`: shared with `crate::auto_quality`'s
+    // tests, which include PATH-mutating tests that would otherwise race
+    // against this module's real-ffprobe-subprocess tests.
+    use crate::FFMPEG_TEST_LOCK as TEST_SERIAL;
 
     fn args(out_ext: &str, opts: VideoOptions) -> Vec<String> {
         build_codec_args(out_ext, &opts, false, None, EncodePass::Single)
@@ -411,6 +415,7 @@ mod tests {
 
     #[test]
     fn ffprobe_duration_of_sample_fixture() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !std::process::Command::new("ffprobe")
             .arg("-version")
             .output()
@@ -428,6 +433,7 @@ mod tests {
 
     #[test]
     fn ffprobe_audio_bitrate_zero_for_silent_fixture() {
+        let _guard = TEST_SERIAL.lock().unwrap();
         if !std::process::Command::new("ffprobe")
             .arg("-version")
             .output()

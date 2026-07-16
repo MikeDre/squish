@@ -280,12 +280,11 @@ pub(crate) fn find_visually_lossless_quality(
 mod tests {
     use super::*;
 
-    // Real ffmpeg subprocess tests and the PATH-mutation tests below cannot
-    // run concurrently: while PATH is pointed at a fake/empty dir, any other
-    // test in this file that shells out to the real `ffmpeg` binary would
-    // fail to find it. This mutex serializes every test in this module that
-    // either mutates PATH or spawns a real ffmpeg process.
-    static TEST_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    // See `crate::FFMPEG_TEST_LOCK`: shared across this module and
+    // `crate::ffmpeg`'s tests, since both contain real-subprocess tests that
+    // would spuriously fail if run concurrently with this module's
+    // PATH-mutating tests.
+    use crate::FFMPEG_TEST_LOCK as TEST_SERIAL;
 
     fn has_ffmpeg() -> bool {
         std::process::Command::new("ffmpeg")

@@ -6,6 +6,19 @@ pub mod format;
 pub mod options;
 pub mod result;
 
+/// Shared test-only synchronization. `ffmpeg`'s and `auto_quality`'s test
+/// modules both contain tests that shell out to a real `ffmpeg`/`ffprobe`
+/// binary via inherited `PATH`, and `auto_quality` also has tests that
+/// temporarily point `PATH` at a fake/empty directory to simulate a missing
+/// binary. All of those tests run as threads within the same test binary
+/// process (this crate's `--lib` tests), so they share the same `PATH` env
+/// var — a real-subprocess test racing against a PATH-mutating test can spuriously
+/// fail to find the real binary. This mutex serializes every such test
+/// across both modules; pure tests with no subprocess/env involvement don't
+/// need it.
+#[cfg(test)]
+pub(crate) static FFMPEG_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
 pub use result::VideoResult;
