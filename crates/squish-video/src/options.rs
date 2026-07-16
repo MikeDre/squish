@@ -29,6 +29,15 @@ impl VideoCodec {
         }
     }
 
+    /// Whether ffmpeg's native two-pass rate control is well-supported for
+    /// this codec. H.264/H.265 (`-pass 1/2 -passlogfile`) and VP9 (its own
+    /// two-pass) qualify; SVT-AV1's two-pass is awkward and varies by build, so
+    /// it falls back to the single-pass retry loop, and `Copy` has no rate
+    /// control at all.
+    pub fn supports_two_pass(&self) -> bool {
+        matches!(self, VideoCodec::H264 | VideoCodec::H265 | VideoCodec::Vp9)
+    }
+
     /// Inclusive CRF range mapped onto the 0-100 quality dial.
     /// `(min_crf @ q=100, max_crf @ q=0)`. The bounds correspond to
     /// "visually lossless" and "noticeably degraded" within each codec's
@@ -254,6 +263,17 @@ mod tests {
         assert_eq!(VideoCodec::parse("copy"), Some(VideoCodec::Copy));
         assert_eq!(VideoCodec::parse("vp9"), Some(VideoCodec::Vp9));
         assert_eq!(VideoCodec::parse("libvpx-vp9"), Some(VideoCodec::Vp9));
+    }
+
+    #[test]
+    fn two_pass_support_by_codec() {
+        // ffmpeg's native two-pass rate control is well-supported for these.
+        assert!(VideoCodec::H264.supports_two_pass());
+        assert!(VideoCodec::H265.supports_two_pass());
+        assert!(VideoCodec::Vp9.supports_two_pass());
+        // SVT-AV1 two-pass is awkward/varies by build; Copy has no rate control.
+        assert!(!VideoCodec::AV1.supports_two_pass());
+        assert!(!VideoCodec::Copy.supports_two_pass());
     }
 
     #[test]
