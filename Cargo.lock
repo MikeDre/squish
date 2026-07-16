@@ -3812,6 +3812,7 @@ dependencies = [
 name = "squish-video"
 version = "0.7.0"
 dependencies = [
+ "serde_json",
  "squish-core",
  "squish-media",
  "tempfile",

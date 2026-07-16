@@ -50,6 +50,15 @@ pub(crate) fn sample_segments(duration_secs: f64) -> Vec<Segment> {
         .collect()
 }
 
+/// Parse the pooled mean VMAF score out of a `libvmaf` JSON log (written via
+/// `log_fmt=json:log_path=<path>`). Returns `None` for malformed JSON or a
+/// log missing the expected `pooled_metrics.vmaf.mean` field, so callers can
+/// treat scoring failure as "does not pass" rather than panicking.
+pub(crate) fn parse_vmaf_json(json_text: &str) -> Option<f64> {
+    let v: serde_json::Value = serde_json::from_str(json_text).ok()?;
+    v.get("pooled_metrics")?.get("vmaf")?.get("mean")?.as_f64()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +98,38 @@ mod tests {
         assert_eq!(segs.len(), 3);
         assert!((segs[2].start_secs - 6.01).abs() < 0.001);
         assert!(segs[2].start_secs + segs[2].len_secs <= 8.01 + 0.001);
+    }
+
+    #[test]
+    fn parses_pooled_mean_from_real_shaped_log() {
+        let json = r#"{
+            "version": "3.0.0",
+            "pooled_metrics": {
+                "vmaf": {
+                    "min": 96.363678,
+                    "max": 97.434367,
+                    "mean": 97.104564,
+                    "harmonic_mean": 97.103996
+                }
+            }
+        }"#;
+        let score = parse_vmaf_json(json).expect("expected a score");
+        assert!((score - 97.104564).abs() < 0.0001);
+    }
+
+    #[test]
+    fn malformed_json_returns_none() {
+        assert_eq!(parse_vmaf_json("not json at all"), None);
+    }
+
+    #[test]
+    fn missing_pooled_metrics_returns_none() {
+        assert_eq!(parse_vmaf_json(r#"{"version": "3.0.0"}"#), None);
+    }
+
+    #[test]
+    fn missing_vmaf_mean_field_returns_none() {
+        let json = r#"{"pooled_metrics": {"vmaf": {"min": 90.0}}}"#;
+        assert_eq!(parse_vmaf_json(json), None);
     }
 }
