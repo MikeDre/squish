@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`--quality auto` for video.** Extends perceptual auto-quality to video:
+  binary-searches the same 1–100 quality dial images use for the lowest CRF
+  whose output stays visually lossless, measured via VMAF (threshold 95) on
+  three short sampled segments (start/mid/end) rather than the whole clip.
+  Applies to all four codecs with a CRF dial (H.264/H.265/AV1/VP9); requires
+  the installed ffmpeg to have `libvmaf` support (`squish doctor` now reports
+  this) and conflicts with `--target-size`/`--fast`/`--codec copy`. Falls back
+  to quality 100 with a warning if nothing sampled reaches the threshold,
+  mirroring the image auto-quality fallback.
 - **Two-pass video encoding for `--target-size`.** H.264/H.265/VP9 now use
   ffmpeg's native two-pass ABR (an analysis pass to the null muxer, then the
   real encode) as the primary size-targeting strategy, so the output lands on

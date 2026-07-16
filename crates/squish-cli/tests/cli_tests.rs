@@ -267,6 +267,61 @@ fn codec_flag_works() {
 }
 
 #[test]
+fn video_quality_auto_conflicts_with_fast() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--quality", "auto", "--fast"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn video_quality_auto_produces_valid_output() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=30:duration=3",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "10",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+
+    let assert = bin()
+        .arg(&input)
+        .args(["--codec", "h264", "--quality", "auto"])
+        .assert();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    if stderr.contains("libvmaf") {
+        eprintln!("skipping: this ffmpeg build lacks libvmaf");
+        return;
+    }
+    assert.success();
+    assert!(tmp.path().join("clip_squished.mp4").exists());
+}
+
+#[test]
 fn video_in_directory_walk() {
     if !has_ffmpeg() {
         return;

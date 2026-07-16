@@ -180,6 +180,9 @@ squish video.mp4 --codec h264
 # Fast mode — optimise without re-encoding
 squish video.mp4 --fast
 
+# Compress as hard as possible with no visible loss (perceptual auto-quality, requires libvmaf)
+squish video.mp4 --quality auto
+
 # Fit a clip under an upload limit (two-pass ABR for H.264/H.265/VP9)
 squish clip.mp4 --target-size 8M
 
@@ -364,8 +367,10 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
 ## Flags
 
 ```
-  -q, --quality <0-100|auto>  Quality, or `auto` for the lowest visually-lossless
-                              quality (images only; conflicts with --target-size)
+  -q, --quality <0-100|auto>  Quality: 0-100, or `auto` for the lowest visually-lossless
+                              quality (images: SSIMULACRA2; video: VMAF, requires
+                              libvmaf). Conflicts with --target-size; for video also
+                              conflicts with --fast/--codec copy
       --lossless             Lossless compression (overrides --quality)
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)

@@ -579,6 +579,9 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 {
                     eprintln!("  note: {note}");
                 }
+                for w in &r.warnings {
+                    eprintln!("  WARNING: {w}");
+                }
             }
         }
         if let Some(pb) = &progress {
