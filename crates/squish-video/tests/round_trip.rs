@@ -479,3 +479,86 @@ fn target_size_with_fast_copy_errors() {
         "expected target-size error, got: {err}"
     );
 }
+
+#[test]
+fn quality_auto_produces_valid_output() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    if squish_video::VideoOptions::default().quality_auto {
+        unreachable!("quality_auto must default to false");
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=3",
+            "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::H264),
+        quality_auto: true,
+        ..Default::default()
+    };
+    let result = squish_video::squish_video(&input, &opts);
+    match result {
+        Ok(r) => {
+            assert!(r.output_path.exists());
+            assert!(r.output_bytes > 0);
+        }
+        Err(squish_video::VideoError::MissingDependency { ref name, .. }) if name == "libvmaf" => {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+        }
+        Err(e) => panic!("unexpected error: {e}"),
+    }
+}
+
+#[test]
+fn quality_auto_conflicts_with_fast_copy() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    fs::copy(fixture("sample.mp4"), &input).unwrap();
+
+    let opts = squish_video::VideoOptions {
+        fast: true,
+        quality_auto: true,
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("quality auto"),
+        "expected a quality-auto error, got: {err}"
+    );
+}
+
+#[test]
+fn quality_auto_conflicts_with_target_size() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    fs::copy(fixture("sample.mp4"), &input).unwrap();
+
+    let opts = squish_video::VideoOptions {
+        quality_auto: true,
+        target_size: Some(50_000),
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("target-size"),
+        "expected a target-size conflict error, got: {err}"
+    );
+}

@@ -84,6 +84,13 @@ pub struct VideoOptions {
     /// fits the budget; takes precedence over `quality`. Incompatible with
     /// `--fast`/copy (no re-encode means no size control).
     pub target_size: Option<u64>,
+
+    /// Perceptual auto-quality: binary-search for the lowest CRF (on the
+    /// 1..=100 quality dial) whose output stays visually lossless per VMAF
+    /// (segment-sampled). Requires libvmaf; incompatible with
+    /// `--target-size`/`--fast`/`--codec copy` (no quality dial to search
+    /// under those).
+    pub quality_auto: bool,
 }
 
 /// Compute the video bitrate (kbps) that fits `target_bytes` into
