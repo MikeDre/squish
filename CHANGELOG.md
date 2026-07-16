@@ -42,6 +42,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   orientation.
 
 ### Fixed
+- **`--target-size` larger than the input still grew the file.** The
+  never-grow guard treated `--target-size` itself as a "legitimate
+  conversion" allowed to grow the output, the same as an explicit
+  `--format`/`--codec`/resize — but a size *budget* never needs to exceed the
+  original, unlike those. A budget bigger than the input (e.g. `--target-size
+  1M` on a 40k file) now leaves the file untouched and reports "skipped
+  (already optimal)", instead of needlessly re-encoding it larger. Affected
+  images, video, and audio identically.
 - **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG
   (the overwhelming majority of real-world EXIF-orientation use — camera
   photos) decoded as raw upright pixels and re-encoded with no orientation
