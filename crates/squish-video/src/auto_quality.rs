@@ -118,6 +118,74 @@ pub(crate) fn extract_reference_segment(
     squish_media::run_ffmpeg(input, out_path, &args)
 }
 
+/// Encode `ref_segment_path` (a short reference clip) at `quality` (the same
+/// 1..=100 dial `--quality` uses) with `codec`, via the existing single-pass
+/// CRF encode path.
+pub(crate) fn encode_segment_at_quality(
+    ref_segment_path: &Path,
+    out_path: &Path,
+    quality: u8,
+    codec: VideoCodec,
+) -> Result<(), VideoError> {
+    let opts = VideoOptions {
+        quality: Some(quality),
+        codec: Some(codec),
+        ..Default::default()
+    };
+    crate::ffmpeg::run_ffmpeg(ref_segment_path, out_path, &opts, false, None)
+}
+
+/// Run ffmpeg's `libvmaf` filter comparing `candidate` against `reference`,
+/// writing a JSON log under `tmp_dir` and returning the parsed pooled mean
+/// score. `Ok(None)` means ffmpeg succeeded but the log couldn't be parsed
+/// (treated as "does not pass" by callers, never a panic).
+///
+/// Not built on `squish_media::run_ffmpeg`: that helper assumes one `-i
+/// <input>` and one trailing output path, but VMAF scoring needs two `-i`
+/// inputs and writes no real output (`-f null -`).
+pub(crate) fn vmaf_score(
+    candidate: &Path,
+    reference: &Path,
+    tmp_dir: &Path,
+) -> Result<Option<f64>, VideoError> {
+    let log_path = tmp_dir.join("vmaf.json");
+    let mut cmd = std::process::Command::new("ffmpeg");
+    cmd.arg("-y")
+        .arg("-i")
+        .arg(candidate)
+        .arg("-i")
+        .arg(reference)
+        .arg("-lavfi")
+        .arg(format!(
+            "libvmaf=log_fmt=json:log_path={}",
+            log_path.display()
+        ))
+        .arg("-f")
+        .arg("null")
+        .arg("-");
+
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            VideoError::MissingDependency {
+                name: "ffmpeg".into(),
+                install_hint: "brew install ffmpeg (macOS) or apt install ffmpeg (Linux)".into(),
+            }
+        } else {
+            VideoError::Io(e)
+        }
+    })?;
+
+    if !output.status.success() {
+        return Err(VideoError::FfmpegFailed {
+            path: candidate.to_path_buf(),
+            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        });
+    }
+
+    let text = std::fs::read_to_string(&log_path)?;
+    Ok(parse_vmaf_json(&text))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,5 +362,98 @@ mod tests {
         assert!(out.exists());
         let dur = crate::ffmpeg::ffprobe_duration_secs(&out).unwrap().unwrap();
         assert!((dur - 1.0).abs() < 0.2, "expected ~1.0s, got {dur}");
+    }
+
+    #[test]
+    fn encode_segment_at_quality_produces_output() {
+        if !has_ffmpeg() {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let reference = tmp.path().join("ref.mkv");
+        let gen = std::process::Command::new("ffmpeg")
+            .args([
+                "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=1",
+                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+            ])
+            .arg(&reference)
+            .output()
+            .unwrap();
+        assert!(gen.status.success(), "reference generation failed");
+
+        let out = tmp.path().join("candidate.mkv");
+        encode_segment_at_quality(&reference, &out, 50, VideoCodec::H264).unwrap();
+
+        assert!(out.exists());
+        assert!(std::fs::metadata(&out).unwrap().len() > 0);
+    }
+
+    #[test]
+    fn vmaf_score_of_identical_content_is_near_100() {
+        if !has_ffmpeg() {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        if !check_libvmaf().is_ok() {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let reference = tmp.path().join("ref.mkv");
+        let gen = std::process::Command::new("ffmpeg")
+            .args([
+                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=1",
+                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+            ])
+            .arg(&reference)
+            .output()
+            .unwrap();
+        assert!(gen.status.success());
+
+        // Encode at very high quality — should score near-perfectly against
+        // the (near-lossless) reference.
+        let candidate = tmp.path().join("candidate.mkv");
+        encode_segment_at_quality(&reference, &candidate, 100, VideoCodec::H264).unwrap();
+
+        let score = vmaf_score(&candidate, &reference, tmp.path())
+            .unwrap()
+            .expect("expected a score");
+        assert!(score > 90.0, "expected near-lossless score, got {score}");
+    }
+
+    #[test]
+    fn vmaf_score_drops_with_lower_quality() {
+        if !has_ffmpeg() {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        if !check_libvmaf().is_ok() {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let reference = tmp.path().join("ref.mkv");
+        let gen = std::process::Command::new("ffmpeg")
+            .args([
+                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=1",
+                "-c:v", "libx264", "-crf", "0", "-pix_fmt", "yuv420p",
+            ])
+            .arg(&reference)
+            .output()
+            .unwrap();
+        assert!(gen.status.success());
+
+        let high = tmp.path().join("high.mkv");
+        encode_segment_at_quality(&reference, &high, 100, VideoCodec::H264).unwrap();
+        let low = tmp.path().join("low.mkv");
+        encode_segment_at_quality(&reference, &low, 1, VideoCodec::H264).unwrap();
+
+        let high_score = vmaf_score(&high, &reference, tmp.path()).unwrap().unwrap();
+        let low_score = vmaf_score(&low, &reference, tmp.path()).unwrap().unwrap();
+        assert!(
+            high_score > low_score,
+            "expected quality 100 ({high_score}) to score higher than quality 1 ({low_score})"
+        );
     }
 }
