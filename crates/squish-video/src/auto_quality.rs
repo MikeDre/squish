@@ -91,9 +91,44 @@ pub(crate) fn check_libvmaf() -> Result<(), VideoError> {
     }
 }
 
+/// Extract a frame-accurate, near-lossless reference clip covering
+/// `segment` of `input`, written to `out_path` (container inferred from its
+/// extension — callers use `.mkv`, which accepts any of the four codecs
+/// without the container-compatibility quirks `.mp4` has for some of them).
+/// Re-decodes rather than stream-copies so arbitrary seek points work; audio
+/// is dropped since only video quality is being judged.
+pub(crate) fn extract_reference_segment(
+    input: &Path,
+    segment: Segment,
+    out_path: &Path,
+) -> Result<(), VideoError> {
+    let args: Vec<std::ffi::OsString> = vec![
+        "-ss".into(),
+        format!("{:.3}", segment.start_secs).into(),
+        "-t".into(),
+        format!("{:.3}", segment.len_secs).into(),
+        "-an".into(),
+        "-c:v".into(),
+        "libx264".into(),
+        "-crf".into(),
+        "0".into(),
+        "-pix_fmt".into(),
+        "yuv420p".into(),
+    ];
+    squish_media::run_ffmpeg(input, out_path, &args)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn has_ffmpeg() -> bool {
+        std::process::Command::new("ffmpeg")
+            .arg("-version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    }
 
     #[test]
     fn short_clip_yields_one_whole_segment() {
@@ -228,5 +263,36 @@ mod tests {
         } else {
             eprintln!("skipping: this ffmpeg build lacks libvmaf");
         }
+    }
+
+    #[test]
+    fn extract_reference_segment_produces_a_clip_of_the_requested_length() {
+        if !has_ffmpeg() {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let input = tmp.path().join("source.mp4");
+        let gen = std::process::Command::new("ffmpeg")
+            .args([
+                "-y", "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=3",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            ])
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(gen.status.success(), "fixture generation failed");
+
+        let out = tmp.path().join("ref-0.mkv");
+        extract_reference_segment(
+            &input,
+            Segment { start_secs: 0.5, len_secs: 1.0 },
+            &out,
+        )
+        .unwrap();
+
+        assert!(out.exists());
+        let dur = crate::ffmpeg::ffprobe_duration_secs(&out).unwrap().unwrap();
+        assert!((dur - 1.0).abs() < 0.2, "expected ~1.0s, got {dur}");
     }
 }
