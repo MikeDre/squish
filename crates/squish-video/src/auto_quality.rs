@@ -227,6 +227,58 @@ where
     }
 }
 
+/// Find the lowest quality (1..=100 dial) whose full-clip output stays
+/// visually lossless (VMAF >= 95, minimum across sampled segments). Extracts
+/// each sampled segment's reference clip once (cached for the whole search),
+/// then binary-searches, encoding + scoring every reference segment per
+/// candidate quality.
+///
+/// Returns `(quality, true)` if some quality passed the threshold, or
+/// `(100, false)` if none did (caller should re-encode the full clip at
+/// quality 100 and surface a warning — mirrors the image auto-quality
+/// fallback).
+pub(crate) fn find_visually_lossless_quality(
+    input: &Path,
+    codec: VideoCodec,
+) -> Result<(u8, bool), VideoError> {
+    let duration = crate::ffmpeg::ffprobe_duration_secs(input)?.ok_or_else(|| {
+        VideoError::InvalidOption {
+            reason: format!(
+                "--quality auto requires a known duration for {}",
+                input.display()
+            ),
+        }
+    })?;
+
+    let segments = sample_segments(duration);
+    let tmp = tempfile::tempdir()?;
+
+    let mut ref_paths = Vec::with_capacity(segments.len());
+    for (i, seg) in segments.iter().enumerate() {
+        let ref_path = tmp.path().join(format!("ref-{i}.mkv"));
+        extract_reference_segment(input, *seg, &ref_path)?;
+        ref_paths.push(ref_path);
+    }
+
+    let candidate_path = tmp.path().join("candidate.mkv");
+    let result = binary_search_quality(VISUALLY_LOSSLESS_THRESHOLD, |quality| {
+        let mut min_score: Option<f64> = None;
+        for ref_path in &ref_paths {
+            if encode_segment_at_quality(ref_path, &candidate_path, quality, codec).is_err() {
+                return None;
+            }
+            let score = match vmaf_score(&candidate_path, ref_path, tmp.path()) {
+                Ok(Some(s)) => s,
+                _ => return None,
+            };
+            min_score = Some(min_score.map_or(score, |m: f64| m.min(score)));
+        }
+        min_score
+    });
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -526,5 +578,32 @@ mod tests {
         let (quality, reached) = binary_search_quality(95.0, |_| Some(99.0));
         assert_eq!(quality, 1);
         assert!(reached);
+    }
+
+    #[test]
+    fn find_visually_lossless_quality_converges_within_range() {
+        if !has_ffmpeg() {
+            eprintln!("skipping: ffmpeg not present");
+            return;
+        }
+        if check_libvmaf().is_err() {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+            return;
+        }
+        let tmp = tempfile::TempDir::new().unwrap();
+        let input = tmp.path().join("source.mp4");
+        let gen = std::process::Command::new("ffmpeg")
+            .args([
+                "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=30:duration=3",
+                "-c:v", "libx264", "-crf", "18", "-pix_fmt", "yuv420p",
+            ])
+            .arg(&input)
+            .output()
+            .unwrap();
+        assert!(gen.status.success(), "fixture generation failed");
+
+        let (quality, _reached) =
+            find_visually_lossless_quality(&input, VideoCodec::H264).unwrap();
+        assert!((1..=100).contains(&quality));
     }
 }
