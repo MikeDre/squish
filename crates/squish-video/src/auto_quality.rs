@@ -186,6 +186,47 @@ pub(crate) fn vmaf_score(
     Ok(parse_vmaf_json(&text))
 }
 
+/// Binary-search the 1..=100 quality dial for the lowest quality whose
+/// `score_at(quality)` is `>= threshold`. Mirrors
+/// `squish_core::compress_to_visually_lossless`'s search shape exactly, with
+/// `score_at` standing in for that function's "encode + measure" step —
+/// callers wire it to real segment encode+VMAF (Task 7); tests here use a
+/// synthetic closure so search correctness doesn't require ffmpeg.
+/// `score_at` returning `None` (scoring failed) is treated the same as a
+/// too-low score: keep searching higher.
+///
+/// Returns `(quality, true)` for the lowest passing quality found, or
+/// `(100, false)` if nothing in the range passed.
+pub(crate) fn binary_search_quality<F>(threshold: f64, mut score_at: F) -> (u8, bool)
+where
+    F: FnMut(u8) -> Option<f64>,
+{
+    let mut lo: u8 = 1;
+    let mut hi: u8 = 100;
+    let mut best_passing: Option<u8> = None;
+
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        match score_at(mid) {
+            Some(score) if score >= threshold => {
+                best_passing = Some(mid);
+                if mid == 1 {
+                    break;
+                }
+                hi = mid - 1;
+            }
+            _ => {
+                lo = mid + 1;
+            }
+        }
+    }
+
+    match best_passing {
+        Some(q) => (q, true),
+        None => (100, false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -455,5 +496,35 @@ mod tests {
             high_score > low_score,
             "expected quality 100 ({high_score}) to score higher than quality 1 ({low_score})"
         );
+    }
+
+    #[test]
+    fn converges_to_lowest_passing_quality() {
+        // Scores >=95 for quality >= 40, else 80 — lowest passing is 40.
+        let (quality, reached) =
+            binary_search_quality(95.0, |q| Some(if q >= 40 { 96.0 } else { 80.0 }));
+        assert_eq!(quality, 40);
+        assert!(reached);
+    }
+
+    #[test]
+    fn falls_back_to_100_when_nothing_passes() {
+        let (quality, reached) = binary_search_quality(95.0, |_| Some(50.0));
+        assert_eq!(quality, 100);
+        assert!(!reached);
+    }
+
+    #[test]
+    fn none_score_is_treated_as_failing() {
+        let (quality, reached) = binary_search_quality(95.0, |_| None);
+        assert_eq!(quality, 100);
+        assert!(!reached);
+    }
+
+    #[test]
+    fn everything_passing_converges_to_quality_1() {
+        let (quality, reached) = binary_search_quality(95.0, |_| Some(99.0));
+        assert_eq!(quality, 1);
+        assert!(reached);
     }
 }
