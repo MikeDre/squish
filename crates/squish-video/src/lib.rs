@@ -1,5 +1,6 @@
 //! Video compression library for squish (ffmpeg-backed).
 
+mod auto_quality;
 pub mod ffmpeg;
 pub mod format;
 pub mod options;
