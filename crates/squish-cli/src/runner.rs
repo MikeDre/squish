@@ -455,9 +455,11 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             let mut res = squish_file(path, &cfg.opts);
             let mut downgraded = false;
             if let Ok(r) = &res {
+                // --target-size is a budget, not a representation change: it
+                // never needs to grow past the original, so it isn't a
+                // legitimate reason to bypass the never-grow guard.
                 let legitimate = cfg.opts.output_format.is_some()
                     || cfg.opts.needs_resize()
-                    || cfg.opts.target_size.is_some()
                     || r.format_in != r.format_out;
                 match enforce_never_grow(
                     &r.input_path,
@@ -529,9 +531,11 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         let mut res = squish_video::squish_video(path, &cfg.video_opts);
         let mut downgraded = false;
         if let Ok(r) = &res {
+            // --target-size is a budget, not a representation change: it
+            // never needs to grow past the original, so it isn't a
+            // legitimate reason to bypass the never-grow guard.
             let legitimate = cfg.video_opts.output_format.is_some()
                 || cfg.video_opts.codec.is_some()
-                || cfg.video_opts.target_size.is_some()
                 || r.format_in != r.format_out;
             match enforce_never_grow(
                 &r.input_path,
@@ -602,10 +606,12 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         let mut res = squish_audio::squish_audio(path, &audio_opts);
         let mut downgraded = false;
         if let Ok(r) = &res {
+            // --target-size is a budget, not a representation change: it
+            // never needs to grow past the original, so it isn't a
+            // legitimate reason to bypass the never-grow guard.
             let legitimate = audio_opts.output_format.is_some()
                 || audio_opts.codec.is_some()
                 || audio_opts.bitrate_kbps.is_some()
-                || audio_opts.target_size.is_some()
                 || r.format_in != r.format_out;
             match enforce_never_grow(
                 &r.input_path,

@@ -60,6 +60,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   orientation.
 
 ### Fixed
+- **`--target-size` larger than the input still grew the file.** The
+  never-grow guard treated `--target-size` itself as a "legitimate
+  conversion" allowed to grow the output, the same as an explicit
+  `--format`/`--codec`/resize — but a size *budget* never needs to exceed the
+  original, unlike those. A budget bigger than the input (e.g. `--target-size
+  1M` on a 40k file) now leaves the file untouched and reports "skipped
+  (already optimal)", instead of needlessly re-encoding it larger. Affected
+  images, video, and audio identically.
 - **`--codec av1 --target-size` failed to encode.** SVT-AV1 rejects the
   `-maxrate`/`-bufsize` VBV constraint outside CRF mode (`Max Bitrate only
   supported with CRF mode`), which errored the whole encode. AV1 now uses plain

@@ -1778,3 +1778,68 @@ fn overwrite_mode_already_optimal_restores_original_bytes_safely() {
         .stdout(predicate::str::contains("Skipped 1 (already optimal"));
     assert_eq!(fs::read(&input).unwrap(), after_first);
 }
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_image() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.jpg");
+    fs::copy(core_fixture("sample.jpg"), &input).unwrap();
+    let input_bytes = fs::read(&input).unwrap();
+
+    // The fixture is ~43k; a 200k budget is already satisfied, so re-encoding
+    // toward that budget must never be allowed to grow the file — --target-size
+    // is not a "legitimate conversion" the way --format/--codec/resize are.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "200k"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sample_squished.jpg");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
+}
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_video() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+    let input_bytes = fs::read(&input).unwrap();
+
+    // Fixture is ~10k; a 5M budget is already satisfied.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "5M"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sample_squished.mp4");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
+}
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_audio() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    make_sine(&input, &["-c:a", "libmp3lame"]);
+    let input_bytes = fs::read(&input).unwrap();
+
+    // A 1-second sine encodes to well under 100k; the budget is already met.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "100k"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sine_squished.mp3");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
+}
