@@ -350,6 +350,114 @@ fn mp4_respects_target_size() {
     assert!(r.output_bytes > 5_000, "suspiciously small output");
 }
 
+/// Generate an incompressible noise clip so rate control has real work to do
+/// and the input is guaranteed far larger than any sane budget.
+fn generate_noise_fixture(path: &std::path::Path, size: &str, secs: u32) {
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            &format!("nullsrc=s={size}:d={secs}:r=30"),
+            "-vf",
+            "geq=random(1)*255:128:128",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "18",
+        ])
+        .arg(path)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+}
+
+#[test]
+fn h265_respects_target_size_via_two_pass() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    generate_noise_fixture(&input, "320x240", 3);
+    let input_size = std::fs::metadata(&input).unwrap().len();
+    assert!(input_size > 200_000, "fixture too small: {input_size}");
+
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::H265),
+        target_size: Some(60_000),
+        ..Default::default()
+    };
+    let r = squish_video::squish_video(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 60_000,
+        "H.265 two-pass output {} exceeds target 60000",
+        r.output_bytes
+    );
+    assert!(r.output_bytes > 5_000, "suspiciously small output");
+    // No pass-log files leaked into the working directory.
+    let leaks: Vec<_> = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| {
+            let n = e.file_name();
+            let n = n.to_string_lossy();
+            n.contains("2pass") || n.ends_with(".log") || n.ends_with(".log.mbtree")
+        })
+        .collect();
+    assert!(leaks.is_empty(), "two-pass log files leaked: {leaks:?}");
+}
+
+#[test]
+fn vp9_respects_target_size_via_two_pass() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    generate_noise_fixture(&input, "320x240", 3);
+
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::Vp9),
+        output_format: Some(squish_video::VideoFormat::Webm),
+        target_size: Some(60_000),
+        ..Default::default()
+    };
+    let r = squish_video::squish_video(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 60_000,
+        "VP9 two-pass output {} exceeds target 60000",
+        r.output_bytes
+    );
+    assert!(r.output_bytes > 3_000, "suspiciously small output");
+}
+
+#[test]
+fn av1_respects_target_size_via_single_pass() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    generate_noise_fixture(&input, "192x144", 2);
+
+    // AV1 has no VBV two-pass here: it must use plain VBR + the retry loop.
+    // Regression guard for SVT-AV1 rejecting -maxrate ("Max Bitrate only
+    // supported with CRF mode"), which previously errored the whole encode.
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::AV1),
+        target_size: Some(40_000),
+        ..Default::default()
+    };
+    let r = squish_video::squish_video(&input, &opts).unwrap();
+    assert!(r.output_path.exists(), "AV1 target-size produced no output");
+    assert!(r.output_bytes > 0, "AV1 output is empty");
+}
+
 #[test]
 fn target_size_with_fast_copy_errors() {
     if !has_ffmpeg() {
@@ -369,5 +477,97 @@ fn target_size_with_fast_copy_errors() {
     assert!(
         format!("{err}").contains("target-size"),
         "expected target-size error, got: {err}"
+    );
+}
+
+#[test]
+fn quality_auto_produces_valid_output() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    if squish_video::VideoOptions::default().quality_auto {
+        unreachable!("quality_auto must default to false");
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=30:duration=3",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "10",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+
+    let opts = squish_video::VideoOptions {
+        codec: Some(squish_video::VideoCodec::H264),
+        quality_auto: true,
+        ..Default::default()
+    };
+    let result = squish_video::squish_video(&input, &opts);
+    match result {
+        Ok(r) => {
+            assert!(r.output_path.exists());
+            assert!(r.output_bytes > 0);
+        }
+        Err(squish_video::VideoError::MissingDependency { ref name, .. }) if name == "libvmaf" => {
+            eprintln!("skipping: this ffmpeg build lacks libvmaf");
+        }
+        Err(e) => panic!("unexpected error: {e}"),
+    }
+}
+
+#[test]
+fn quality_auto_conflicts_with_fast_copy() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    fs::copy(fixture("sample.mp4"), &input).unwrap();
+
+    let opts = squish_video::VideoOptions {
+        fast: true,
+        quality_auto: true,
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("quality auto"),
+        "expected a quality-auto error, got: {err}"
+    );
+}
+
+#[test]
+fn quality_auto_conflicts_with_target_size() {
+    if !has_ffmpeg() {
+        eprintln!("skipping: ffmpeg not present");
+        return;
+    }
+    let tmp = tempfile::TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    fs::copy(fixture("sample.mp4"), &input).unwrap();
+
+    let opts = squish_video::VideoOptions {
+        quality_auto: true,
+        target_size: Some(50_000),
+        ..Default::default()
+    };
+    let err = squish_video::squish_video(&input, &opts).unwrap_err();
+    assert!(
+        format!("{err}").contains("target-size"),
+        "expected a target-size conflict error, got: {err}"
     );
 }

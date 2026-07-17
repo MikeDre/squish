@@ -39,6 +39,8 @@ pub struct FileConfig {
     pub target_size: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub overwrite: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exclude: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "VideoConfig::is_empty")]
     pub video: VideoConfig,
     #[serde(default, skip_serializing_if = "AudioConfig::is_empty")]
@@ -170,6 +172,7 @@ pub fn merge(base: FileConfig, over: FileConfig) -> FileConfig {
         max_width: over.max_width.or(base.max_width),
         max_height: over.max_height.or(base.max_height),
         target_size: over.target_size.or(base.target_size),
+        exclude: over.exclude.or(base.exclude),
         video: VideoConfig {
             codec: over.video.codec.or(base.video.codec),
             fast: over.video.fast.or(base.video.fast),
@@ -202,6 +205,7 @@ jobs = 4
 max-width = 2000
 max-height = 1500
 target-size = "500k"
+exclude = ["*.min.js", "vendor/**"]
 
 [video]
 codec = "h264"
@@ -227,6 +231,10 @@ source-map = false
         assert_eq!(c.jobs, Some(4));
         assert_eq!(c.max_width, Some(2000));
         assert_eq!(c.target_size.as_deref(), Some("500k"));
+        assert_eq!(
+            c.exclude,
+            Some(vec!["*.min.js".to_string(), "vendor/**".to_string()])
+        );
         assert_eq!(c.video.codec.as_deref(), Some("h264"));
         assert_eq!(c.audio.bitrate.as_deref(), Some("128k"));
         assert_eq!(c.audio.strip_tags, Some(true));
@@ -261,6 +269,23 @@ source-map = false
     #[test]
     fn quality_out_of_range_is_an_error() {
         assert!(parse_config("quality = 150\n").is_err());
+    }
+
+    #[test]
+    fn parses_exclude_array() {
+        let c = parse_config("exclude = [\"*.min.js\", \"vendor/**\"]\n").unwrap();
+        assert_eq!(
+            c.exclude,
+            Some(vec!["*.min.js".to_string(), "vendor/**".to_string()])
+        );
+    }
+
+    #[test]
+    fn merge_exclude_overlay_wins() {
+        let base = parse_config("exclude = [\"a\"]\n").unwrap();
+        let over = parse_config("exclude = [\"b\"]\n").unwrap();
+        let m = merge(base, over);
+        assert_eq!(m.exclude, Some(vec!["b".to_string()]));
     }
 
     #[test]

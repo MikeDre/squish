@@ -11,6 +11,11 @@ pub struct VideoResult {
     pub format_in: VideoFormat,
     pub format_out: VideoFormat,
     pub duration: Duration,
+
+    /// Non-fatal notes about the encode — e.g. `--quality auto` couldn't
+    /// reach the visually-lossless threshold and fell back to maximum
+    /// quality.
+    pub warnings: Vec<String>,
 }
 
 impl VideoResult {
@@ -36,6 +41,7 @@ mod tests {
             format_in: VideoFormat::Mp4,
             format_out: VideoFormat::Mp4,
             duration: Duration::from_millis(100),
+            warnings: Vec::new(),
         }
     }
 

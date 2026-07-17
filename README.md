@@ -47,6 +47,8 @@ cargo install squish-media-cli
 
 This compiles squish from crates.io and places the `squish` binary in `~/.cargo/bin`. You still need the system dependencies for full format support (see below).
 
+With [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) installed, `cargo binstall squish-media-cli` fetches the prebuilt release binary instead of compiling (macOS and Linux only — Windows isn't published yet, see Roadmap).
+
 ### Build from source
 
 **1. Install Rust** (skip if `rustc --version` already works):
@@ -99,6 +101,32 @@ GIF and HEIC support require external libraries. Install them for full format co
 
 If a dependency is missing when you need it, squish tells you exactly what to install.
 
+### Shell completions
+
+`squish completions <shell>` prints a completion script to stdout for `bash`, `zsh`, or `fish`, generated from the CLI's own flag definitions so it never drifts out of sync.
+
+```bash
+# zsh
+squish completions zsh > "${fpath[1]}/_squish"
+
+# bash (requires bash-completion)
+squish completions bash > /usr/local/etc/bash_completion.d/squish   # macOS (Homebrew)
+squish completions bash | sudo tee /etc/bash_completion.d/squish    # Linux
+
+# fish
+squish completions fish > ~/.config/fish/completions/squish.fish
+```
+
+Open a new shell (or `exec $SHELL`) afterward. The Homebrew tap installs completions automatically — see below.
+
+### Man page
+
+The Homebrew tap installs `man squish` automatically. Building from source or installing via `cargo install`, generate it yourself:
+
+```bash
+squish man > /usr/local/share/man/man1/squish.1   # then `man squish`
+```
+
 ## Use
 
 ### Images
@@ -129,7 +157,7 @@ squish hero.jpg --target-size 500k
 # Compress as hard as possible with no visible loss (perceptual auto-quality)
 squish photo.jpg --quality auto
 
-# Web-optimize: resize to 1920px, convert to WebP, visually-lossless quality (H.264 for video)
+# Web-optimize: resize to fit within 1920x1920 (portrait or landscape), convert to WebP, visually-lossless quality (H.264 for video)
 squish ./assets -r --preset web
 
 # Preview without writing
@@ -152,7 +180,10 @@ squish video.mp4 --codec h264
 # Fast mode — optimise without re-encoding
 squish video.mp4 --fast
 
-# Fit a clip under an upload limit (bitrate computed from duration)
+# Compress as hard as possible with no visible loss (perceptual auto-quality, requires libvmaf)
+squish video.mp4 --quality auto
+
+# Fit a clip under an upload limit (two-pass ABR for H.264/H.265/VP9)
 squish clip.mp4 --target-size 8M
 
 # Mixed batch — images and videos together
@@ -223,22 +254,38 @@ Images and code minification work out of the box. Video and audio need
 `ffmpeg`, and GIF needs `gifsicle`; `doctor` shows what's present (with
 versions) and how to install anything missing. It always exits 0.
 
+### Scripting
+
+`--json` prints a single machine-readable report to stdout instead of the human summary — nothing else goes to stdout, so it's safe to pipe straight into `jq` or parse in CI:
+
+```bash
+squish photos/ -r --json | jq '.totals'
+# { "files": 8, "bytes_in": 12345678, "bytes_out": 3456789, "saving_pct": 72.0, "by_kind": {...} }
+
+squish photos/ -r --json | jq -r '.files[] | select(.status == "squished") | "\(.input) -> \(.output)"'
+
+# Exit code is unaffected by --json: 0 clean, 1 if any file errored.
+squish photos/ -r --json > report.json || jq '.errors' report.json
+```
+
+Works with `--dry-run` too (every planned file reports `status: "skipped"` with no `output`, since nothing is written).
+
 ## Formats
 
 ### Images
 
 Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TIFF.
 
-| Format | Library |
-|---|---|
-| PNG | `oxipng` + `imagequant` |
-| JPEG | `mozjpeg` (progressive, optimised Huffman) |
-| WebP | `libwebp` (static); animated WebP copies through unchanged |
-| AVIF | `ravif` (encode) + `dav1d` (decode) |
-| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) |
-| GIF (static + animated) | `gifsicle -O3` |
-| HEIC | `libheif-rs` |
-| TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output |
+| Format | Library | Metadata |
+|---|---|---|
+| PNG | `oxipng` + `imagequant` | EXIF stripped by default, ICC always kept; `--keep-metadata` preserves EXIF too |
+| JPEG | `mozjpeg` (progressive, optimised Huffman) | EXIF orientation always applied to pixels before re-encoding; EXIF stripped by default, ICC always kept; `--keep-metadata` preserves EXIF too (with the now-redundant orientation tag reset) |
+| WebP | `libwebp` (static); animated WebP copies through unchanged | Always stripped (not yet supported) |
+| AVIF | `ravif` (encode) + `dav1d` (decode) | Always stripped (not yet supported) |
+| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) | N/A (vector format) |
+| GIF (static + animated) | `gifsicle -O3` | Whatever `gifsicle` does by default |
+| HEIC | `libheif-rs` | Always stripped (not yet supported) |
+| TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output | Always stripped (not yet supported) |
 
 ### Video
 
@@ -320,8 +367,10 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
 ## Flags
 
 ```
-  -q, --quality <0-100|auto>  Quality, or `auto` for the lowest visually-lossless
-                              quality (images only; conflicts with --target-size)
+  -q, --quality <0-100|auto>  Quality: 0-100, or `auto` for the lowest visually-lossless
+                              quality (images: SSIMULACRA2; video: VMAF, requires
+                              libvmaf). Conflicts with --target-size; for video also
+                              conflicts with --fast/--codec copy
       --lossless             Lossless compression (overrides --quality)
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
@@ -343,8 +392,19 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --no-config            Ignore squish.toml config files for this run
       --kinds <KINDS>        Restrict the run to these file kinds, comma-
                              separated: image, video, audio, code (default: all)
+      --exclude <GLOB>       Skip files/dirs matching this glob during a directory
+                             walk (repeatable). Relative to each input path's own
+                             root. Explicit file arguments are never excluded
+      --gitignore            Also respect .gitignore (and .git/info/exclude, and
+                             the global gitignore) while walking directories.
+                             Off by default
+      --no-default-excludes  Don't prune .git, node_modules, and target while
+                             walking directories (pruned by default)
       --stats                Print usage report (this month + all-time) and exit
       --no-stats             Skip recording this run (also: SQUISH_NO_STATS=1)
+      --json                 Print a single machine-readable JSON report to stdout
+                             instead of the human summary. Conflicts with
+                             --verbose/--quiet/--watch/--stats; works with --dry-run
   -j, --jobs <N>             Parallelism (default: num CPUs)
   -v, --verbose              Per-file output
       --quiet                Errors only
@@ -352,10 +412,15 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --fast                 Video: optimise without re-encoding
       --bitrate <BITRATE>    Audio bitrate, e.g. 128k, 192k. Overrides --quality for lossy audio
       --strip-tags           Strip audio metadata (ID3 tags, album art). Default: preserved
+      --keep-metadata        Preserve EXIF and the ICC colour profile in image output
+                             (default: EXIF stripped, ICC always kept). Orientation is
+                             always applied to pixels either way. JPEG/PNG only
       --preset <web>         Apply a destination preset of sensible defaults
                              (overridable by explicit flags). Currently: web
       --safe                 Code: skip mangling and DCE (whitespace-only minification)
       --source-map           Code: emit a .map file alongside output (JS/TS/CSS only)
+
+  completions <bash|zsh|fish>  Print a shell completion script to stdout
 ```
 
 ## Config file
@@ -368,6 +433,7 @@ quality = 75          # or "auto" — perceptual visually-lossless (images only)
 format = "webp"
 recursive = true
 max-width = 2000
+exclude = ["*.min.js", "vendor/**"]
 # Replace originals in place instead of writing _squished siblings.
 # Destructive — no copy is kept. CLI flags still override this.
 overwrite = false
@@ -440,6 +506,10 @@ reinstalling squish.
 ## Collision behavior
 
 If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `_3`, etc. Pass `--force` to overwrite instead.
+
+## Never-grow guarantee
+
+squish never writes an output larger than its input — if encoding wouldn't help (the file is already optimal) and no `--format` conversion, resize, or codec change was requested, the encode is discarded and the output is left byte-identical to the input, reported as "skipped (already optimal)" rather than a (non-)saving. This applies with `--overwrite` too: the original is safely preserved even though the encoder writes in place. When a conversion *is* requested, growth is allowed (a tiny PNG icon converted to AVIF can legitimately grow) — `--verbose` prints a note when that happens.
 
 ## Development
 

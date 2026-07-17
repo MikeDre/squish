@@ -203,11 +203,12 @@ fn single_mp4_produces_squished_sibling() {
     let input = tmp.path().join("sample.mp4");
     fs::copy(video_fixture("sample.mp4"), &input).unwrap();
 
-    bin()
-        .arg(&input)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Squished 1 files"));
+    // Whether this tiny fixture actually shrinks under default re-encode
+    // settings varies by ffmpeg build/version (the never-grow guarantee,
+    // Brief 12, reports it as "already optimal" instead of "Squished" when
+    // it doesn't) — the thing this test actually cares about is that the
+    // run succeeds and produces a sibling output either way.
+    bin().arg(&input).assert().success();
 
     assert!(tmp.path().join("sample_squished.mp4").exists());
 }
@@ -221,12 +222,12 @@ fn mixed_batch_images_and_videos() {
     fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("b.mp4")).unwrap();
 
-    bin()
-        .arg(tmp.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("images"))
-        .stdout(predicate::str::contains("videos"));
+    // No stdout wording assertion: whether the video shows up under
+    // "Squished" or "Skipped (already optimal)" depends on whether this tiny
+    // fixture happens to shrink under this ffmpeg build (see the never-grow
+    // guarantee, Brief 12) — the sibling files existing either way is what
+    // this test actually cares about.
+    bin().arg(tmp.path()).assert().success();
 
     assert!(tmp.path().join("a_squished.png").exists());
     assert!(tmp.path().join("b_squished.mp4").exists());
@@ -266,6 +267,61 @@ fn codec_flag_works() {
 }
 
 #[test]
+fn video_quality_auto_conflicts_with_fast() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--quality", "auto", "--fast"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn video_quality_auto_produces_valid_output() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("clip.mp4");
+    let gen = std::process::Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=30:duration=3",
+            "-c:v",
+            "libx264",
+            "-crf",
+            "10",
+            "-pix_fmt",
+            "yuv420p",
+        ])
+        .arg(&input)
+        .output()
+        .unwrap();
+    assert!(gen.status.success(), "fixture generation failed");
+
+    let assert = bin()
+        .arg(&input)
+        .args(["--codec", "h264", "--quality", "auto"])
+        .assert();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).to_string();
+    if stderr.contains("libvmaf") {
+        eprintln!("skipping: this ffmpeg build lacks libvmaf");
+        return;
+    }
+    assert.success();
+    assert!(tmp.path().join("clip_squished.mp4").exists());
+}
+
+#[test]
 fn video_in_directory_walk() {
     if !has_ffmpeg() {
         return;
@@ -273,11 +329,12 @@ fn video_in_directory_walk() {
     let tmp = TempDir::new().unwrap();
     fs::copy(video_fixture("sample.mp4"), tmp.path().join("v.mp4")).unwrap();
 
-    bin()
-        .arg(tmp.path())
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Squished 1 files"));
+    // Whether this tiny fixture actually shrinks under default re-encode
+    // settings varies by ffmpeg build/version (the never-grow guarantee,
+    // Brief 12, reports it as "already optimal" instead of "Squished" when
+    // it doesn't) — the thing this test actually cares about is that the
+    // directory walk finds the video and produces a sibling output either way.
+    bin().arg(tmp.path()).assert().success();
 
     assert!(tmp.path().join("v_squished.mp4").exists());
 }
@@ -784,6 +841,48 @@ fn no_direct_cargo_bin_calls_in_this_file() {
         "all squish-binary invocations in cli_tests.rs must go through bin() \
          (got {count} direct binary-spawn occurrences; only the one inside fn bin() is allowed)"
     );
+}
+
+// ----- Shell completions -----
+
+#[test]
+fn completions_zsh_prints_compdef() {
+    bin()
+        .args(["completions", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("#compdef squish"));
+}
+
+#[test]
+fn completions_bash_prints_complete_dash_f() {
+    bin()
+        .args(["completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("complete -F"));
+}
+
+#[test]
+fn completions_fish_prints_fish_function() {
+    bin()
+        .args(["completions", "fish"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("function __fish_squish"));
+}
+
+// ----- Man page -----
+
+#[test]
+fn man_prints_roff_header() {
+    // clap_mangen/roff emit a two-line quote-escaping preamble before the
+    // `.TH` title macro, so assert `.TH` is present rather than on line 1.
+    bin()
+        .arg("man")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(".TH squish 1"));
 }
 
 #[test]
@@ -1329,4 +1428,418 @@ fn preset_bogus_value_errors() {
         .failure()
         .code(2)
         .stderr(predicate::str::contains("web"));
+}
+
+// ----- --json output mode -----
+
+/// Parses stdout as JSON, asserting it is *only* JSON (no leading/trailing
+/// human text mixed in) from the first byte to the last.
+fn parse_json_stdout(assert: &assert_cmd::assert::Assert) -> serde_json::Value {
+    let stdout = String::from_utf8_lossy(&assert.get_output().stdout).to_string();
+    serde_json::from_str(stdout.trim_end()).unwrap_or_else(|e| {
+        panic!("stdout is not pure JSON ({e}); got:\n{stdout}");
+    })
+}
+
+#[test]
+fn json_reports_schema_fields_and_totals() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::copy(core_fixture("sample.jpg"), tmp.path().join("b.jpg")).unwrap();
+
+    let assert = bin().arg(tmp.path()).arg("--json").assert().success();
+    let v = parse_json_stdout(&assert);
+
+    assert_eq!(v["version"], 1);
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    for f in files {
+        assert_eq!(f["status"], "squished");
+        assert_eq!(f["kind"], "image");
+        assert!(f["bytes_in"].as_u64().unwrap() > 0);
+        assert!(f["bytes_out"].as_u64().unwrap() > 0);
+        assert!(f["output"].is_string());
+        assert!(f["format"].is_string());
+    }
+
+    let bytes_in: u64 = files.iter().map(|f| f["bytes_in"].as_u64().unwrap()).sum();
+    let bytes_out: u64 = files.iter().map(|f| f["bytes_out"].as_u64().unwrap()).sum();
+    assert_eq!(v["totals"]["files"], 2);
+    assert_eq!(v["totals"]["bytes_in"], bytes_in);
+    assert_eq!(v["totals"]["bytes_out"], bytes_out);
+    assert_eq!(v["totals"]["by_kind"]["image"]["files"], 2);
+    assert!(v["errors"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn json_dry_run_lists_planned_files_without_writing() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+
+    let assert = bin()
+        .arg(tmp.path())
+        .args(["--dry-run", "--json"])
+        .assert()
+        .success();
+    let v = parse_json_stdout(&assert);
+
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["status"], "skipped");
+    assert_eq!(files[0]["kind"], "image");
+    assert!(files[0]["output"].is_null());
+    assert!(!tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn json_batch_with_one_failing_file_reports_error_and_exit_code() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("ok.png")).unwrap();
+    fs::write(tmp.path().join("corrupt.png"), b"not actually a PNG").unwrap();
+
+    let assert = bin().arg(tmp.path()).arg("--json").assert().code(1);
+    let v = parse_json_stdout(&assert);
+
+    assert_eq!(v["files"].as_array().unwrap().len(), 1);
+    let errors = v["errors"].as_array().unwrap();
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0]["input"].as_str().unwrap().contains("corrupt.png"));
+    assert!(!errors[0]["message"].as_str().unwrap().is_empty());
+}
+
+#[test]
+fn json_conflicts_with_verbose_quiet_watch_stats() {
+    for flag in ["--verbose", "--quiet", "--watch", "--stats"] {
+        bin()
+            .arg(core_fixture("sample.png"))
+            .args(["--json", flag])
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains("cannot be used with"));
+    }
+}
+
+// ----- --exclude / --gitignore / --no-default-excludes -----
+
+#[test]
+fn exclude_glob_skips_matching_files_in_a_directory_walk() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::create_dir(tmp.path().join("vendor")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("vendor/b.png")).unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--exclude", "vendor/**"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(!tmp.path().join("vendor/b_squished.png").exists());
+}
+
+#[test]
+fn explicit_file_argument_is_never_excluded() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--exclude", "*.png"])
+        .assert()
+        .success();
+
+    assert!(tmp.path().join("a_squished.png").exists());
+}
+
+#[test]
+fn default_excludes_prune_git_node_modules_target() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    for dir in [".git", "node_modules", "target"] {
+        fs::create_dir(tmp.path().join(dir)).unwrap();
+        fs::copy(
+            core_fixture("sample.png"),
+            tmp.path().join(dir).join("b.png"),
+        )
+        .unwrap();
+    }
+
+    bin()
+        .arg(tmp.path())
+        .arg("-r")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+}
+
+#[test]
+fn no_default_excludes_flag_walks_into_node_modules() {
+    let tmp = TempDir::new().unwrap();
+    fs::create_dir(tmp.path().join("node_modules")).unwrap();
+    fs::copy(
+        core_fixture("sample.png"),
+        tmp.path().join("node_modules/a.png"),
+    )
+    .unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--no-default-excludes"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("node_modules/a_squished.png").exists());
+}
+
+#[test]
+fn gitignore_flag_respects_dotgitignore_file() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join(".gitignore"), "ignored.png\n").unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("ignored.png")).unwrap();
+
+    bin()
+        .arg(tmp.path())
+        .args(["-r", "--gitignore"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    assert!(tmp.path().join("a_squished.png").exists());
+    assert!(!tmp.path().join("ignored_squished.png").exists());
+}
+
+#[test]
+fn exclude_config_key_supplies_default() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(
+        tmp.path().join("squish.toml"),
+        "exclude = [\"vendor/**\"]\n",
+    )
+    .unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+    fs::create_dir(tmp.path().join("vendor")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("vendor/b.png")).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .args([".", "-r"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+}
+
+// ----- --keep-metadata -----
+
+/// Cheap byte-level check for the JPEG APP1 EXIF marker signature. The
+/// thorough, structurally-verified checks (parsed tags, orientation) live in
+/// squish-core's own `tests/metadata.rs`; this just proves the CLI flag
+/// actually threads through to the core option end-to-end.
+fn has_exif_marker(bytes: &[u8]) -> bool {
+    bytes.windows(6).any(|w| w == b"Exif\0\0")
+}
+
+#[test]
+fn keep_metadata_flag_preserves_exif_default_strips_it() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.jpg");
+    fs::copy(core_fixture("exif_sample.jpg"), &input).unwrap();
+
+    bin().arg(&input).assert().success();
+    let stripped = fs::read(tmp.path().join("a_squished.jpg")).unwrap();
+    assert!(
+        !has_exif_marker(&stripped),
+        "EXIF should be stripped by default"
+    );
+
+    let input2 = tmp.path().join("b.jpg");
+    fs::copy(core_fixture("exif_sample.jpg"), &input2).unwrap();
+    bin().arg(&input2).arg("--keep-metadata").assert().success();
+    let kept = fs::read(tmp.path().join("b_squished.jpg")).unwrap();
+    assert!(
+        has_exif_marker(&kept),
+        "--keep-metadata should preserve EXIF"
+    );
+}
+
+// ----- Never-grow guarantee -----
+
+#[test]
+fn already_optimal_file_is_skipped_byte_identical_on_second_run() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    // First pass: oxipng (--lossless, no quantization search) genuinely
+    // compresses it.
+    bin()
+        .arg(&input)
+        .arg("--lossless")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+    let once = tmp.path().join("a_squished.png");
+    assert!(once.exists());
+    let bytes_after_first_pass = fs::read(&once).unwrap();
+
+    // Second pass, re-squishing the already-optimized output: oxipng at max
+    // compression is deterministic, so a second lossless pass over its own
+    // output finds nothing further to gain — must report "skipped", not a
+    // (non-)saving, and the result must be byte-identical, not merely the
+    // same size.
+    bin()
+        .arg(&once)
+        .arg("--lossless")
+        .assert()
+        .success()
+        .code(0)
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+    let twice = tmp.path().join("a_squished_squished.png");
+    assert_eq!(fs::read(&twice).unwrap(), bytes_after_first_pass);
+}
+
+#[test]
+fn format_conversion_is_allowed_to_grow() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin().arg(&input).arg("--lossless").assert().success();
+    let optimized = tmp.path().join("a_squished.png");
+
+    // Converting an already-optimal PNG to TIFF (no compression) reliably
+    // grows it — an explicit --format conversion must be allowed to do
+    // that, not silently discarded by the never-grow guard.
+    bin()
+        .arg(&optimized)
+        .args(["--format", "tiff"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Squished 1 files"));
+
+    let converted = tmp.path().join("a_squished_squished.tiff");
+    let out_size = fs::metadata(&converted).unwrap().len();
+    let in_size = fs::metadata(&optimized).unwrap().len();
+    assert!(
+        out_size > in_size,
+        "expected TIFF conversion to grow the file: {in_size} -> {out_size}"
+    );
+}
+
+#[test]
+fn already_optimal_reports_skipped_status_in_json() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+    bin().arg(&input).arg("--lossless").assert().success();
+    let optimized = tmp.path().join("a_squished.png");
+
+    let assert = bin()
+        .arg(&optimized)
+        .args(["--lossless", "--json"])
+        .assert()
+        .success();
+    let v = parse_json_stdout(&assert);
+
+    let files = v["files"].as_array().unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0]["status"], "skipped");
+    assert_eq!(files[0]["kind"], "image");
+    assert_eq!(files[0]["bytes_in"], files[0]["bytes_out"]);
+    // Already-optimal skips don't count toward "squished" totals.
+    assert_eq!(v["totals"]["files"], 0);
+}
+
+#[test]
+fn overwrite_mode_already_optimal_restores_original_bytes_safely() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("a.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--lossless", "--overwrite"])
+        .assert()
+        .success();
+    let after_first = fs::read(&input).unwrap();
+
+    // Second in-place pass: the encoder overwrites `input` directly (no
+    // temp+rename for images), so if the never-grow guard didn't cache the
+    // original bytes *before* encoding, there would be nothing left to
+    // restore. Verify the file is still intact and byte-identical.
+    bin()
+        .arg(&input)
+        .args(["--lossless", "--overwrite"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+    assert_eq!(fs::read(&input).unwrap(), after_first);
+}
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_image() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.jpg");
+    fs::copy(core_fixture("sample.jpg"), &input).unwrap();
+    let input_bytes = fs::read(&input).unwrap();
+
+    // The fixture is ~43k; a 200k budget is already satisfied, so re-encoding
+    // toward that budget must never be allowed to grow the file — --target-size
+    // is not a "legitimate conversion" the way --format/--codec/resize are.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "200k"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sample_squished.jpg");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
+}
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_video() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.mp4");
+    fs::copy(video_fixture("sample.mp4"), &input).unwrap();
+    let input_bytes = fs::read(&input).unwrap();
+
+    // Fixture is ~10k; a 5M budget is already satisfied.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "5M"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sample_squished.mp4");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
+}
+
+#[test]
+fn target_size_larger_than_input_does_not_grow_audio() {
+    if !has_ffmpeg() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sine.mp3");
+    make_sine(&input, &["-c:a", "libmp3lame"]);
+    let input_bytes = fs::read(&input).unwrap();
+
+    // A 1-second sine encodes to well under 100k; the budget is already met.
+    bin()
+        .arg(&input)
+        .args(["--target-size", "100k"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Skipped 1 (already optimal"));
+
+    let out = tmp.path().join("sine_squished.mp3");
+    assert_eq!(fs::read(&out).unwrap(), input_bytes);
 }

@@ -15,6 +15,17 @@ description = "Local CLI to compress images, video, audio, and minify code"
 name = "squish"
 path = "src/main.rs"
 
+# The release tarball (see .github/workflows/release.yml) is a flat archive —
+# just `squish` (and `squish.1`) at the root, no enclosing directory — and is
+# named after the binary ("squish"), not the crate ("squish-media-cli").
+# Verified against the real v0.7.0 assets. Windows targets aren't published
+# (see ROADMAP.md's deferred list), so `cargo binstall` falls back to
+# building from source there.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/v{ version }/squish-v{ version }-{ target }.tar.gz"
+pkg-fmt = "tgz"
+bin-dir = "{ bin }{ binary-ext }"
+
 [dependencies]
 squish-core.workspace = true
 squish-video = { workspace = true }
@@ -23,8 +34,11 @@ squish-code = { workspace = true }
 anyhow = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
+clap_mangen = "0.2"
 dirs = "5"
 humantime = "2"
+ignore = "0.4"
 indicatif = "0.17"
 notify = "8"
 notify-debouncer-mini = "0.7"
@@ -32,7 +46,6 @@ rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
-walkdir = "2"
 
 [dev-dependencies]
 assert_cmd = "2"

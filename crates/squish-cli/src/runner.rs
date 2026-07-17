@@ -21,6 +21,7 @@ pub struct RunConfig {
     pub verbose: bool,
     pub quiet: bool,
     pub dry_run: bool,
+    pub json: bool,
     pub overwrite: bool,
     pub kinds: KindFilter,
     /// When true (a preset is active), skip the "--format specifies X but no X
@@ -36,6 +37,14 @@ pub struct RunReport {
     pub code_results: Vec<CodeResult>,
     pub errors: Vec<(PathBuf, String)>,
     pub skipped_unknown: Vec<PathBuf>,
+    /// Files where encoding produced no improvement (and no format/resize/
+    /// codec conversion was requested, so growth wasn't expected/allowed):
+    /// the encode was discarded and the output left byte-identical to the
+    /// input. See `enforce_never_grow`.
+    pub already_optimal_images: Vec<SquishResult>,
+    pub already_optimal_video: Vec<VideoResult>,
+    pub already_optimal_audio: Vec<AudioResult>,
+    pub already_optimal_code: Vec<CodeResult>,
     pub total_wall: Duration,
 }
 
@@ -54,12 +63,17 @@ impl RunReport {
         let cod: u64 = self.code_results.iter().map(|r| r.output_bytes).sum();
         img + vid + aud + cod
     }
-    #[allow(dead_code)]
     pub fn total_files(&self) -> usize {
         self.results.len()
             + self.video_results.len()
             + self.audio_results.len()
             + self.code_results.len()
+    }
+    pub fn total_already_optimal(&self) -> usize {
+        self.already_optimal_images.len()
+            + self.already_optimal_video.len()
+            + self.already_optimal_audio.len()
+            + self.already_optimal_code.len()
     }
     pub fn exit_code(&self) -> u8 {
         if self.errors.is_empty() {
@@ -76,6 +90,57 @@ enum FileKind {
     Audio,
     Code,
     Unknown,
+}
+
+/// Outcome of the never-grow check (see `enforce_never_grow`) for one file.
+enum NeverGrow {
+    /// Output was smaller than input — the common case, nothing to do.
+    Smaller,
+    /// Output wasn't smaller, but a format/resize/codec conversion was
+    /// requested, so growth is allowed (e.g. a tiny PNG icon converted to
+    /// AVIF can legitimately grow). Caller prints a verbose-mode note.
+    GrewButAllowed,
+    /// Output wasn't smaller and no conversion was requested: the encode
+    /// was discarded and `output_path` now holds a byte-identical copy of
+    /// the original input.
+    Skipped,
+}
+
+/// Central "never grow" enforcement (IMPLEMENTATION-BRIEFS.md Brief 12):
+/// squish must never write an output larger than its input unless the user
+/// asked for a transformation that legitimately changes representation
+/// (format conversion, resize, codec change).
+///
+/// `original_bytes` must be `Some` whenever `overwrite` is true: in that
+/// mode every encoder (image, video, audio, code) writes over — or renames
+/// onto — `input_path` before returning, so by the time this runs the
+/// original bytes are already gone from disk and can only be restored from
+/// an in-memory copy taken *before* the encode call. When `overwrite` is
+/// false, `input_path` is guaranteed untouched on disk and is read directly
+/// instead — no in-memory cache needed for the common case.
+fn enforce_never_grow(
+    input_path: &Path,
+    output_path: &Path,
+    input_bytes: u64,
+    output_bytes: u64,
+    legitimate_transform: bool,
+    overwrite: bool,
+    original_bytes: Option<&[u8]>,
+) -> std::io::Result<NeverGrow> {
+    if output_bytes < input_bytes {
+        return Ok(NeverGrow::Smaller);
+    }
+    if legitimate_transform {
+        return Ok(NeverGrow::GrewButAllowed);
+    }
+    if overwrite {
+        let bytes = original_bytes
+            .expect("original bytes must be cached before encoding when overwrite is set");
+        std::fs::write(output_path, bytes)?;
+    } else if input_path != output_path {
+        std::fs::copy(input_path, output_path)?;
+    }
+    Ok(NeverGrow::Skipped)
 }
 
 fn classify_file(path: &Path) -> FileKind {
@@ -321,20 +386,31 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     }
 
     if cfg.dry_run {
-        for p in &image_files {
-            println!("{}", dry_run_action(cfg.overwrite, "image", p));
-        }
-        for p in &video_files {
-            println!("{}", dry_run_action(cfg.overwrite, "video", p));
-        }
-        for p in &audio_files {
-            println!("{}", dry_run_action(cfg.overwrite, "audio", p));
-        }
-        for p in &code_files {
-            println!("{}", dry_run_action(cfg.overwrite, "code", p));
-        }
-        for p in &skipped_unknown {
-            println!("would skip (unrecognized): {}", p.display());
+        if cfg.json {
+            let report = crate::json_report::build_dry_run(
+                &image_files,
+                &video_files,
+                &audio_files,
+                &code_files,
+                &skipped_unknown,
+            );
+            crate::json_report::print(&report);
+        } else {
+            for p in &image_files {
+                println!("{}", dry_run_action(cfg.overwrite, "image", p));
+            }
+            for p in &video_files {
+                println!("{}", dry_run_action(cfg.overwrite, "video", p));
+            }
+            for p in &audio_files {
+                println!("{}", dry_run_action(cfg.overwrite, "audio", p));
+            }
+            for p in &code_files {
+                println!("{}", dry_run_action(cfg.overwrite, "code", p));
+            }
+            for p in &skipped_unknown {
+                println!("would skip (unrecognized): {}", p.display());
+            }
         }
         return Ok(RunReport {
             results: Vec::new(),
@@ -343,6 +419,10 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             code_results: Vec::new(),
             errors: Vec::new(),
             skipped_unknown,
+            already_optimal_images: Vec::new(),
+            already_optimal_video: Vec::new(),
+            already_optimal_audio: Vec::new(),
+            already_optimal_code: Vec::new(),
             total_wall: start.elapsed(),
         });
     }
@@ -364,10 +444,50 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let progress = build_progress_bar(total, cfg);
 
     // Images in parallel.
-    let image_pairs: Vec<(PathBuf, Result<SquishResult, SquishError>)> = image_files
+    let image_pairs: Vec<(PathBuf, Result<SquishResult, SquishError>, bool)> = image_files
         .par_iter()
         .map(|path| {
-            let res = squish_file(path, &cfg.opts);
+            let original_bytes = if cfg.overwrite {
+                std::fs::read(path).ok()
+            } else {
+                None
+            };
+            let mut res = squish_file(path, &cfg.opts);
+            let mut downgraded = false;
+            if let Ok(r) = &res {
+                // --target-size is a budget, not a representation change: it
+                // never needs to grow past the original, so it isn't a
+                // legitimate reason to bypass the never-grow guard.
+                let legitimate = cfg.opts.output_format.is_some()
+                    || cfg.opts.needs_resize()
+                    || r.format_in != r.format_out;
+                match enforce_never_grow(
+                    &r.input_path,
+                    &r.output_path,
+                    r.input_bytes,
+                    r.output_bytes,
+                    legitimate,
+                    cfg.overwrite,
+                    original_bytes.as_deref(),
+                ) {
+                    Ok(NeverGrow::Smaller) => {}
+                    Ok(NeverGrow::GrewButAllowed) => {
+                        if !cfg.quiet && cfg.verbose {
+                            eprintln!(
+                                "  note: output grew ({} → {} bytes) — conversion requested",
+                                r.input_bytes, r.output_bytes
+                            );
+                        }
+                    }
+                    Ok(NeverGrow::Skipped) => downgraded = true,
+                    Err(e) => res = Err(e.into()),
+                }
+            }
+            if downgraded {
+                if let Ok(r) = &mut res {
+                    r.output_bytes = r.input_bytes;
+                }
+            }
             let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
             if !cfg.quiet && cfg.verbose {
                 match &res {
@@ -396,14 +516,54 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 pb.set_message(display_filename(path));
                 pb.inc(1);
             }
-            (path.clone(), res)
+            (path.clone(), res, downgraded)
         })
         .collect();
 
     // Videos sequentially.
-    let mut video_pairs: Vec<(PathBuf, Result<VideoResult, VideoError>)> = Vec::new();
+    let mut video_pairs: Vec<(PathBuf, Result<VideoResult, VideoError>, bool)> = Vec::new();
     for path in &video_files {
-        let res = squish_video::squish_video(path, &cfg.video_opts);
+        let original_bytes = if cfg.overwrite {
+            std::fs::read(path).ok()
+        } else {
+            None
+        };
+        let mut res = squish_video::squish_video(path, &cfg.video_opts);
+        let mut downgraded = false;
+        if let Ok(r) = &res {
+            // --target-size is a budget, not a representation change: it
+            // never needs to grow past the original, so it isn't a
+            // legitimate reason to bypass the never-grow guard.
+            let legitimate = cfg.video_opts.output_format.is_some()
+                || cfg.video_opts.codec.is_some()
+                || r.format_in != r.format_out;
+            match enforce_never_grow(
+                &r.input_path,
+                &r.output_path,
+                r.input_bytes,
+                r.output_bytes,
+                legitimate,
+                cfg.overwrite,
+                original_bytes.as_deref(),
+            ) {
+                Ok(NeverGrow::Smaller) => {}
+                Ok(NeverGrow::GrewButAllowed) => {
+                    if !cfg.quiet && cfg.verbose {
+                        eprintln!(
+                            "  note: output grew ({} → {} bytes) — conversion requested",
+                            r.input_bytes, r.output_bytes
+                        );
+                    }
+                }
+                Ok(NeverGrow::Skipped) => downgraded = true,
+                Err(e) => res = Err(e.into()),
+            }
+        }
+        if downgraded {
+            if let Ok(r) = &mut res {
+                r.output_bytes = r.input_bytes;
+            }
+        }
         let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
         if !cfg.quiet && cfg.verbose {
             match &res {
@@ -423,19 +583,63 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 {
                     eprintln!("  note: {note}");
                 }
+                for w in &r.warnings {
+                    eprintln!("  WARNING: {w}");
+                }
             }
         }
         if let Some(pb) = &progress {
             pb.set_message(display_filename(path));
             pb.inc(1);
         }
-        video_pairs.push((path.clone(), res));
+        video_pairs.push((path.clone(), res, downgraded));
     }
 
     // Audio sequentially.
-    let mut audio_pairs: Vec<(PathBuf, Result<AudioResult, AudioError>)> = Vec::new();
+    let mut audio_pairs: Vec<(PathBuf, Result<AudioResult, AudioError>, bool)> = Vec::new();
     for path in &audio_files {
-        let res = squish_audio::squish_audio(path, &audio_opts);
+        let original_bytes = if cfg.overwrite {
+            std::fs::read(path).ok()
+        } else {
+            None
+        };
+        let mut res = squish_audio::squish_audio(path, &audio_opts);
+        let mut downgraded = false;
+        if let Ok(r) = &res {
+            // --target-size is a budget, not a representation change: it
+            // never needs to grow past the original, so it isn't a
+            // legitimate reason to bypass the never-grow guard.
+            let legitimate = audio_opts.output_format.is_some()
+                || audio_opts.codec.is_some()
+                || audio_opts.bitrate_kbps.is_some()
+                || r.format_in != r.format_out;
+            match enforce_never_grow(
+                &r.input_path,
+                &r.output_path,
+                r.input_bytes,
+                r.output_bytes,
+                legitimate,
+                cfg.overwrite,
+                original_bytes.as_deref(),
+            ) {
+                Ok(NeverGrow::Smaller) => {}
+                Ok(NeverGrow::GrewButAllowed) => {
+                    if !cfg.quiet && cfg.verbose {
+                        eprintln!(
+                            "  note: output grew ({} → {} bytes) — conversion requested",
+                            r.input_bytes, r.output_bytes
+                        );
+                    }
+                }
+                Ok(NeverGrow::Skipped) => downgraded = true,
+                Err(e) => res = Err(e.into()),
+            }
+        }
+        if downgraded {
+            if let Ok(r) = &mut res {
+                r.output_bytes = r.input_bytes;
+            }
+        }
         let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
         if !cfg.quiet && cfg.verbose {
             match &res {
@@ -452,14 +656,45 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
             pb.set_message(display_filename(path));
             pb.inc(1);
         }
-        audio_pairs.push((path.clone(), res));
+        audio_pairs.push((path.clone(), res, downgraded));
     }
 
     // Code in parallel.
-    let code_pairs: Vec<(PathBuf, Result<CodeResult, CodeError>)> = code_files
+    let code_pairs: Vec<(PathBuf, Result<CodeResult, CodeError>, bool)> = code_files
         .par_iter()
         .map(|path| {
-            let res = squish_code::squish_code(path, &cfg.code_opts);
+            let original_bytes = if cfg.overwrite {
+                std::fs::read(path).ok()
+            } else {
+                None
+            };
+            let mut res = squish_code::squish_code(path, &cfg.code_opts);
+            let mut downgraded = false;
+            if let Ok(r) = &res {
+                // Code never has a legitimate size-changing "conversion" —
+                // minification only ever changes formatting, never format.
+                match enforce_never_grow(
+                    &r.input_path,
+                    &r.output_path,
+                    r.input_bytes,
+                    r.output_bytes,
+                    false,
+                    cfg.overwrite,
+                    original_bytes.as_deref(),
+                ) {
+                    Ok(NeverGrow::Smaller) => {}
+                    Ok(NeverGrow::GrewButAllowed) => unreachable!(
+                        "code never reports a legitimate transform, so growth is never allowed"
+                    ),
+                    Ok(NeverGrow::Skipped) => downgraded = true,
+                    Err(e) => res = Err(e.into()),
+                }
+            }
+            if downgraded {
+                if let Ok(r) = &mut res {
+                    r.output_bytes = r.input_bytes;
+                }
+            }
             let n = processed.fetch_add(1, Ordering::SeqCst) + 1;
             if !cfg.quiet && cfg.verbose {
                 match &res {
@@ -476,7 +711,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
                 pb.set_message(display_filename(path));
                 pb.inc(1);
             }
-            (path.clone(), res)
+            (path.clone(), res, downgraded)
         })
         .collect();
 
@@ -488,28 +723,36 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
     let mut video_results = Vec::new();
     let mut audio_results = Vec::new();
     let mut code_results = Vec::new();
+    let mut already_optimal_images = Vec::new();
+    let mut already_optimal_video = Vec::new();
+    let mut already_optimal_audio = Vec::new();
+    let mut already_optimal_code = Vec::new();
     let mut errors: Vec<(PathBuf, String)> = Vec::new();
 
-    for (p, r) in image_pairs {
+    for (p, r, downgraded) in image_pairs {
         match r {
+            Ok(r) if downgraded => already_optimal_images.push(r),
             Ok(r) => results.push(r),
             Err(e) => errors.push((p, format!("{e}"))),
         }
     }
-    for (p, r) in video_pairs {
+    for (p, r, downgraded) in video_pairs {
         match r {
+            Ok(r) if downgraded => already_optimal_video.push(r),
             Ok(r) => video_results.push(r),
             Err(e) => errors.push((p, format!("{e}"))),
         }
     }
-    for (p, r) in audio_pairs {
+    for (p, r, downgraded) in audio_pairs {
         match r {
+            Ok(r) if downgraded => already_optimal_audio.push(r),
             Ok(r) => audio_results.push(r),
             Err(e) => errors.push((p, format!("{e}"))),
         }
     }
-    for (p, r) in code_pairs {
+    for (p, r, downgraded) in code_pairs {
         match r {
+            Ok(r) if downgraded => already_optimal_code.push(r),
             Ok(r) => code_results.push(r),
             Err(e) => errors.push((p, format!("{e}"))),
         }
@@ -522,10 +765,16 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
         code_results,
         errors,
         skipped_unknown,
+        already_optimal_images,
+        already_optimal_video,
+        already_optimal_audio,
+        already_optimal_code,
         total_wall: start.elapsed(),
     };
 
-    if !cfg.quiet {
+    if cfg.json {
+        crate::json_report::print(&crate::json_report::build(&report));
+    } else if !cfg.quiet {
         print_summary(&report);
     }
 
@@ -533,7 +782,7 @@ pub fn run(paths: &[PathBuf], cfg: &RunConfig) -> Result<RunReport> {
 }
 
 fn build_progress_bar(total: u64, cfg: &RunConfig) -> Option<ProgressBar> {
-    if cfg.quiet || cfg.verbose || total == 0 {
+    if cfg.quiet || cfg.verbose || cfg.json || total == 0 {
         return None;
     }
     let pb = ProgressBar::with_draw_target(Some(total), ProgressDrawTarget::stderr());
@@ -686,6 +935,34 @@ fn print_summary(r: &RunReport) {
             names.join(", ")
         };
         println!("Skipped {} (unrecognized: {list})", r.skipped_unknown.len());
+    }
+    let already_optimal = r.total_already_optimal();
+    if already_optimal > 0 {
+        let paths: Vec<&PathBuf> = r
+            .already_optimal_images
+            .iter()
+            .map(|x| &x.input_path)
+            .chain(r.already_optimal_video.iter().map(|x| &x.input_path))
+            .chain(r.already_optimal_audio.iter().map(|x| &x.input_path))
+            .chain(r.already_optimal_code.iter().map(|x| &x.input_path))
+            .collect();
+        let names: Vec<String> = paths
+            .iter()
+            .take(5)
+            .map(|p| {
+                p.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("?")
+                    .to_string()
+            })
+            .collect();
+        let extra = paths.len().saturating_sub(5);
+        let list = if extra > 0 {
+            format!("{}, and {extra} more", names.join(", "))
+        } else {
+            names.join(", ")
+        };
+        println!("Skipped {already_optimal} (already optimal: {list})");
     }
     if !r.errors.is_empty() {
         eprintln!("\nErrors ({}):", r.errors.len());
@@ -919,6 +1196,82 @@ mod fast_override_tests {
         assert!(fast_override_note(false, VideoFormat::Dv, VideoFormat::Mp4).is_none());
         // no remap → no note
         assert!(fast_override_note(true, VideoFormat::Mp4, VideoFormat::Mp4).is_none());
+    }
+}
+
+#[cfg(test)]
+mod never_grow_tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn smaller_output_is_kept() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("in.bin");
+        let output = tmp.path().join("out.bin");
+        std::fs::write(&input, b"aaaaaaaaaa").unwrap();
+        std::fs::write(&output, b"aaa").unwrap();
+
+        let outcome = enforce_never_grow(&input, &output, 10, 3, false, false, None).unwrap();
+        assert!(matches!(outcome, NeverGrow::Smaller));
+        // Untouched — the encoder's own (smaller) output stands.
+        assert_eq!(std::fs::read(&output).unwrap(), b"aaa");
+    }
+
+    #[test]
+    fn legitimate_transform_allows_growth() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("in.bin");
+        let output = tmp.path().join("out.bin");
+        std::fs::write(&input, b"aaa").unwrap();
+        std::fs::write(&output, b"aaaaaaaaaa").unwrap();
+
+        let outcome = enforce_never_grow(&input, &output, 3, 10, true, false, None).unwrap();
+        assert!(matches!(outcome, NeverGrow::GrewButAllowed));
+        // Untouched — growth was allowed, nothing to restore.
+        assert_eq!(std::fs::read(&output).unwrap(), b"aaaaaaaaaa");
+    }
+
+    #[test]
+    fn non_overwrite_growth_restores_input_by_copy() {
+        let tmp = TempDir::new().unwrap();
+        let input = tmp.path().join("in.bin");
+        let output = tmp.path().join("out.bin");
+        std::fs::write(&input, b"aaa").unwrap();
+        std::fs::write(&output, b"aaaaaaaaaa").unwrap(); // encoder's output "grew"
+
+        let outcome = enforce_never_grow(&input, &output, 3, 10, false, false, None).unwrap();
+        assert!(matches!(outcome, NeverGrow::Skipped));
+        assert_eq!(std::fs::read(&output).unwrap(), b"aaa");
+        // The input itself must be untouched.
+        assert_eq!(std::fs::read(&input).unwrap(), b"aaa");
+    }
+
+    #[test]
+    fn overwrite_growth_restores_from_cached_original_bytes() {
+        let tmp = TempDir::new().unwrap();
+        // In --overwrite mode output_path == input_path, and by the time
+        // this runs the encoder has already clobbered it in place — this
+        // test simulates exactly that: the path on disk already holds the
+        // (larger) encoded bytes, and only the pre-encode cache remembers
+        // the real original.
+        let path = tmp.path().join("in.bin");
+        std::fs::write(&path, b"aaaaaaaaaa").unwrap(); // already-clobbered "grown" content
+        let original = b"aaa".to_vec();
+
+        let outcome =
+            enforce_never_grow(&path, &path, 3, 10, false, true, Some(&original)).unwrap();
+        assert!(matches!(outcome, NeverGrow::Skipped));
+        assert_eq!(std::fs::read(&path).unwrap(), b"aaa");
+    }
+
+    #[test]
+    #[should_panic(expected = "original bytes must be cached")]
+    fn overwrite_without_cached_bytes_panics_rather_than_silently_losing_data() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("in.bin");
+        std::fs::write(&path, b"aaaaaaaaaa").unwrap();
+        let _ = enforce_never_grow(&path, &path, 3, 10, false, true, None);
     }
 }
 

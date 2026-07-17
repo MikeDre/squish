@@ -44,6 +44,13 @@ pub struct SquishOptions {
     /// Image-only; ignored by video/audio. Mutually exclusive with
     /// `target_size` at the CLI layer.
     pub auto: bool,
+
+    /// Preserve EXIF and the ICC colour profile in the output, where the
+    /// format supports it (currently JPEG and PNG). Default (`false`)
+    /// strips EXIF but still preserves ICC and applies EXIF orientation to
+    /// pixels before stripping it, so color and framing stay correct either
+    /// way — this flag only affects whether EXIF metadata itself survives.
+    pub keep_metadata: bool,
 }
 
 impl SquishOptions {

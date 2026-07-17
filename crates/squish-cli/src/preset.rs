@@ -14,6 +14,9 @@ pub fn apply_preset(args: &mut Args, file_cfg: &mut FileConfig, preset: Preset) 
             if args.max_width.is_none() {
                 args.max_width = Some(1920);
             }
+            if args.max_height.is_none() {
+                args.max_height = Some(1920);
+            }
             if args.format.is_none() {
                 args.format = Some("webp".to_string());
             }
@@ -53,6 +56,7 @@ mod tests {
         let mut cfg = FileConfig::default();
         apply_preset(&mut args, &mut cfg, Preset::Web);
         assert_eq!(args.max_width, Some(1920));
+        assert_eq!(args.max_height, Some(1920));
         assert_eq!(args.format.as_deref(), Some("webp"));
         assert_eq!(args.quality, Some(QualityArg::Auto));
         assert_eq!(cfg.video.codec.as_deref(), Some("h264"));
@@ -73,6 +77,15 @@ mod tests {
         assert_eq!(args.quality, Some(QualityArg::Fixed(90)));
         assert_eq!(args.max_width, Some(800));
         assert_eq!(args.format.as_deref(), Some("webp"));
+    }
+
+    #[test]
+    fn explicit_max_height_wins_over_preset() {
+        let mut args = args_from(&["squish", "input.png", "--max-height", "400"]);
+        let mut cfg = FileConfig::default();
+        apply_preset(&mut args, &mut cfg, Preset::Web);
+        assert_eq!(args.max_height, Some(400));
+        assert_eq!(args.max_width, Some(1920));
     }
 
     #[test]

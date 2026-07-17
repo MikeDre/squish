@@ -4,6 +4,7 @@ mod config_wizard;
 mod doctor;
 mod finder_action;
 mod format_request;
+mod json_report;
 mod preset;
 mod runner;
 mod stats;
@@ -12,7 +13,7 @@ mod walker;
 mod watch;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, Parser};
 use squish_audio::{AudioFormat, AudioOptions};
 use squish_code::CodeOptions;
 use squish_core::SquishOptions;
@@ -35,6 +36,20 @@ fn real_main() -> Result<u8> {
         Some(cli::Command::FinderAction(cmd)) => return finder_action::run(cmd),
         Some(cli::Command::Config { local }) => return config_wizard::run(*local),
         Some(cli::Command::Doctor) => return doctor::run(),
+        Some(cli::Command::Completions { shell }) => {
+            clap_complete::generate(
+                *shell,
+                &mut cli::Args::command(),
+                "squish",
+                &mut std::io::stdout(),
+            );
+            return Ok(0);
+        }
+        Some(cli::Command::Man) => {
+            let man = clap_mangen::Man::new(cli::Args::command());
+            man.render(&mut std::io::stdout())?;
+            return Ok(0);
+        }
         None => {}
     }
 
@@ -113,18 +128,23 @@ fn real_main() -> Result<u8> {
         }
     };
 
-    // Split --quality into the numeric value the encoders use and the auto flag.
-    // Auto is image-only: video/audio receive no explicit quality (codec default).
+    // Split --quality into the numeric value the encoders use and the auto
+    // flag. Auto drives a perceptual search for both images (SSIMULACRA2) and
+    // video (VMAF); audio has no perceptual auto and always gets a plain
+    // numeric quality (None when auto, so the codec default applies).
     let (image_quality, auto): (Option<u8>, bool) = match args.quality {
         Some(cli::QualityArg::Fixed(n)) => (Some(n), false),
         Some(cli::QualityArg::Auto) => (None, true),
         None => (None, false),
     };
-    // Video/audio have no perceptual auto; they take the same numeric quality
-    // (None when auto, so the codec default applies).
     let av_quality = image_quality;
 
-    let worklist = walker::collect_worklist(&args.paths, args.recursive);
+    let exclude_opts = walker::ExcludeOptions {
+        globs: args.exclude.clone(),
+        gitignore: args.gitignore,
+        no_default_excludes: args.no_default_excludes,
+    };
+    let worklist = walker::collect_worklist(&args.paths, args.recursive, &exclude_opts);
 
     // Classify worklist to determine which kinds are present (for codec validation).
     let mut has_video = false;
@@ -198,6 +218,7 @@ fn real_main() -> Result<u8> {
         overwrite: args.overwrite,
         target_size,
         auto,
+        keep_metadata: args.keep_metadata,
     };
 
     let video_opts = VideoOptions {
@@ -209,6 +230,7 @@ fn real_main() -> Result<u8> {
         overwrite: args.overwrite,
         output_format: requested_format.as_ref().and_then(|r| r.video),
         target_size,
+        quality_auto: auto,
     };
 
     let audio_opts = AudioOptions {
@@ -239,12 +261,19 @@ fn real_main() -> Result<u8> {
         verbose: args.verbose,
         quiet: args.quiet,
         dry_run: args.dry_run,
+        json: args.json,
         overwrite: args.overwrite,
         kinds,
         skip_format_kind_check: args.preset.is_some(),
     };
     if args.watch {
-        watch::run_watch(&args.paths, &cfg, args.recursive, args.no_stats)?;
+        watch::run_watch(
+            &args.paths,
+            &cfg,
+            args.recursive,
+            args.no_stats,
+            &exclude_opts,
+        )?;
         return Ok(0);
     }
 
@@ -324,6 +353,9 @@ fn apply_file_config(args: &mut cli::Args, cfg: &config::FileConfig) {
     }
     if args.max_height.is_none() {
         args.max_height = cfg.max_height;
+    }
+    if args.exclude.is_empty() {
+        args.exclude = cfg.exclude.clone().unwrap_or_default();
     }
     if !args.strip_tags {
         args.strip_tags = cfg.audio.strip_tags.unwrap_or(false);

@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Value of `--quality`: a fixed 0–100 number, or `auto` (perceptual
-/// visually-lossless search, image formats only).
+/// visually-lossless search — images via SSIMULACRA2, video via VMAF).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QualityArg {
     Fixed(u8),
@@ -40,7 +40,8 @@ pub struct Args {
     pub paths: Vec<PathBuf>,
 
     /// Quality: 0-100, or `auto` for the lowest visually-lossless quality
-    /// (image formats only). Auto conflicts with --target-size.
+    /// (images: SSIMULACRA2; video: VMAF, requires libvmaf). Conflicts with
+    /// --target-size; for video also conflicts with --fast/--codec copy.
     #[arg(short = 'q', long, value_parser = parse_quality)]
     pub quality: Option<QualityArg>,
 
@@ -117,8 +118,18 @@ pub struct Args {
     pub target_size: Option<String>,
 
     /// Strip audio metadata (ID3 tags, album art). Default: preserved.
+    /// (Images work the other way: --keep-metadata preserves EXIF, since
+    /// images strip by default.)
     #[arg(long = "strip-tags")]
     pub strip_tags: bool,
+
+    /// Preserve EXIF and the ICC colour profile in image output (default:
+    /// EXIF stripped, ICC always preserved). Orientation is always applied
+    /// to pixels before encoding either way, so framing is correct
+    /// regardless of this flag. Currently supported for JPEG and PNG only;
+    /// other image formats ignore it.
+    #[arg(long = "keep-metadata")]
+    pub keep_metadata: bool,
 
     /// Code: skip mangling and dead-code elimination (whitespace-only).
     #[arg(long)]
@@ -146,10 +157,33 @@ pub struct Args {
     #[arg(long, conflicts_with_all = ["dry_run", "stats"])]
     pub watch: bool,
 
+    /// Print a single machine-readable JSON report to stdout instead of the
+    /// normal human summary. Suppresses stdout progress/summary output
+    /// (warnings and per-file logs, if any, still go to stderr). Works with
+    /// --dry-run. Exit code is unaffected.
+    #[arg(long, conflicts_with_all = ["verbose", "quiet", "watch", "stats"])]
+    pub json: bool,
+
     /// Restrict the run to these file kinds, comma-separated.
     /// Kinds: image, video, audio, code. Default: all kinds.
     #[arg(long, value_name = "KINDS")]
     pub kinds: Option<String>,
+
+    /// Skip files/dirs matching this glob during a directory walk (repeatable).
+    /// Matched relative to each input path's own root. Explicit file
+    /// arguments are never excluded, even if they match.
+    #[arg(long, value_name = "GLOB")]
+    pub exclude: Vec<String>,
+
+    /// Also respect .gitignore (and .git/info/exclude, and the global
+    /// gitignore) while walking directories. Off by default.
+    #[arg(long)]
+    pub gitignore: bool,
+
+    /// Don't prune .git, node_modules, and target while walking directories
+    /// (pruned by default).
+    #[arg(long = "no-default-excludes")]
+    pub no_default_excludes: bool,
 
     /// Apply a destination preset of sensible defaults (overridable by explicit
     /// flags). Values: web.
@@ -170,6 +204,14 @@ pub enum Command {
     },
     /// Report which formats and external tools are available on this machine.
     Doctor,
+    /// Generate a shell completion script (writes to stdout).
+    Completions {
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+    /// Generate the squish.1 man page (writes roff to stdout).
+    #[command(hide = true)]
+    Man,
 }
 
 #[derive(Subcommand, Debug)]

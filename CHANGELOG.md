@@ -4,6 +4,90 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`--quality auto` for video.** Extends perceptual auto-quality to video:
+  binary-searches the same 1–100 quality dial images use for the lowest CRF
+  whose output stays visually lossless, measured via VMAF (threshold 95) on
+  three short sampled segments (start/mid/end) rather than the whole clip.
+  Applies to all four codecs with a CRF dial (H.264/H.265/AV1/VP9); requires
+  the installed ffmpeg to have `libvmaf` support (`squish doctor` now reports
+  this) and conflicts with `--target-size`/`--fast`/`--codec copy`. Falls back
+  to quality 100 with a warning if nothing sampled reaches the threshold,
+  mirroring the image auto-quality fallback.
+- **Two-pass video encoding for `--target-size`.** H.264/H.265/VP9 now use
+  ffmpeg's native two-pass ABR (an analysis pass to the null muxer, then the
+  real encode) as the primary size-targeting strategy, so the output lands on
+  the budget in one encode instead of relying on repeated single-pass retries.
+  Pass-log files are written to a tempdir, never the source directory. The
+  single-pass retry loop is kept as a fallback for SVT-AV1 (whose two-pass is
+  awkward) and as an overshoot backstop after the second pass (rarely
+  triggered). AV1 rate targeting is best-effort — it can't use VBV — while the
+  VBV-capable codecs hit the budget exactly.
+- **Shell completions.** `squish completions <bash|zsh|fish>` prints a
+  completion script to stdout, generated from the CLI's own flag definitions.
+  The Homebrew tap installs completions automatically.
+- **Man page.** `squish man` prints the `squish.1` roff source to stdout.
+  Included in release tarballs and installed automatically by the Homebrew
+  tap.
+- **`cargo binstall` support.** `cargo binstall squish-media-cli` fetches the
+  prebuilt release binary for macOS/Linux instead of compiling from source.
+- **`--json` output mode.** Prints a single machine-readable report (per-file
+  bytes in/out, format, saving %, status; totals by kind; errors) to stdout
+  instead of the human summary — nothing else touches stdout, so it's safe to
+  pipe into `jq` or parse in CI. Works with `--dry-run`. Conflicts with
+  `--verbose`/`--quiet`/`--watch`/`--stats`. Exit codes unchanged.
+- **`--exclude` globs and ignore-aware walking.** `--exclude <GLOB>`
+  (repeatable) skips matching files/dirs during a directory walk, rooted at
+  each input path; explicit file arguments are never excluded. `.git`,
+  `node_modules`, and `target` are pruned by default (`--no-default-excludes`
+  to disable). `--gitignore` opts into also respecting `.gitignore` (and
+  `.git/info/exclude`, and the global gitignore) — off by default so existing
+  behavior doesn't change. New `exclude = [...]` `squish.toml` key. Applies to
+  `--watch` too. Switched the directory walker from `walkdir` to the `ignore`
+  crate.
+- **`--keep-metadata`.** Preserve EXIF and the ICC colour profile in image
+  output where the format supports it (currently JPEG and PNG). Default:
+  EXIF stripped, ICC always preserved (colour correctness). Mirrors
+  `--strip-tags`' naming for audio, inverted — images strip by default.
+  Preserved EXIF has its orientation tag reset to 1, since pixels are always
+  corrected before encoding either way (see the orientation fix below).
+- **`--preset web` now bounds image height too.** Previously only
+  `max-width 1920` was set, so a portrait photo (taller than it is wide)
+  passed through unresized. The preset now also sets `max-height 1920`,
+  bounding images to a 1920×1920 box on either axis regardless of
+  orientation.
+
+### Fixed
+- **`--target-size` larger than the input still grew the file.** The
+  never-grow guard treated `--target-size` itself as a "legitimate
+  conversion" allowed to grow the output, the same as an explicit
+  `--format`/`--codec`/resize — but a size *budget* never needs to exceed the
+  original, unlike those. A budget bigger than the input (e.g. `--target-size
+  1M` on a 40k file) now leaves the file untouched and reports "skipped
+  (already optimal)", instead of needlessly re-encoding it larger. Affected
+  images, video, and audio identically.
+- **`--codec av1 --target-size` failed to encode.** SVT-AV1 rejects the
+  `-maxrate`/`-bufsize` VBV constraint outside CRF mode (`Max Bitrate only
+  supported with CRF mode`), which errored the whole encode. AV1 now uses plain
+  VBR (`-b:v` only) and relies on the retry loop to converge on the budget.
+- **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG
+  (the overwhelming majority of real-world EXIF-orientation use — camera
+  photos) decoded as raw upright pixels and re-encoded with no orientation
+  tag, baking in the wrong visual framing. Orientation is now always read
+  and applied to pixels before encoding.
+- **Never-grow guarantee.** squish could silently write an output larger
+  than its input (a size guard already existed for SVG only, see v0.3.3).
+  Now applies uniformly to images, video, audio, and code: if the encode
+  doesn't help and no `--format`/resize/codec conversion was requested, it's
+  discarded and the output is left byte-identical to the input, reported as
+  "skipped (already optimal)" in the summary and `--json` (`status:
+  "skipped"`) instead of a (non-)saving. Safe under `--overwrite` too — the
+  original is never lost even though encoders write in place. When a
+  conversion *is* requested, growth is allowed (e.g. a tiny PNG icon
+  converted to AVIF can legitimately grow), with a `--verbose` note.
+
 ## [0.7.0] - 2026-06-15
 
 ### Added
