@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] - 2026-07-17
 
 ### Added
 - **`--crop`.** Crop images while compressing: an aspect ratio (`--crop 16:9`,
@@ -94,6 +94,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   original is never lost even though encoders write in place. When a
   conversion *is* requested, growth is allowed (e.g. a tiny PNG icon
   converted to AVIF can legitimately grow), with a `--verbose` note.
+
+[0.8.0]: https://github.com/MikeDre/squish/compare/v0.7.0...v0.8.0
 
 ## [0.7.0] - 2026-06-15
 
