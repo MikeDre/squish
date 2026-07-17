@@ -48,7 +48,7 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
 
 ## Encoding quality
 
-- [ ] **Two-pass video encoding for `--target-size`** — replace (or back) the
+- [x] **Two-pass video encoding for `--target-size`** — replace (or back) the
   current single-pass-ABR-with-retry loop with ffmpeg's native two-pass mode
   for more accurate size targeting on a known budget. Keep the retry loop as a
   fallback for codecs/containers where two-pass is awkward.

@@ -30,6 +30,31 @@ fn resolve_output_ext(input: &Path, format_in: VideoFormat, format_out: VideoFor
     }
 }
 
+/// Single-pass ABR toward a size budget: encode, and if the output overshoots
+/// `target`, re-encode with the bitrate scaled by the observed overshoot (up to
+/// 3 attempts total). Used for codecs without well-supported two-pass (AV1) and
+/// as the overshoot backstop after a two-pass encode.
+fn single_pass_to_target(
+    input: &Path,
+    encode_path: &Path,
+    opts: &VideoOptions,
+    force_reencode: bool,
+    initial_kbps: u32,
+    target: u64,
+) -> Result<(), VideoError> {
+    let mut kbps = initial_kbps;
+    for attempt in 1..=3 {
+        ffmpeg::run_ffmpeg(input, encode_path, opts, force_reencode, Some(kbps))?;
+        let size = std::fs::metadata(encode_path)?.len();
+        if size <= target || attempt == 3 {
+            break;
+        }
+        let ratio = target as f64 / size as f64;
+        kbps = ((kbps as f64 * ratio * 0.98) as u32).max(20);
+    }
+    Ok(())
+}
+
 /// Compress a single video file. Shells out to system ffmpeg.
 ///
 /// On error, any partial output file is cleaned up.
@@ -108,17 +133,50 @@ pub fn squish_video(input: &Path, opts: &VideoOptions) -> Result<VideoResult, Vi
 
     match (video_bitrate_kbps, opts.target_size) {
         (Some(initial_kbps), Some(target)) => {
-            // Single-pass ABR overshoots on short clips; re-encode with the
-            // bitrate scaled by the observed overshoot until the output fits.
-            let mut kbps = initial_kbps;
-            for attempt in 1..=3 {
-                ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, Some(kbps))?;
+            let codec = opts.effective_codec_for_ext_reencode(&ext, force_reencode);
+            if codec.supports_two_pass() {
+                // Two-pass ABR is the primary strategy: an analysis pass lets
+                // the encoder distribute the bitrate budget accurately, so the
+                // output lands near the target in one encode. Pass-log temp
+                // files live in a tempdir, never the source directory.
+                let passdir = tempfile::tempdir()?;
+                let passlog = passdir.path().join("squish2pass");
+                ffmpeg::run_two_pass(
+                    input,
+                    &encode_path,
+                    opts,
+                    force_reencode,
+                    initial_kbps,
+                    &passlog,
+                )?;
+                // Overshoot backstop (should rarely trigger): if two-pass still
+                // exceeded the budget, fall back to the single-pass retry loop
+                // starting from a bitrate scaled by the observed overshoot.
                 let size = std::fs::metadata(&encode_path)?.len();
-                if size <= target || attempt == 3 {
-                    break;
+                if size > target {
+                    let ratio = target as f64 / size as f64;
+                    let scaled = ((initial_kbps as f64 * ratio * 0.98) as u32).max(20);
+                    single_pass_to_target(
+                        input,
+                        &encode_path,
+                        opts,
+                        force_reencode,
+                        scaled,
+                        target,
+                    )?;
                 }
-                let ratio = target as f64 / size as f64;
-                kbps = ((kbps as f64 * ratio * 0.98) as u32).max(20);
+            } else {
+                // Codecs without well-supported two-pass (AV1): single-pass ABR
+                // overshoots on short clips, so retry with the bitrate scaled by
+                // the observed overshoot until the output fits.
+                single_pass_to_target(
+                    input,
+                    &encode_path,
+                    opts,
+                    force_reencode,
+                    initial_kbps,
+                    target,
+                )?;
             }
         }
         _ => ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, None)?,

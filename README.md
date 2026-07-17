@@ -180,7 +180,7 @@ squish video.mp4 --codec h264
 # Fast mode — optimise without re-encoding
 squish video.mp4 --fast
 
-# Fit a clip under an upload limit (bitrate computed from duration)
+# Fit a clip under an upload limit (two-pass ABR for H.264/H.265/VP9)
 squish clip.mp4 --target-size 8M
 
 # Mixed batch — images and videos together
