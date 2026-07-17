@@ -94,6 +94,23 @@ fn probe_tool(name: &str, version_arg: &str) -> ToolStatus {
     }
 }
 
+/// Whether the installed ffmpeg's `-filters` output lists `libvmaf` — a
+/// compile-time filter, not a standalone binary, so this can't use
+/// `probe_tool`'s "run `<name> <version_arg>`" shape.
+fn probe_libvmaf() -> ToolStatus {
+    match Command::new("ffmpeg").arg("-filters").output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            if stdout.contains("libvmaf") {
+                ToolStatus::Present(None)
+            } else {
+                ToolStatus::Missing
+            }
+        }
+        _ => ToolStatus::Missing,
+    }
+}
+
 /// Entry point for `squish doctor`: probe the external tools, render, print.
 pub fn run() -> anyhow::Result<u8> {
     let ffmpeg_hint = "brew install ffmpeg (macOS) · apt install ffmpeg (Linux)";
@@ -115,6 +132,13 @@ pub fn run() -> anyhow::Result<u8> {
             powers: "GIF compression",
             install: "brew install gifsicle (macOS) · apt install gifsicle (Linux)",
             status: probe_tool("gifsicle", "--version"),
+        },
+        ToolReport {
+            name: "libvmaf",
+            powers: "--quality auto for video (VMAF scoring)",
+            install: "reinstall/upgrade ffmpeg with libvmaf support (Homebrew's ffmpeg \
+                      formula includes it by default: brew reinstall ffmpeg)",
+            status: probe_libvmaf(),
         },
     ];
 
@@ -219,5 +243,31 @@ mod tests {
         assert!(out.contains("✓ ffmpeg"));
         assert!(out.contains("(present)"));
         assert!(!out.contains("missing"));
+    }
+
+    #[test]
+    fn render_shows_libvmaf_present() {
+        let tools = vec![report(
+            "libvmaf",
+            "--quality auto for video (VMAF scoring)",
+            ToolStatus::Present(None),
+        )];
+        let out = render_report(&tools);
+        assert!(out.contains("✓ libvmaf"));
+        assert!(out.contains("(present)"));
+    }
+
+    #[test]
+    fn render_shows_libvmaf_missing_with_hint() {
+        let tools = vec![report(
+            "libvmaf",
+            "--quality auto for video (VMAF scoring)",
+            ToolStatus::Missing,
+        )];
+        let out = render_report(&tools);
+        assert!(out.contains("✗ libvmaf"));
+        assert!(out.contains(
+            "--quality auto for video (VMAF scoring) is unavailable until libvmaf is installed."
+        ));
     }
 }

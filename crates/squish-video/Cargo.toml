@@ -15,3 +15,4 @@ description = "Video compression library for squish (ffmpeg-backed)"
 squish-core = { workspace = true }
 squish-media = { workspace = true }
 tempfile = "3"
+serde_json = "1"

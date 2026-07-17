@@ -1,9 +1,23 @@
 //! Video compression library for squish (ffmpeg-backed).
 
+mod auto_quality;
 pub mod ffmpeg;
 pub mod format;
 pub mod options;
 pub mod result;
+
+/// Shared test-only synchronization. `ffmpeg`'s and `auto_quality`'s test
+/// modules both contain tests that shell out to a real `ffmpeg`/`ffprobe`
+/// binary via inherited `PATH`, and `auto_quality` also has tests that
+/// temporarily point `PATH` at a fake/empty directory to simulate a missing
+/// binary. All of those tests run as threads within the same test binary
+/// process (this crate's `--lib` tests), so they share the same `PATH` env
+/// var — a real-subprocess test racing against a PATH-mutating test can spuriously
+/// fail to find the real binary. This mutex serializes every such test
+/// across both modules; pure tests with no subprocess/env involvement don't
+/// need it.
+#[cfg(test)]
+pub(crate) static FFMPEG_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub use format::{detect_video_format, detect_video_from_bytes, VideoFormat};
 pub use options::{VideoCodec, VideoOptions};
@@ -76,6 +90,12 @@ pub fn squish_video(input: &Path, opts: &VideoOptions) -> Result<VideoResult, Vi
 
     let force_reencode = format_out != format_in;
 
+    if opts.quality_auto && opts.target_size.is_some() {
+        return Err(VideoError::InvalidOption {
+            reason: "--quality auto cannot be combined with --target-size".into(),
+        });
+    }
+
     // A size budget needs a bitrate-controlled re-encode: compute the video
     // bitrate from the probed duration, reserving room for copied audio.
     let video_bitrate_kbps = match opts.target_size {
@@ -131,56 +151,83 @@ pub fn squish_video(input: &Path, opts: &VideoOptions) -> Result<VideoResult, Vi
         )
     };
 
-    match (video_bitrate_kbps, opts.target_size) {
-        (Some(initial_kbps), Some(target)) => {
-            let codec = opts.effective_codec_for_ext_reencode(&ext, force_reencode);
-            if codec.supports_two_pass() {
-                // Two-pass ABR is the primary strategy: an analysis pass lets
-                // the encoder distribute the bitrate budget accurately, so the
-                // output lands near the target in one encode. Pass-log temp
-                // files live in a tempdir, never the source directory.
-                let passdir = tempfile::tempdir()?;
-                let passlog = passdir.path().join("squish2pass");
-                ffmpeg::run_two_pass(
-                    input,
-                    &encode_path,
-                    opts,
-                    force_reencode,
-                    initial_kbps,
-                    &passlog,
-                )?;
-                // Overshoot backstop (should rarely trigger): if two-pass still
-                // exceeded the budget, fall back to the single-pass retry loop
-                // starting from a bitrate scaled by the observed overshoot.
-                let size = std::fs::metadata(&encode_path)?.len();
-                if size > target {
-                    let ratio = target as f64 / size as f64;
-                    let scaled = ((initial_kbps as f64 * ratio * 0.98) as u32).max(20);
+    let warnings = if opts.quality_auto {
+        let codec = opts.effective_codec_for_ext_reencode(&ext, force_reencode);
+        if codec == VideoCodec::Copy {
+            return Err(VideoError::InvalidOption {
+                reason: "--quality auto requires re-encoding and cannot be combined with \
+                         --fast / --codec copy"
+                    .into(),
+            });
+        }
+        auto_quality::check_libvmaf()?;
+        let (quality, reached) = auto_quality::find_visually_lossless_quality(input, codec)?;
+        let mut auto_opts = opts.clone();
+        auto_opts.quality = Some(quality);
+        ffmpeg::run_ffmpeg(input, &encode_path, &auto_opts, force_reencode, None)?;
+        if reached {
+            Vec::new()
+        } else {
+            vec![format!(
+                "{}: --quality auto could not reach visually-lossless quality; wrote maximum \
+                 quality",
+                input.display()
+            )]
+        }
+    } else {
+        match (video_bitrate_kbps, opts.target_size) {
+            (Some(initial_kbps), Some(target)) => {
+                let codec = opts.effective_codec_for_ext_reencode(&ext, force_reencode);
+                if codec.supports_two_pass() {
+                    // Two-pass ABR is the primary strategy: an analysis pass lets
+                    // the encoder distribute the bitrate budget accurately, so the
+                    // output lands near the target in one encode. Pass-log temp
+                    // files live in a tempdir, never the source directory.
+                    let passdir = tempfile::tempdir()?;
+                    let passlog = passdir.path().join("squish2pass");
+                    ffmpeg::run_two_pass(
+                        input,
+                        &encode_path,
+                        opts,
+                        force_reencode,
+                        initial_kbps,
+                        &passlog,
+                    )?;
+                    // Overshoot backstop (should rarely trigger): if two-pass
+                    // still exceeded the budget, fall back to the single-pass
+                    // retry loop starting from a bitrate scaled by the observed
+                    // overshoot.
+                    let size = std::fs::metadata(&encode_path)?.len();
+                    if size > target {
+                        let ratio = target as f64 / size as f64;
+                        let scaled = ((initial_kbps as f64 * ratio * 0.98) as u32).max(20);
+                        single_pass_to_target(
+                            input,
+                            &encode_path,
+                            opts,
+                            force_reencode,
+                            scaled,
+                            target,
+                        )?;
+                    }
+                } else {
+                    // Codecs without well-supported two-pass (AV1): single-pass
+                    // ABR overshoots on short clips, so retry with the bitrate
+                    // scaled by the observed overshoot until the output fits.
                     single_pass_to_target(
                         input,
                         &encode_path,
                         opts,
                         force_reencode,
-                        scaled,
+                        initial_kbps,
                         target,
                     )?;
                 }
-            } else {
-                // Codecs without well-supported two-pass (AV1): single-pass ABR
-                // overshoots on short clips, so retry with the bitrate scaled by
-                // the observed overshoot until the output fits.
-                single_pass_to_target(
-                    input,
-                    &encode_path,
-                    opts,
-                    force_reencode,
-                    initial_kbps,
-                    target,
-                )?;
             }
+            _ => ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, None)?,
         }
-        _ => ffmpeg::run_ffmpeg(input, &encode_path, opts, force_reencode, None)?,
-    }
+        Vec::new()
+    };
 
     let output_path = match rename_to {
         Some(target) => {
@@ -200,6 +247,7 @@ pub fn squish_video(input: &Path, opts: &VideoOptions) -> Result<VideoResult, Vi
         format_in,
         format_out,
         duration: start.elapsed(),
+        warnings,
     })
 }
 

@@ -128,15 +128,15 @@ fn real_main() -> Result<u8> {
         }
     };
 
-    // Split --quality into the numeric value the encoders use and the auto flag.
-    // Auto is image-only: video/audio receive no explicit quality (codec default).
+    // Split --quality into the numeric value the encoders use and the auto
+    // flag. Auto drives a perceptual search for both images (SSIMULACRA2) and
+    // video (VMAF); audio has no perceptual auto and always gets a plain
+    // numeric quality (None when auto, so the codec default applies).
     let (image_quality, auto): (Option<u8>, bool) = match args.quality {
         Some(cli::QualityArg::Fixed(n)) => (Some(n), false),
         Some(cli::QualityArg::Auto) => (None, true),
         None => (None, false),
     };
-    // Video/audio have no perceptual auto; they take the same numeric quality
-    // (None when auto, so the codec default applies).
     let av_quality = image_quality;
 
     let exclude_opts = walker::ExcludeOptions {
@@ -230,6 +230,7 @@ fn real_main() -> Result<u8> {
         overwrite: args.overwrite,
         output_format: requested_format.as_ref().and_then(|r| r.video),
         target_size,
+        quality_auto: auto,
     };
 
     let audio_opts = AudioOptions {

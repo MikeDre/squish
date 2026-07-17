@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Value of `--quality`: a fixed 0–100 number, or `auto` (perceptual
-/// visually-lossless search, image formats only).
+/// visually-lossless search — images via SSIMULACRA2, video via VMAF).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum QualityArg {
     Fixed(u8),
@@ -40,7 +40,8 @@ pub struct Args {
     pub paths: Vec<PathBuf>,
 
     /// Quality: 0-100, or `auto` for the lowest visually-lossless quality
-    /// (image formats only). Auto conflicts with --target-size.
+    /// (images: SSIMULACRA2; video: VMAF, requires libvmaf). Conflicts with
+    /// --target-size; for video also conflicts with --fast/--codec copy.
     #[arg(short = 'q', long, value_parser = parse_quality)]
     pub quality: Option<QualityArg>,
 
