@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Two-pass video encoding for `--target-size`.** H.264/H.265/VP9 now use
+  ffmpeg's native two-pass ABR (an analysis pass to the null muxer, then the
+  real encode) as the primary size-targeting strategy, so the output lands on
+  the budget in one encode instead of relying on repeated single-pass retries.
+  Pass-log files are written to a tempdir, never the source directory. The
+  single-pass retry loop is kept as a fallback for SVT-AV1 (whose two-pass is
+  awkward) and as an overshoot backstop after the second pass (rarely
+  triggered). AV1 rate targeting is best-effort — it can't use VBV — while the
+  VBV-capable codecs hit the budget exactly.
 - **Shell completions.** `squish completions <bash|zsh|fish>` prints a
   completion script to stdout, generated from the CLI's own flag definitions.
   The Homebrew tap installs completions automatically.
@@ -50,6 +59,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   1M` on a 40k file) now leaves the file untouched and reports "skipped
   (already optimal)", instead of needlessly re-encoding it larger. Affected
   images, video, and audio identically.
+- **`--codec av1 --target-size` failed to encode.** SVT-AV1 rejects the
+  `-maxrate`/`-bufsize` VBV constraint outside CRF mode (`Max Bitrate only
+  supported with CRF mode`), which errored the whole encode. AV1 now uses plain
+  VBR (`-b:v` only) and relies on the retry loop to converge on the budget.
 - **JPEG EXIF orientation was silently discarded.** A rotated/flipped JPEG
   (the overwhelming majority of real-world EXIF-orientation use — camera
   photos) decoded as raw upright pixels and re-encoded with no orientation
