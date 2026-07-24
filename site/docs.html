@@ -118,14 +118,16 @@
             for full format coverage.</p>
 
           <h3 class="docs-h3">Install via cargo</h3>
-          <pre class="code-block has-copy"><code>cargo install squish-media-cli</code><button
-            class="copy-btn" type="button" data-copy="cargo install squish-media-cli"
+          <pre class="code-block has-copy"><code>cargo install squish-media-cli --locked</code><button
+            class="copy-btn" type="button" data-copy="cargo install squish-media-cli --locked"
             aria-label="Copy cargo command"><svg viewBox="0 0 16 16" width="15" height="15"
             aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
             d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
           <p>Compiles squish from crates.io (stable Rust 1.95+) and places the binary in
-            <code>~/.cargo/bin</code>. You still need the system dependencies for full format
-            support.</p>
+            <code>~/.cargo/bin</code>. <code>--locked</code> installs the exact dependency
+            versions squish was released with; without it cargo may re-resolve transitive
+            crates to newer versions that fail to compile. You still need the system
+            dependencies for full format support.</p>
 
           <h3 class="docs-h3">Build from source</h3>
           <pre class="code-block"><code><span class="c-comment"># installs system deps via Homebrew (macOS) or apt (Linux)</span>

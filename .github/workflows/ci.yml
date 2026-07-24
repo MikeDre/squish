@@ -61,6 +61,60 @@ jobs:
       - name: Run tests
         run: cargo test --workspace
 
+  install:
+    name: cargo install (--locked path + drift check)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdav1d-dev nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev
+
+      - name: Cache source-built libheif
+        id: libheif-cache
+        uses: actions/cache@v4
+        with:
+          path: /tmp/libheif-install
+          key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Build libheif from source
+        if: steps.libheif-cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch v1.23.0 https://github.com/strukturag/libheif.git /tmp/libheif
+          cmake -S /tmp/libheif -B /tmp/libheif/build -DCMAKE_BUILD_TYPE=Release \
+            -DWITH_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/tmp/libheif-install
+          cmake --build /tmp/libheif/build -j"$(nproc)"
+          cmake --install /tmp/libheif/build
+
+      - name: Install cached libheif
+        run: |
+          sudo cp -r /tmp/libheif-install/* /usr/local/
+          sudo ldconfig
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Verifies the exact command the README and website tell users to run.
+      # This is the supported install path and must always succeed.
+      - name: cargo install --locked (documented install path)
+        run: cargo install --path crates/squish-cli --locked --force
+
+      # Non-blocking. Mirrors a bare `cargo install squish-media-cli` by
+      # re-resolving every transitive dependency to its newest compatible
+      # version. Expected to fail while the pinned lightningcss alpha conflicts
+      # with a newer cssparser under fresh resolution (the reason --locked is
+      # the documented path). Kept as a signal for when the pins drift back
+      # into alignment — at which point the pin can be relaxed and this promoted
+      # to a required check.
+      - name: Fresh-resolve drift check (informational, non-blocking)
+        continue-on-error: true
+        run: |
+          cargo update
+          cargo build -p squish-media-cli
+
   lint:
     name: Clippy + rustfmt
     runs-on: ubuntu-24.04

@@ -42,10 +42,12 @@ Each release ships binaries for macOS (arm64/x64) and Linux (x64/arm64) on the [
 If you have Rust installed (see step 1 below):
 
 ```bash
-cargo install squish-media-cli
+cargo install squish-media-cli --locked
 ```
 
 This compiles squish from crates.io and places the `squish` binary in `~/.cargo/bin`. You still need the system dependencies for full format support (see below).
+
+> **Why `--locked`?** It installs the exact dependency versions squish was tested and released with (from the published `Cargo.lock`). Without it, cargo re-resolves transitive dependencies and may pick newer versions that fail to compile — notably the pinned `lightningcss` CSS engine against a newer `cssparser`. Always prefer `--locked` when installing squish from crates.io.
 
 With [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) installed, `cargo binstall squish-media-cli` fetches the prebuilt release binary instead of compiling (macOS and Linux only — Windows isn't published yet, see Roadmap).
 
@@ -65,7 +67,7 @@ Once the installer finishes, open a **new terminal** (or run `source ~/.cargo/en
 
 ```bash
 ./scripts/setup.sh    # installs system deps via Homebrew (macOS) or apt (Linux)
-cargo install --path crates/squish-cli
+cargo install --path crates/squish-cli --locked
 ```
 
 **3. Make sure `squish` is on your PATH:**

@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **`cargo install` compile failure.** Installing from crates.io with a bare
+  `cargo install squish-media-cli` could fail while compiling `lightningcss`
+  (errors E0053/E0277/E0308) because cargo re-resolved transitive dependencies
+  and pulled a newer `cssparser` incompatible with the pinned CSS engine. The
+  documented install command is now `cargo install squish-media-cli --locked`,
+  which installs the exact tested dependency versions from the published
+  `Cargo.lock`. README, website, and build-from-source instructions updated; a
+  CI job now verifies the `--locked` install path and monitors fresh-resolution
+  drift.
+
 ## [0.8.0] - 2026-07-17
 
 ### Added

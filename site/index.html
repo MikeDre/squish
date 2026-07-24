@@ -382,13 +382,15 @@
       </div>
 
       <div class="tab-panel" id="tab-cargo" role="tabpanel" aria-labelledby="tabbtn-cargo" hidden>
-        <pre class="code-block has-copy"><code>cargo install squish-media-cli</code><button
-          class="copy-btn" type="button" data-copy="cargo install squish-media-cli"
+        <pre class="code-block has-copy"><code>cargo install squish-media-cli --locked</code><button
+          class="copy-btn" type="button" data-copy="cargo install squish-media-cli --locked"
           aria-label="Copy cargo command"><svg viewBox="0 0 16 16" width="15" height="15"
           aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.5"
           d="M5.5 5.5h-2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2m-4-9h6a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1z"/></svg></button></pre>
-        <p class="tab-note">Compiles from crates.io on stable Rust (1.95+). Install the
-          system dependencies separately for full format coverage.</p>
+        <p class="tab-note"><code>--locked</code> installs the tested dependency versions;
+          without it cargo may pull newer transitive crates that fail to compile. Compiles
+          from crates.io on stable Rust (1.95+). Install the system dependencies separately
+          for full format coverage.</p>
       </div>
 
       <div class="tab-panel" id="tab-bin" role="tabpanel" aria-labelledby="tabbtn-bin" hidden>
