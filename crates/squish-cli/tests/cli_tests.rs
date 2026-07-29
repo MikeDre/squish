@@ -1927,3 +1927,98 @@ fn out_of_bounds_crop_is_per_file_error_and_batch_continues() {
     assert!(!tmp.path().join("a_squished.png").exists());
     assert!(tmp.path().join("ok_squished.svg").exists());
 }
+
+#[test]
+fn select_with_two_images_errors_before_any_ui() {
+    let dir = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.png"), dir.path().join("a.png")).unwrap();
+    fs::copy(core_fixture("sample.jpg"), dir.path().join("b.jpg")).unwrap();
+
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(dir.path())
+        .arg("--select")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("needs exactly one image"))
+        .stderr(predicate::str::contains("matched 2 files"));
+}
+
+#[test]
+fn select_rejects_svg() {
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(core_fixture("sample.svg"))
+        .arg("--select")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("vector format"));
+}
+
+#[test]
+fn select_rejects_animated_webp() {
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(core_fixture("anim.webp"))
+        .arg("--select")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("animated WebP"));
+}
+
+#[test]
+fn select_rejects_a_non_image() {
+    let dir = TempDir::new().unwrap();
+    let js = dir.path().join("app.js");
+    fs::write(&js, "const a = 1;\n").unwrap();
+
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(&js)
+        .arg("--select")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("needs an image"));
+}
+
+#[test]
+fn select_requires_a_tty_without_the_env_seam() {
+    bin()
+        .arg(core_fixture("sample.png"))
+        .arg("--select")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("interactive terminal"));
+}
+
+#[test]
+fn select_conflicts_with_json() {
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(core_fixture("sample.png"))
+        .args(["--select", "--json"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+#[test]
+fn config_rejects_a_select_key() {
+    let dir = TempDir::new().unwrap();
+    fs::write(dir.path().join("squish.toml"), "select = true\n").unwrap();
+    fs::copy(core_fixture("sample.png"), dir.path().join("a.png")).unwrap();
+
+    bin()
+        .current_dir(dir.path())
+        .arg("a.png")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("select"));
+}

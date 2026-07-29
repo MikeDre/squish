@@ -202,6 +202,12 @@ pub struct Args {
     /// flags). Values: web.
     #[arg(long, value_enum)]
     pub preset: Option<Preset>,
+
+    /// Pick the crop region interactively in your browser (single image only).
+    /// Seeded by --crop/--gravity when given. Deliberately not a squish.toml
+    /// key — a persisted interactive default is meaningless.
+    #[arg(long, conflicts_with_all = ["json", "watch", "stats"])]
+    pub select: bool,
 }
 
 #[derive(Subcommand, Debug)]

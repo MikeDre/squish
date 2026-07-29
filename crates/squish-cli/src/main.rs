@@ -7,6 +7,7 @@ mod format_request;
 mod json_report;
 mod preset;
 mod runner;
+mod select;
 mod stats;
 mod target_size;
 mod walker;
@@ -16,7 +17,7 @@ use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use squish_audio::{AudioFormat, AudioOptions};
 use squish_code::CodeOptions;
-use squish_core::SquishOptions;
+use squish_core::{CropSpec, SquishOptions};
 use squish_video::VideoOptions;
 
 fn main() -> std::process::ExitCode {
@@ -207,7 +208,7 @@ fn real_main() -> Result<u8> {
         }
     }
 
-    let opts = SquishOptions {
+    let mut opts = SquishOptions {
         quality: image_quality,
         lossless: args.lossless,
         output_format: requested_format.as_ref().and_then(|r| r.image),
@@ -222,6 +223,27 @@ fn real_main() -> Result<u8> {
         crop: args.crop,
         gravity: args.gravity,
     };
+
+    if args.select {
+        match select::resolve_crop(&worklist, &args)? {
+            Some(r) => {
+                // Echo the resolved rect so an interactive choice can be
+                // replayed non-interactively: --crop 1440x810+240+120
+                println!("crop: {}x{}+{}+{}", r.w, r.h, r.x, r.y);
+                opts.crop = Some(CropSpec::Exact {
+                    w: r.w,
+                    h: r.h,
+                    x: r.x,
+                    y: r.y,
+                });
+            }
+            None => {
+                println!("crop cancelled — nothing written");
+                return Ok(0);
+            }
+        }
+    }
+    let opts = opts;
 
     let video_opts = VideoOptions {
         quality: av_quality,
