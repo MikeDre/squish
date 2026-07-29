@@ -10,6 +10,8 @@ use squish_core::{CropRect, CropSpec, Format, Gravity};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
+mod server;
+
 /// Longest edge of the preview handed to the browser.
 pub(crate) const PREVIEW_MAX_EDGE: u32 = 4000;
 
@@ -91,16 +93,39 @@ pub(crate) fn seed_rect(
     }
 }
 
-/// Run an interactive selection. `Ok(None)` means the user cancelled.
-///
-/// NOTE: Task 3 replaces the body with a browser session. For now it returns
-/// the seed rect, so the flag is wired and every rejection path is live.
-pub(crate) fn resolve_crop(worklist: &[PathBuf], args: &Args) -> Result<Option<CropRect>> {
+/// The outcome of an interactive selection: the chosen rect (None = cancelled)
+/// plus the source dimensions it was chosen against, so the caller can tell a
+/// whole-image selection from a real crop.
+pub(crate) struct Selection {
+    pub rect: Option<CropRect>,
+    pub source: (u32, u32),
+}
+
+/// Run an interactive selection. `rect: None` means the user cancelled.
+pub(crate) fn resolve_crop(worklist: &[PathBuf], args: &Args) -> Result<Selection> {
     let path = preflight(worklist)?;
     // Fails fast on an image that cannot be decoded, before any UI exists.
     let preview = squish_core::preview_bytes(&path, PREVIEW_MAX_EDGE)?;
     let seed = seed_rect(args.crop, args.gravity, preview.source_w, preview.source_h)?;
-    Ok(Some(seed))
+    let source = (preview.source_w, preview.source_h);
+    let session = server::Session {
+        file_name: path
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        source_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+        preview,
+        seed,
+    };
+
+    let rect = match server::run(&session)? {
+        server::Outcome::Cropped(r) => Some(r),
+        server::Outcome::Cancelled => None,
+        server::Outcome::TimedOut => {
+            anyhow::bail!("crop selector timed out after 10 minutes with no selection")
+        }
+    };
+    Ok(Selection { rect, source })
 }
 
 #[cfg(test)]

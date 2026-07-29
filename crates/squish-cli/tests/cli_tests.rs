@@ -2022,3 +2022,76 @@ fn config_rejects_a_select_key() {
         .code(2)
         .stderr(predicate::str::contains("select"));
 }
+
+/// Drive a real `--select` session: launch the binary, wait for it to publish
+/// its URL, POST a rect, and check the cropped output.
+///
+/// Spawns the squish binary directly rather than through `bin()` (see
+/// `spawn_watch` above for the same pattern): the process only exits *after*
+/// this test POSTs the rect over HTTP, so `assert_cmd`'s blocking `assert()`
+/// would deadlock waiting for an exit that can't happen until we've already
+/// talked to it.
+#[test]
+fn select_end_to_end_crops_the_posted_rect() {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let dir = TempDir::new().unwrap();
+    let img = dir.path().join("hero.png");
+    fs::copy(core_fixture("sample.png"), &img).unwrap();
+    let url_file = dir.path().join("url.txt");
+
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_squish"))
+        .env("SQUISH_NO_STATS", "1")
+        .env("SQUISH_GLOBAL_CONFIG", "/nonexistent/squish-config.toml")
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .env("SQUISH_SELECT_URL_FILE", &url_file)
+        .arg(&img)
+        .arg("--select")
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    // Wait for the server to publish its URL — bounded, so a regression that
+    // makes the server fail to start (or the child crash on launch) fails
+    // this test with a clear message instead of hanging CI forever.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let url = loop {
+        if let Ok(s) = fs::read_to_string(&url_file) {
+            if s.starts_with("http://") {
+                break s;
+            }
+        }
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("squish --select exited early ({status}) before publishing its URL");
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            panic!("timed out after 10s waiting for squish --select to publish its URL");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let rest = url.trim_start_matches("http://");
+    let (addr, query) = rest.split_once('/').unwrap();
+
+    let body = r#"{"x":5,"y":6,"w":40,"h":30}"#;
+    let mut s = TcpStream::connect(addr).unwrap();
+    write!(
+        s,
+        "POST /crop{query} HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut resp = String::new();
+    s.read_to_string(&mut resp).unwrap();
+    assert!(resp.starts_with("HTTP/1.1 200"), "got: {resp}");
+
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success(), "squish failed: {out:?}");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("crop: 40x30+5+6"), "stdout was: {stdout}");
+
+    let squished = dir.path().join("hero_squished.png");
+    let decoded = image::open(&squished).unwrap();
+    assert_eq!((decoded.width(), decoded.height()), (40, 30));
+}

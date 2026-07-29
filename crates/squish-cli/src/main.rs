@@ -225,17 +225,24 @@ fn real_main() -> Result<u8> {
     };
 
     if args.select {
-        match select::resolve_crop(&worklist, &args)? {
+        let sel = select::resolve_crop(&worklist, &args)?;
+        let source_dims = sel.source;
+        match sel.rect {
             Some(r) => {
-                // Echo the resolved rect so an interactive choice can be
-                // replayed non-interactively: --crop 1440x810+240+120
-                println!("crop: {}x{}+{}+{}", r.w, r.h, r.x, r.y);
-                opts.crop = Some(CropSpec::Exact {
-                    w: r.w,
-                    h: r.h,
-                    x: r.x,
-                    y: r.y,
-                });
+                let full = r.x == 0 && r.y == 0 && r.w == source_dims.0 && r.h == source_dims.1;
+                if full {
+                    println!("selection covers the whole image — no crop applied");
+                } else {
+                    // Echo the resolved rect so an interactive choice can be
+                    // replayed non-interactively: --crop 1440x810+240+120
+                    println!("crop: {}x{}+{}+{}", r.w, r.h, r.x, r.y);
+                    opts.crop = Some(CropSpec::Exact {
+                        w: r.w,
+                        h: r.h,
+                        x: r.x,
+                        y: r.y,
+                    });
+                }
             }
             None => {
                 println!("crop cancelled — nothing written");
