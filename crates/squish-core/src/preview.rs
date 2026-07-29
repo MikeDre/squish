@@ -1,0 +1,78 @@
+//! Browser-renderable previews for the interactive crop selector.
+//!
+//! The selector needs to show any image squish can crop — including HEIC,
+//! AVIF and TIFF, which browsers cannot display — so the decode has to happen
+//! here, where the codecs live. The preview is deliberately capped: a 100 MP
+//! scan would otherwise ship 400 MB of decoded pixels into a browser tab.
+
+use crate::error::SquishError;
+use crate::format::{detect_format, Format};
+use std::io::Cursor;
+use std::path::Path;
+
+/// A downscaled, browser-renderable copy of an image, plus the dimensions of
+/// the source it was made from. Selection maths runs in *source* pixels, so
+/// callers need both.
+#[derive(Debug, Clone)]
+pub struct Preview {
+    pub bytes: Vec<u8>,
+    pub mime: &'static str,
+    pub w: u32,
+    pub h: u32,
+    pub source_w: u32,
+    pub source_h: u32,
+}
+
+/// Decode `path`, downscale to fit `max_edge` (never upscaling), and encode a
+/// browser-renderable image: JPEG q85, or PNG when the source has alpha.
+pub fn preview_bytes(path: &Path, max_edge: u32) -> Result<Preview, SquishError> {
+    let input = std::fs::read(path)?;
+    let format_in = detect_format(path, &input).ok_or_else(|| SquishError::UnsupportedFormat {
+        path: path.to_path_buf(),
+        reason: "could not identify format from extension or magic bytes".into(),
+    })?;
+    if format_in == Format::Svg {
+        return Err(SquishError::UnsupportedFormat {
+            path: path.to_path_buf(),
+            reason: "SVG is a vector format and cannot be cropped".into(),
+        });
+    }
+
+    let img = crate::decode_to_dynamic_image(format_in, &input, path)?;
+    let (source_w, source_h) = (img.width(), img.height());
+
+    let scaled = if source_w > max_edge || source_h > max_edge {
+        img.resize(max_edge, max_edge, image::imageops::FilterType::Lanczos3)
+    } else {
+        img
+    };
+    let (w, h) = (scaled.width(), scaled.height());
+
+    let mut bytes = Vec::new();
+    let mime = if scaled.color().has_alpha() {
+        scaled
+            .write_to(&mut Cursor::new(&mut bytes), image::ImageFormat::Png)
+            .map_err(|e| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            })?;
+        "image/png"
+    } else {
+        let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut bytes, 85);
+        enc.encode_image(&scaled.to_rgb8())
+            .map_err(|e| SquishError::EncodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            })?;
+        "image/jpeg"
+    };
+
+    Ok(Preview {
+        bytes,
+        mime,
+        w,
+        h,
+        source_w,
+        source_h,
+    })
+}

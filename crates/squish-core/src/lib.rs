@@ -7,6 +7,7 @@ pub mod format;
 pub mod formats;
 pub mod naming;
 pub mod options;
+pub mod preview;
 pub mod result;
 
 pub use crop::{CropRect, CropSpec, Gravity};
@@ -17,6 +18,7 @@ pub use naming::{
     in_place_target, in_place_temp_path,
 };
 pub use options::SquishOptions;
+pub use preview::{preview_bytes, Preview};
 pub use result::SquishResult;
 
 use auto_quality::{ssimulacra2_score, VISUALLY_LOSSLESS_THRESHOLD};
@@ -504,7 +506,7 @@ fn dispatch_encode_raster(
     }
 }
 
-fn decode_to_dynamic_image(
+pub(crate) fn decode_to_dynamic_image(
     format_in: Format,
     input: &[u8],
     path: &Path,
