@@ -16,9 +16,6 @@ pub(crate) struct Session {
     pub preview: squish_core::Preview,
     pub seed: CropRect,
     pub file_name: String,
-    // Not read by this task's placeholder page; a later task's live
-    // estimated-output-size UI reports against the original file size.
-    #[allow(dead_code)]
     pub source_bytes: u64,
 }
 
@@ -207,22 +204,44 @@ fn mime_header(mime: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).expect("static header")
 }
 
-/// Placeholder page. Task 4 replaces this with the real selector.
+/// The selector page: one HTML file with the CSS and JS inlined, plus the
+/// session config as JSON. No external requests — a strict-CSP-friendly,
+/// offline-safe page, and nothing to build.
+///
+/// The token is deliberately *not* interpolated: the browser already carries it
+/// in `location.search`, so baking it into the markup would only widen its
+/// exposure (a saved page, a screenshot, a devtools copy-as-HTML).
 fn page_html(session: &Session, _token: &str) -> String {
-    let s = &session.seed;
-    format!(
-        "<!doctype html><meta charset=\"utf-8\"><title>squish — select crop</title>\
-         <h1>{name}</h1><p>Selector UI arrives in the next task.</p>\
-         <button onclick=\"send('/crop')\">Crop seed region</button> \
-         <button onclick=\"send('/cancel')\">Cancel</button>\
-         <script>const R={{x:{x},y:{y},w:{w},h:{h}}};\
-         function send(p){{fetch(p+location.search,{{method:'POST',body:JSON.stringify(R)}});}}</script>",
-        name = session.file_name,
-        x = s.x,
-        y = s.y,
-        w = s.w,
-        h = s.h,
-    )
+    let cfg = serde_json::json!({
+        "source_w": session.preview.source_w,
+        "source_h": session.preview.source_h,
+        "preview_w": session.preview.w,
+        "preview_h": session.preview.h,
+        "seed": {
+            "x": session.seed.x,
+            "y": session.seed.y,
+            "w": session.seed.w,
+            "h": session.seed.h,
+        },
+        "file_name": session.file_name,
+        "source_bytes": session.source_bytes,
+    });
+
+    // The config lands inside a <script> block, and a file name is untrusted
+    // text: `<` must not be able to close that block. A `<` can only occur
+    // inside a JSON string here, and the `<` escape is the same string to
+    // any JSON or JS parser, so escaping it costs nothing.
+    let cfg = cfg
+        .to_string()
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e");
+
+    // Config last: a `__SQUISH_CONFIG__` literal arriving from the CSS or JS
+    // file can never be substituted.
+    include_str!("assets/selector.html")
+        .replace("__SQUISH_CSS__", include_str!("assets/selector.css"))
+        .replace("__SQUISH_JS__", include_str!("assets/selector.js"))
+        .replace("__SQUISH_CONFIG__", &cfg)
 }
 
 fn open_browser(url: &str) -> bool {
@@ -394,6 +413,45 @@ mod tests {
 
         request(&addr, "POST", &format!("/cancel?t={token}"), None);
         handle.join().unwrap();
+    }
+
+    #[test]
+    fn page_embeds_the_session_config() {
+        let s = session();
+        let html = page_html(&s, "tok");
+        assert!(html.contains("\"source_w\":640"));
+        assert!(html.contains("\"source_h\":480"));
+        assert!(html.contains("\"preview_w\":640"));
+        assert!(html.contains("\"w\":320"), "seed rect present");
+        assert!(html.contains("hero.jpg"));
+    }
+
+    #[test]
+    fn page_is_self_contained() {
+        let html = page_html(&session(), "tok");
+        assert!(!html.contains("https://"), "no external requests");
+        assert!(!html.contains("script src"), "no external scripts");
+        assert!(!html.contains("stylesheet"), "no external stylesheets");
+        assert!(html.contains("<style>") && html.contains("<script>"));
+    }
+
+    #[test]
+    fn page_does_not_leak_the_token_into_markup() {
+        // The browser already has the token in its URL; the page uses
+        // location.search, so the token must not be baked into the HTML.
+        let html = page_html(&session(), "sekrit");
+        assert!(!html.contains("sekrit"));
+    }
+
+    #[test]
+    fn page_config_cannot_close_the_script_block() {
+        // A file name is untrusted text; it must not be able to break out of
+        // the <script> block the config is injected into.
+        let mut s = session();
+        s.file_name = "a</script><img src=x onerror=alert(1)>.png".into();
+        let html = page_html(&s, "tok");
+        assert!(!html.contains("</script><img"));
+        assert!(html.contains("\\u003c/script\\u003e"), "escaped instead");
     }
 
     #[test]
