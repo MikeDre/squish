@@ -23,10 +23,21 @@ function scale() { return img.clientWidth / CFG.source_w; }
 function s2p(v) { return v * scale(); }
 function p2s(v) { return v / scale(); }
 
-/** Selection position relative to the stage, in CSS px. */
+/**
+ * The image's box in the stage's *content* space, in CSS px — scroll included.
+ *
+ * The selection and shade are absolutely positioned inside the stage, so they
+ * scroll with the image. Positioning them in content space is what keeps them
+ * glued to the same image region while panning, with no re-render on scroll.
+ */
 function frame() {
   const i = img.getBoundingClientRect(), s = stage.getBoundingClientRect();
-  return { left: i.left - s.left, top: i.top - s.top, w: i.width, h: i.height };
+  return {
+    left: i.left - s.left + stage.scrollLeft,
+    top: i.top - s.top + stage.scrollTop,
+    w: i.width,
+    h: i.height,
+  };
 }
 
 function clampSel() {
@@ -131,8 +142,10 @@ function render() {
  */
 function placeReadout(f) {
   const r = $("readout");
-  const left = f.left + s2p(sel.x);
-  const bottom = f.top + s2p(sel.y) + s2p(sel.h);
+  // Visible position, not content position: when zoomed in, what matters is
+  // whether the readout lands inside the scrolled viewport.
+  const left = f.left + s2p(sel.x) - stage.scrollLeft;
+  const bottom = f.top + s2p(sel.y) + s2p(sel.h) - stage.scrollTop;
   const below = bottom + 6 + r.offsetHeight <= stage.clientHeight;
   r.style.top = below ? "100%" : "auto";
   r.style.bottom = below ? "auto" : "6px";
@@ -154,6 +167,10 @@ function pointerToSource(ev) {
 }
 
 let drag = null;
+/** null = fit to the window; a number = CSS px per preview px. */
+let zoom = null;
+let spaceHeld = false;
+let panning = null;
 
 /** The drag a grab on `handle` starts: the opposite edge or corner is pinned. */
 function resizeDrag(name) {
@@ -178,6 +195,18 @@ function resizeDrag(name) {
 
 stage.addEventListener("pointerdown", (ev) => {
   if (finished || ev.button !== 0) return;
+  if (spaceHeld) {
+    // Panning wins over selecting. Handled here rather than in a capture-phase
+    // listener: when the stage is itself the target, capture and bubble
+    // listeners on it fire in registration order, so a separate listener
+    // could not reliably pre-empt this one.
+    panning = { x: ev.clientX, y: ev.clientY, l: stage.scrollLeft, t: stage.scrollTop };
+    drag = null;
+    stage.classList.add("grabbing");
+    stage.setPointerCapture(ev.pointerId);
+    ev.preventDefault();
+    return;
+  }
   const handle = ev.target.closest && ev.target.closest(".h");
   const p = pointerToSource(ev);
   if (handle) {
@@ -204,6 +233,11 @@ stage.addEventListener("pointerdown", (ev) => {
 });
 
 stage.addEventListener("pointermove", (ev) => {
+  if (panning) {
+    stage.scrollLeft = panning.l - (ev.clientX - panning.x);
+    stage.scrollTop = panning.t - (ev.clientY - panning.y);
+    return;
+  }
   if (!drag) return;
   const p = pointerToSource(ev);
   if (drag.mode === "resize") {
@@ -234,6 +268,12 @@ stage.addEventListener("pointermove", (ev) => {
 });
 
 stage.addEventListener("pointerup", (ev) => {
+  if (panning) {
+    panning = null;
+    stage.classList.remove("grabbing");
+    stage.releasePointerCapture(ev.pointerId);
+    return;
+  }
   if (!drag) return;
   drag = null;
   stage.releasePointerCapture(ev.pointerId);
@@ -306,6 +346,72 @@ function setRatio(spec) {
 for (const b of document.querySelectorAll("#ratios button"))
   b.addEventListener("click", () => setRatio(b.dataset.r));
 setRatio(CFG.lock ? `${CFG.lock[0]}:${CFG.lock[1]}` : "free");
+
+function applyZoom() {
+  if (zoom === null) {
+    stage.classList.remove("zoomed");
+    img.style.width = "";
+  } else {
+    stage.classList.add("zoomed");
+    img.style.width = CFG.preview_w * zoom + "px";
+  }
+  render();
+}
+
+/**
+ * Zoom while keeping the source pixel under (clientX, clientY) under it. Zoom
+ * that drifts is useless for the thing zoom is for: placing an edge exactly.
+ */
+function zoomTo(next, clientX, clientY) {
+  const at = pointerToSource({ clientX, clientY });
+  zoom = next === null ? null : Math.min(4, Math.max(0.05, next));
+  applyZoom();
+  if (zoom === null) return;
+  const i = img.getBoundingClientRect();
+  stage.scrollLeft += i.left + s2p(at.x) - clientX;
+  stage.scrollTop += i.top + s2p(at.y) - clientY;
+  render();
+}
+
+for (const b of document.querySelectorAll("#zoom button")) {
+  b.addEventListener("click", () => {
+    for (const o of document.querySelectorAll("#zoom button"))
+      o.setAttribute("aria-pressed", String(o === b));
+    // Zoom on the stage's centre when it comes from a button, not the cursor.
+    const s = stage.getBoundingClientRect();
+    zoomTo(b.dataset.z === "fit" ? null : Number(b.dataset.z),
+           s.left + stage.clientWidth / 2, s.top + stage.clientHeight / 2);
+  });
+}
+
+// The page opens fitted, so say so — the ratio row shows its state too.
+for (const b of document.querySelectorAll("#zoom button"))
+  b.setAttribute("aria-pressed", String(b.dataset.z === "fit"));
+
+stage.addEventListener("wheel", (ev) => {
+  // Only ctrl/⌘+wheel zooms — a plain wheel has to keep scrolling a zoomed
+  // image, or there is no way to reach its edges.
+  if (!ev.ctrlKey && !ev.metaKey) return;
+  const base = zoom === null ? img.clientWidth / CFG.preview_w : zoom;
+  zoomTo(base * (ev.deltaY < 0 ? 1.1 : 1 / 1.1), ev.clientX, ev.clientY);
+  ev.preventDefault();
+}, { passive: false });
+
+// Space is a modifier here, not a key press: hold to pan, release to select.
+document.addEventListener("keydown", (ev) => {
+  if (ev.code === "Space" && !spaceHeld) {
+    spaceHeld = true;
+    stage.classList.add("panning");
+    ev.preventDefault();
+  }
+});
+document.addEventListener("keyup", (ev) => {
+  if (ev.code === "Space") {
+    spaceHeld = false;
+    panning = null;
+    stage.classList.remove("panning", "grabbing");
+  }
+});
 
 img.addEventListener("load", render);
 window.addEventListener("resize", render);
