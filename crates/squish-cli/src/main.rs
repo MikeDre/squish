@@ -225,7 +225,9 @@ fn real_main() -> Result<u8> {
     };
 
     if args.select {
-        let sel = select::resolve_crop(&worklist, &args)?;
+        // `opts` here is the run's settings *before* the crop is chosen, which
+        // is exactly what the live estimate must encode with.
+        let sel = select::resolve_crop(&worklist, &args, &opts)?;
         let source_dims = sel.source;
         match sel.rect {
             Some(r) => {

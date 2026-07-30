@@ -19,6 +19,11 @@ pub(crate) struct Session {
     pub source_bytes: u64,
     /// Aspect ratio the page opens locked to, from an aspect `--crop`.
     pub lock: Option<(u32, u32)>,
+    /// The settings a live estimate is produced with, e.g. "q75 webp".
+    pub settings: String,
+    /// The real input, re-encoded per selection to get an exact size.
+    pub source_path: std::path::PathBuf,
+    pub opts: squish_core::SquishOptions,
 }
 
 /// How a session ended.
@@ -119,6 +124,39 @@ pub(crate) fn serve(bound: Bound, session: &Session, idle: Duration) -> Result<O
                     }
                 }
             }
+            (Method::Post, "/estimate") => {
+                let mut body = String::new();
+                if req.as_reader().read_to_string(&mut body).is_err() {
+                    let _ = req.respond(Response::from_string("{}").with_status_code(400));
+                    continue;
+                }
+                let rect = match validate(&body, session) {
+                    Ok(r) => r,
+                    Err(msg) => {
+                        let _ = req.respond(Response::from_string(msg).with_status_code(400));
+                        continue;
+                    }
+                };
+                // Encoding can take a second or more; do it off the accept loop
+                // so Cancel is never queued behind an estimate.
+                let source = session.source_path.clone();
+                let opts = session.opts.clone();
+                let tag = format!("{}-{}", token, estimate_seq());
+                std::thread::spawn(move || {
+                    let payload = match super::estimate::estimate(&source, &opts, rect, &tag) {
+                        Ok(super::estimate::EstimateOutcome::Bytes(n)) => {
+                            serde_json::json!({ "bytes": n })
+                        }
+                        Ok(super::estimate::EstimateOutcome::Skipped(why)) => {
+                            serde_json::json!({ "skipped": why })
+                        }
+                        Err(e) => serde_json::json!({ "skipped": e.to_string() }),
+                    };
+                    let _ = req.respond(
+                        Response::from_string(payload.to_string()).with_header(json_header()),
+                    );
+                });
+            }
             _ => {
                 let _ = req.respond(Response::from_string("not found").with_status_code(404));
             }
@@ -202,6 +240,17 @@ fn html_header() -> Header {
         .expect("static header")
 }
 
+fn json_header() -> Header {
+    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).expect("static header")
+}
+
+/// Monotonic counter so each estimate gets its own scratch directory.
+fn estimate_seq() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    N.fetch_add(1, Ordering::Relaxed)
+}
+
 fn mime_header(mime: &str) -> Header {
     Header::from_bytes(&b"Content-Type"[..], mime.as_bytes()).expect("static header")
 }
@@ -228,6 +277,7 @@ fn page_html(session: &Session, _token: &str) -> String {
         "file_name": session.file_name,
         "source_bytes": session.source_bytes,
         "lock": session.lock.map(|(w, h)| [w, h]),
+        "settings": session.settings,
     });
 
     // The config lands inside a <script> block, and a file name is untrusted
@@ -288,6 +338,9 @@ mod tests {
             file_name: "hero.jpg".into(),
             source_bytes: 4096,
             lock: None,
+            settings: "q75 jpg".into(),
+            source_path: std::path::PathBuf::from("hero.jpg"),
+            opts: Default::default(),
         }
     }
 

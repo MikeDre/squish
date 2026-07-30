@@ -123,6 +123,7 @@ body.done #stage { opacity: 0.4; pointer-events: none; }
 .h[data-h="sw"] { left: -5px; bottom: -5px; cursor: nesw-resize; }
 .h[data-h="s"]  { left: calc(50% - 5px); bottom: -5px; cursor: ns-resize; }
 .h[data-h="se"] { right: -5px; bottom: -5px; cursor: nwse-resize; }
+#estimate { margin-left: 14px; font-variant-numeric: tabular-nums; opacity: 0.85; }
 #zoom { display: flex; gap: 6px; margin-left: 14px; }
 #zoom button { padding: 4px 9px; }
 #zoom button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }

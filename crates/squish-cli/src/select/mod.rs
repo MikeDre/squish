@@ -6,10 +6,11 @@
 
 use crate::cli::Args;
 use anyhow::{bail, Result};
-use squish_core::{CropRect, CropSpec, Format, Gravity};
+use squish_core::{CropRect, CropSpec, Format, Gravity, SquishOptions};
 use std::io::IsTerminal;
 use std::path::PathBuf;
 
+mod estimate;
 mod server;
 
 /// Longest edge of the preview handed to the browser.
@@ -112,7 +113,11 @@ pub(crate) struct Selection {
 }
 
 /// Run an interactive selection. `rect: None` means the user cancelled.
-pub(crate) fn resolve_crop(worklist: &[PathBuf], args: &Args) -> Result<Selection> {
+pub(crate) fn resolve_crop(
+    worklist: &[PathBuf],
+    args: &Args,
+    opts: &SquishOptions,
+) -> Result<Selection> {
     let path = preflight(worklist)?;
     // Fails fast on an image that cannot be decoded, before any UI exists.
     let preview = squish_core::preview_bytes(&path, PREVIEW_MAX_EDGE)?;
@@ -125,6 +130,9 @@ pub(crate) fn resolve_crop(worklist: &[PathBuf], args: &Args) -> Result<Selectio
             .unwrap_or_default(),
         source_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
         lock: ratio_lock(args.crop),
+        settings: estimate::settings_label(opts, &path),
+        source_path: path.clone(),
+        opts: opts.clone(),
         preview,
         seed,
     };

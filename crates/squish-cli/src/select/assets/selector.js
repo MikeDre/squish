@@ -280,8 +280,29 @@ stage.addEventListener("pointerup", (ev) => {
   settle();
 });
 
-/** Called whenever the selection stops changing. */
-function settle() { render(); }
+let estimateAbort = null;
+
+/** Called whenever the selection stops changing: fetch an exact size. */
+async function settle() {
+  render();
+  if (finished) return;
+  if (estimateAbort) estimateAbort.abort();
+  estimateAbort = new AbortController();
+  $("estimate").textContent = "estimating…";
+  try {
+    const r = await fetch("/estimate" + location.search, {
+      method: "POST",
+      body: JSON.stringify({ x: sel.x, y: sel.y, w: sel.w, h: sel.h }),
+      signal: estimateAbort.signal,
+    });
+    const j = await r.json();
+    $("estimate").textContent = j.bytes
+      ? `~${fmtBytes(j.bytes)} · ${CFG.settings}`
+      : `— (${j.skipped || "unavailable"})`;
+  } catch (e) {
+    if (e.name !== "AbortError") $("estimate").textContent = "—";
+  }
+}
 
 async function send(path) {
   if (finished) return;
@@ -413,5 +434,5 @@ document.addEventListener("keyup", (ev) => {
   }
 });
 
-img.addEventListener("load", render);
+img.addEventListener("load", () => { render(); settle(); });
 window.addEventListener("resize", render);
