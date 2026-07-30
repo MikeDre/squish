@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **`--select` — pick a crop region by eye.** Opens a self-contained page in
+  your browser (loopback only, single-use token, no uploads) where you drag out
+  the crop region: live readout of the selection's size in source pixels, its
+  offset and aspect ratio, ratio presets with shift-lock, eight resize handles,
+  arrow-key nudging, zoom/pan, and the exact compressed size the selection will
+  produce. Takes one image; seeded by `--crop`/`--gravity`, so
+  `--crop 16:9 --select` places a 16:9 box by hand and
+  `--crop WxH+X+Y --select` reopens a previous crop to adjust. The resolved rect
+  is echoed as `crop: WxH+X+Y` so any interactive choice can be replayed
+  non-interactively. Works with `--dry-run` to pick a region without writing.
+
 ### Fixed
 - **`cargo install` compile failure.** Installing from crates.io with a bare
   `cargo install squish-media-cli` could fail while compiling `lightningcss`

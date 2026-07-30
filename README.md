@@ -162,6 +162,12 @@ squish avatars/ -r --crop 1:1 --gravity north
 # Crop an exact pixel region: WxH+X+Y
 squish scan.png --crop 800x600+120+40
 
+# Pick the crop region by eye, in your browser
+squish hero.jpg --select
+
+# Place a 16:9 crop by hand instead of relying on --gravity
+squish hero.jpg --crop 16:9 --select
+
 # Compress to a size budget (highest quality that fits)
 squish hero.jpg --target-size 500k
 
@@ -177,6 +183,32 @@ squish ./big-folder/ -r --dry-run
 # Keep watching a folder, squishing files as they land
 squish ./assets/ -r --watch
 ```
+
+### Picking a crop by eye
+
+`--select` opens a local page in your browser — nothing is uploaded, and the
+server is bound to `127.0.0.1` with a single-use token, shutting down the moment
+you confirm or cancel. Drag out a region and the readout shows its exact size in
+**source** pixels, its offset, its aspect ratio, and the real compressed size it
+will produce. Ratio presets, eight resize handles, arrow-key nudging (1 px, or
+10 px with shift), and zoom/pan are all there.
+
+It takes exactly one image. The rect is echoed when the run finishes:
+
+```bash
+$ squish hero.jpg --select
+crop: 1440x810+240+120
+hero_squished.jpg  4.4 MB → 812 KB (-82%)
+```
+
+Reuse that spec to repeat the crop non-interactively — handy in scripts:
+
+```bash
+squish hero.jpg --crop 1440x810+240+120
+```
+
+Pair it with `--dry-run` to pick a region without writing anything, and
+`--crop 1440x810+240+120 --select` to reopen a previous crop and adjust it.
 
 ### Video
 
@@ -395,6 +427,11 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
       --gravity <POS>        Anchor for an aspect-ratio --crop: center
                              (default), north, south, east, west, northwest,
                              northeast, southwest, southeast
+      --select               Pick the crop region interactively in your browser
+                             (single image only; seeded by --crop/--gravity).
+                             Shows the selection's size in source pixels and the
+                             exact output size it will produce. Conflicts with
+                             --json/--watch/--stats
       --target-size <SIZE>   Per-file output size budget, e.g. 500k, 1.5M, 2g (decimal
                              units). Images pick the highest quality that fits; video/
                              audio compute a bitrate from the input's duration. Conflicts

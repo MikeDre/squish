@@ -2095,3 +2095,78 @@ fn select_end_to_end_crops_the_posted_rect() {
     let decoded = image::open(&squished).unwrap();
     assert_eq!((decoded.width(), decoded.height()), (40, 30));
 }
+
+#[test]
+fn help_documents_select() {
+    bin()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("--select"))
+        .stdout(predicate::str::contains("interactively"));
+}
+
+/// --dry-run is the "generate a spec to paste into a script" path: the selector
+/// still runs and echoes the rect, but nothing is written.
+#[test]
+fn select_with_dry_run_echoes_the_spec_and_writes_nothing() {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let dir = TempDir::new().unwrap();
+    let img = dir.path().join("hero.png");
+    fs::copy(core_fixture("sample.png"), &img).unwrap();
+    let url_file = dir.path().join("url.txt");
+
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_squish"))
+        .env("SQUISH_NO_STATS", "1")
+        .env("SQUISH_GLOBAL_CONFIG", "/nonexistent/squish-config.toml")
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .env("SQUISH_SELECT_URL_FILE", &url_file)
+        .arg(&img)
+        .args(["--select", "--dry-run"])
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    // Bounded, like the other end-to-end select test: a server that never binds
+    // must fail this test with a message rather than hang CI.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let url = loop {
+        if let Ok(s) = fs::read_to_string(&url_file) {
+            if s.starts_with("http://") {
+                break s;
+            }
+        }
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("squish --select --dry-run exited early ({status})");
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            panic!("timed out after 10s waiting for the selector URL");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let rest = url.trim_start_matches("http://");
+    let (addr, query) = rest.split_once('/').unwrap();
+
+    let body = r#"{"x":1,"y":2,"w":50,"h":25}"#;
+    let mut s = TcpStream::connect(addr).unwrap();
+    write!(
+        s,
+        "POST /crop{query} HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut resp = String::new();
+    s.read_to_string(&mut resp).unwrap();
+
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("crop: 50x25+1+2"), "stdout was: {stdout}");
+    assert!(
+        !dir.path().join("hero_squished.png").exists(),
+        "--dry-run must not write"
+    );
+}
