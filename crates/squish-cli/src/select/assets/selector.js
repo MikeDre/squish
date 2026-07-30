@@ -65,26 +65,39 @@ function applyLock() {
   const ratio = activeLock();
   if (!ratio) return;
 
-  // Drive from whichever axis the user has pulled further, so the box follows
-  // the pointer instead of collapsing when the drag is mostly vertical.
+  // Which axis leads. An edge handle must follow the edge being dragged; a
+  // corner or a fresh drag follows whichever way the pointer has gone further,
+  // so the box tracks the pointer instead of collapsing on the other axis.
+  const drive = drag ? drag.drive : "dominant";
   let w = sel.w, h = sel.h;
-  if (h <= 0 || w / h > ratio) h = w / ratio;
+  if (drive === "w") h = w / ratio;
+  else if (drive === "h") w = h * ratio;
+  else if (h <= 0 || w / h > ratio) h = w / ratio;
   else w = h * ratio;
+
   if (h > CFG.source_h) { h = CFG.source_h; w = h * ratio; }
   if (w > CFG.source_w) { w = CFG.source_w; h = w / ratio; }
   w = Math.max(1, Math.round(w));
   h = Math.max(1, Math.round(h));
 
-  if (drag && (drag.mode === "new" || drag.mode === "resize") && drag.anchor) {
-    // Pin the anchor corner and grow away from it, in the drag's direction.
-    sel.x = drag.dx < 0 ? drag.anchor.x - w : drag.anchor.x;
-    sel.y = drag.dy < 0 ? drag.anchor.y - h : drag.anchor.y;
+  // Hold still whatever the user is not moving: the opposite edge or corner
+  // during a drag, the centre otherwise.
+  if (drag && drag.keep) {
+    sel.x = axisPlace(drag.keep.x, drag.fix.x, w);
+    sel.y = axisPlace(drag.keep.y, drag.fix.y, h);
   } else {
     sel.x = Math.round(sel.x + sel.w / 2 - w / 2);
     sel.y = Math.round(sel.y + sel.h / 2 - h / 2);
   }
   sel.w = w;
   sel.h = h;
+}
+
+/** Place one axis so its pinned edge — or its centre — stays put. */
+function axisPlace(mode, fixed, size) {
+  if (mode === "min") return fixed;
+  if (mode === "max") return fixed - size;
+  return Math.round(fixed - size / 2);
 }
 
 function render() {
@@ -141,24 +154,51 @@ function pointerToSource(ev) {
 }
 
 let drag = null;
+
+/** The drag a grab on `handle` starts: the opposite edge or corner is pinned. */
+function resizeDrag(name) {
+  const f = { x0: sel.x, y0: sel.y, x1: sel.x + sel.w, y1: sel.y + sel.h };
+  const keep = {
+    x: name.includes("w") ? "max" : name.includes("e") ? "min" : "center",
+    y: name.includes("n") ? "max" : name.includes("s") ? "min" : "center",
+  };
+  return {
+    mode: "resize",
+    h: name,
+    fixed: f,
+    keep,
+    fix: {
+      x: keep.x === "max" ? f.x1 : keep.x === "min" ? f.x0 : (f.x0 + f.x1) / 2,
+      y: keep.y === "max" ? f.y1 : keep.y === "min" ? f.y0 : (f.y0 + f.y1) / 2,
+    },
+    // A single-letter handle is an edge: the ratio must follow that edge.
+    drive: name.length > 1 ? "dominant" : name === "n" || name === "s" ? "h" : "w",
+  };
+}
+
 stage.addEventListener("pointerdown", (ev) => {
   if (finished || ev.button !== 0) return;
+  const handle = ev.target.closest && ev.target.closest(".h");
   const p = pointerToSource(ev);
-  const inside =
-    p.x >= sel.x && p.x <= sel.x + sel.w && p.y >= sel.y && p.y <= sel.y + sel.h;
-  drag = inside
-    ? { mode: "move", ox: p.x - sel.x, oy: p.y - sel.y }
-    : {
-        mode: "new",
-        ax: p.x,
-        ay: p.y,
-        anchor: { x: p.x, y: p.y },
-        dx: 0,
-        dy: 0,
-        shift: ev.shiftKey,
-        // The ratio a shift-drag constrains to: whatever the box is now.
-        baseRatio: sel.h ? sel.w / sel.h : 1,
-      };
+  if (handle) {
+    drag = resizeDrag(handle.dataset.h);
+  } else {
+    const inside =
+      p.x >= sel.x && p.x <= sel.x + sel.w && p.y >= sel.y && p.y <= sel.y + sel.h;
+    drag = inside
+      ? { mode: "move", ox: p.x - sel.x, oy: p.y - sel.y }
+      : {
+          mode: "new",
+          ax: p.x,
+          ay: p.y,
+          keep: { x: "min", y: "min" },
+          fix: { x: p.x, y: p.y },
+          drive: "dominant",
+          shift: ev.shiftKey,
+          // The ratio a shift-drag constrains to: whatever the box is now.
+          baseRatio: sel.h ? sel.w / sel.h : 1,
+        };
+  }
   stage.setPointerCapture(ev.pointerId);
   ev.preventDefault();
 });
@@ -166,7 +206,18 @@ stage.addEventListener("pointerdown", (ev) => {
 stage.addEventListener("pointermove", (ev) => {
   if (!drag) return;
   const p = pointerToSource(ev);
-  if (drag.mode === "move") {
+  if (drag.mode === "resize") {
+    const f = drag.fixed;
+    let { x0, y0, x1, y1 } = f;
+    if (drag.h.includes("n")) y0 = p.y;
+    if (drag.h.includes("s")) y1 = p.y;
+    if (drag.h.includes("w")) x0 = p.x;
+    if (drag.h.includes("e")) x1 = p.x;
+    sel.x = Math.min(x0, x1);
+    sel.y = Math.min(y0, y1);
+    sel.w = Math.abs(x1 - x0);
+    sel.h = Math.abs(y1 - y0);
+  } else if (drag.mode === "move") {
     sel.x = p.x - drag.ox;
     sel.y = p.y - drag.oy;
   } else {
@@ -174,9 +225,9 @@ stage.addEventListener("pointermove", (ev) => {
     sel.y = Math.min(drag.ay, p.y);
     sel.w = Math.abs(p.x - drag.ax);
     sel.h = Math.abs(p.y - drag.ay);
-    // Which way the box is being pulled, so a locked drag grows the right way.
-    drag.dx = p.x - drag.ax;
-    drag.dy = p.y - drag.ay;
+    // Pin whichever corner the box is being pulled away from.
+    drag.keep.x = p.x < drag.ax ? "max" : "min";
+    drag.keep.y = p.y < drag.ay ? "max" : "min";
     drag.shift = ev.shiftKey;
   }
   render();
@@ -206,9 +257,26 @@ async function send(path) {
 $("crop").addEventListener("click", () => send("/crop"));
 $("cancel").addEventListener("click", () => send("/cancel"));
 
+let nudgeTimer = null;
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter") { send("/crop"); ev.preventDefault(); }
-  else if (ev.key === "Escape") { send("/cancel"); ev.preventDefault(); }
+  if (ev.key === "Enter") { send("/crop"); ev.preventDefault(); return; }
+  if (ev.key === "Escape") { send("/cancel"); ev.preventDefault(); return; }
+
+  const step = ev.shiftKey ? 10 : 1;
+  const resize = ev.altKey;              // alt+arrows resize instead of move
+  let dx = 0, dy = 0;
+  if (ev.key === "ArrowLeft") dx = -step;
+  else if (ev.key === "ArrowRight") dx = step;
+  else if (ev.key === "ArrowUp") dy = -step;
+  else if (ev.key === "ArrowDown") dy = step;
+  else return;
+
+  if (resize) { sel.w += dx; sel.h += dy; }
+  else { sel.x += dx; sel.y += dy; }
+  render();
+  clearTimeout(nudgeTimer);
+  nudgeTimer = setTimeout(settle, 300);
+  ev.preventDefault();
 });
 
 // Closing the tab must not leave the CLI waiting for the 10-minute timeout.

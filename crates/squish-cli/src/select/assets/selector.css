@@ -107,3 +107,19 @@ body.done #stage { opacity: 0.4; pointer-events: none; }
 #ratios { margin-left: auto; display: flex; gap: 6px; }
 #ratios button { padding: 4px 9px; }
 #ratios button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.h {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.55);
+  border-radius: 2px;
+}
+.h[data-h="nw"] { left: -5px; top: -5px; cursor: nwse-resize; }
+.h[data-h="n"]  { left: calc(50% - 5px); top: -5px; cursor: ns-resize; }
+.h[data-h="ne"] { right: -5px; top: -5px; cursor: nesw-resize; }
+.h[data-h="w"]  { left: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.h[data-h="e"]  { right: -5px; top: calc(50% - 5px); cursor: ew-resize; }
+.h[data-h="sw"] { left: -5px; bottom: -5px; cursor: nesw-resize; }
+.h[data-h="s"]  { left: calc(50% - 5px); bottom: -5px; cursor: ns-resize; }
+.h[data-h="se"] { right: -5px; bottom: -5px; cursor: nwse-resize; }
