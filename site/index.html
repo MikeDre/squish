@@ -272,6 +272,16 @@
 
       <div class="feature-grid">
         <div class="feature">
+          <code class="feature-flag">--select</code>
+          <p>Pick the crop region by eye in your browser — live readout in source pixels and the
+            exact compressed size before you commit. Loopback only, nothing uploaded.</p>
+        </div>
+        <div class="feature">
+          <code class="feature-flag">--crop 16:9</code>
+          <p>Crop while you compress: a preset ratio anchored by <code>--gravity</code>, or an
+            exact pixel rect. GIF crops keep their animation.</p>
+        </div>
+        <div class="feature">
           <code class="feature-flag">--target-size 8M</code>
           <p>Fit any file under an upload limit. Images binary-search the quality dial;
             video and audio compute a bitrate from the file's duration.</p>

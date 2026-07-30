@@ -2,7 +2,9 @@
 
 Image compression library for [squish](https://github.com/MikeDre/squish) — the local CLI that optimises images, video, audio, and code.
 
-Compresses PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, and TIFF with pure-Rust encoders where possible (`oxipng` + `imagequant`, `mozjpeg`, `libwebp`, `ravif`, `oxvg_optimiser`), including cross-format conversion, proportional resizing, and `target_size` budgets (binary-searches the quality dial for the highest quality that fits).
+Compresses PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, and TIFF with pure-Rust encoders where possible (`oxipng` + `imagequant`, `mozjpeg`, `libwebp`, `ravif`, `oxvg_optimiser`), including cross-format conversion, proportional resizing, cropping (an aspect ratio anchored by a gravity, or an exact pixel rect — applied before any resize, and preserving animation for GIF), and `target_size` budgets (binary-searches the quality dial for the highest quality that fits).
+
+`preview_bytes` renders any supported image — including HEIC, AVIF, and TIFF, which browsers can't display — as a downscaled JPEG or PNG, reporting both the preview and source dimensions. It backs the CLI's interactive crop selector.
 
 ```rust
 use squish_core::{squish_file, SquishOptions};

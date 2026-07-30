@@ -58,6 +58,7 @@
           <li><a href="#install">Install</a></li>
           <li><a href="#doctor">Check your setup</a></li>
           <li><a href="#images">Images</a></li>
+          <li><a href="#select">Picking a crop by eye</a></li>
           <li><a href="#video">Video</a></li>
           <li><a href="#audio">Audio</a></li>
           <li><a href="#code">Code</a></li>
@@ -85,6 +86,7 @@
             <li><a href="#install">Install</a></li>
             <li><a href="#doctor">Check your setup</a></li>
             <li><a href="#images">Images</a></li>
+            <li><a href="#select">Picking a crop by eye</a></li>
             <li><a href="#video">Video</a></li>
             <li><a href="#audio">Audio</a></li>
             <li><a href="#code">Code</a></li>
@@ -189,6 +191,18 @@ squish photos/ -r --max-width 2000
 <span class="c-comment"># Fit within a box</span>
 squish hero.jpg --max-width 1920 --max-height 1080
 
+<span class="c-comment"># Crop to a preset aspect ratio (largest centred fit), then compress</span>
+squish hero.jpg --crop 16:9
+
+<span class="c-comment"># Square-crop a whole folder, anchored to the top of each image</span>
+squish avatars/ -r --crop 1:1 --gravity north
+
+<span class="c-comment"># Crop an exact pixel region: WxH+X+Y</span>
+squish scan.png --crop 800x600+120+40
+
+<span class="c-comment"># Pick the crop region by eye, in your browser</span>
+squish hero.jpg --select
+
 <span class="c-comment"># Compress to a size budget (highest quality that fits)</span>
 squish hero.jpg --target-size 500k
 
@@ -203,6 +217,24 @@ squish ./big-folder/ -r --dry-run
 
 <span class="c-comment"># Keep watching a folder, squishing files as they land</span>
 squish ./assets/ -r --watch</code></pre>
+        </section>
+
+        <section class="docs-section" id="select">
+          <h2 class="docs-h2">Picking a crop by eye</h2>
+          <p><code>--select</code> opens a local page in your browser — nothing is uploaded, and the
+            server is bound to <code>127.0.0.1</code> with a single-use token, shutting down the
+            moment you confirm or cancel. Drag out a region and the readout shows its exact size in
+            <strong>source</strong> pixels, its offset, its aspect ratio, and the real compressed
+            size it will produce. Ratio presets, eight resize handles, arrow-key nudging (1&nbsp;px,
+            or 10&nbsp;px with shift), and zoom/pan are all there.</p>
+          <p>It takes exactly one image. The rect is echoed when the run finishes:</p>
+          <pre class="code-block"><code><span class="c-comment">$</span> squish hero.jpg --select
+crop: 1440x810+240+120
+hero_squished.jpg  4.4 MB → 812 KB (-82%)</code></pre>
+          <p>Reuse that spec to repeat the crop non-interactively — handy in scripts:</p>
+          <pre class="code-block"><code>squish hero.jpg --crop 1440x810+240+120</code></pre>
+          <p>Pair it with <code>--dry-run</code> to pick a region without writing anything, and
+            <code>--crop 1440x810+240+120 --select</code> to reopen a previous crop and adjust it.</p>
         </section>
 
         <section class="docs-section" id="video">
@@ -380,6 +412,23 @@ squish photos/ -r --no-stats</code></pre>
                   <td>Scale down images wider than this (preserves aspect ratio)</td></tr>
                 <tr><td><code>--max-height &lt;PIXELS&gt;</code></td>
                   <td>Scale down images taller than this (preserves aspect ratio)</td></tr>
+                <tr><td><code>--crop &lt;SPEC&gt;</code></td>
+                  <td>Crop images before compressing (applied before
+                    <code>--max-width</code>/<code>--max-height</code>). An aspect ratio like
+                    <code>16:9</code> or <code>1:1</code> (largest fit, anchored by
+                    <code>--gravity</code>), or an exact pixel rect <code>WxH+X+Y</code>, e.g.
+                    <code>800x600+120+40</code>. Images only; GIF crops preserve animation. Not read
+                    from <code>squish.toml</code></td></tr>
+                <tr><td><code>--gravity &lt;POS&gt;</code></td>
+                  <td>Anchor for an aspect-ratio <code>--crop</code>: <code>center</code> (default),
+                    <code>north</code>, <code>south</code>, <code>east</code>, <code>west</code>,
+                    <code>northwest</code>, <code>northeast</code>, <code>southwest</code>,
+                    <code>southeast</code></td></tr>
+                <tr><td><code>--select</code></td>
+                  <td>Pick the crop region interactively in your browser (single image only; seeded
+                    by <code>--crop</code>/<code>--gravity</code>). Shows the selection's size in
+                    source pixels and the exact output size it will produce. Conflicts with
+                    <code>--json</code>/<code>--watch</code>/<code>--stats</code></td></tr>
                 <tr><td><code>--target-size &lt;SIZE&gt;</code></td>
                   <td>Per-file output size budget, e.g. <code>500k</code>, <code>1.5M</code>,
                     <code>2g</code> (decimal units). Images pick the highest quality that fits;
@@ -400,6 +449,24 @@ squish photos/ -r --no-stats</code></pre>
                 <tr><td><code>--watch</code></td>
                   <td>Keep running: watch the given paths and squish files as they appear or change
                     (Ctrl-C to stop). Never re-squishes its own outputs</td></tr>
+                <tr><td><code>--keep-metadata</code></td>
+                  <td>Preserve EXIF and the ICC colour profile in image output (default: EXIF
+                    stripped, ICC always preserved). Orientation is applied to pixels before
+                    encoding either way, so framing is correct regardless. JPEG and PNG only</td></tr>
+                <tr><td><code>--json</code></td>
+                  <td>Print a single machine-readable JSON report to stdout instead of the human
+                    summary (warnings still go to stderr). Works with <code>--dry-run</code>; exit
+                    code is unaffected</td></tr>
+                <tr><td><code>--exclude &lt;GLOB&gt;</code></td>
+                  <td>Skip files/dirs matching this glob during a directory walk (repeatable).
+                    Matched relative to each input path's own root; explicit file arguments are
+                    never excluded</td></tr>
+                <tr><td><code>--gitignore</code></td>
+                  <td>Also respect <code>.gitignore</code> (plus <code>.git/info/exclude</code> and
+                    the global gitignore) while walking directories. Off by default</td></tr>
+                <tr><td><code>--no-default-excludes</code></td>
+                  <td>Don't prune <code>.git</code>, <code>node_modules</code>, and
+                    <code>target</code> while walking directories (pruned by default)</td></tr>
                 <tr><td><code>--no-config</code></td>
                   <td>Ignore <code>squish.toml</code> config files for this run</td></tr>
                 <tr><td><code>--kinds &lt;KINDS&gt;</code></td>

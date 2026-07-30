@@ -8,6 +8,11 @@ squish dog.png
 squish ./assets/ -r --format webp --quality 75
 squish hero.jpg --target-size 500k
 
+# Crop while compressing — a preset ratio, an exact rect, or by eye in the browser
+squish hero.jpg --crop 16:9
+squish scan.png --crop 800x600+120+40
+squish hero.jpg --select
+
 # Video — H.265 by default, or fit under an upload limit
 squish video.mp4
 squish clip.mp4 --target-size 8M
