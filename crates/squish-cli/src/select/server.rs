@@ -17,6 +17,8 @@ pub(crate) struct Session {
     pub seed: CropRect,
     pub file_name: String,
     pub source_bytes: u64,
+    /// Aspect ratio the page opens locked to, from an aspect `--crop`.
+    pub lock: Option<(u32, u32)>,
 }
 
 /// How a session ended.
@@ -225,6 +227,7 @@ fn page_html(session: &Session, _token: &str) -> String {
         },
         "file_name": session.file_name,
         "source_bytes": session.source_bytes,
+        "lock": session.lock.map(|(w, h)| [w, h]),
     });
 
     // The config lands inside a <script> block, and a file name is untrusted
@@ -284,6 +287,7 @@ mod tests {
             },
             file_name: "hero.jpg".into(),
             source_bytes: 4096,
+            lock: None,
         }
     }
 
@@ -441,6 +445,16 @@ mod tests {
         // location.search, so the token must not be baked into the HTML.
         let html = page_html(&session(), "sekrit");
         assert!(!html.contains("sekrit"));
+    }
+
+    #[test]
+    fn page_config_carries_the_ratio_lock() {
+        let mut s = session();
+        s.lock = Some((16, 9));
+        assert!(page_html(&s, "tok").contains("\"lock\":[16,9]"));
+
+        let s2 = session();
+        assert!(page_html(&s2, "tok").contains("\"lock\":null"));
     }
 
     #[test]

@@ -93,6 +93,16 @@ pub(crate) fn seed_rect(
     }
 }
 
+/// The aspect ratio the selector should lock to, if the user asked for one.
+/// Only an aspect `--crop` locks: an exact rect is a starting point, not a
+/// constraint.
+pub(crate) fn ratio_lock(spec: Option<CropSpec>) -> Option<(u32, u32)> {
+    match spec {
+        Some(CropSpec::Aspect { w, h }) => Some((w, h)),
+        _ => None,
+    }
+}
+
 /// The outcome of an interactive selection: the chosen rect (None = cancelled)
 /// plus the source dimensions it was chosen against, so the caller can tell a
 /// whole-image selection from a real crop.
@@ -114,6 +124,7 @@ pub(crate) fn resolve_crop(worklist: &[PathBuf], args: &Args) -> Result<Selectio
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default(),
         source_bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
+        lock: ratio_lock(args.crop),
         preview,
         seed,
     };
@@ -210,6 +221,25 @@ mod tests {
             480,
         )
         .is_err());
+    }
+
+    #[test]
+    fn ratio_lock_comes_from_an_aspect_spec_only() {
+        assert_eq!(
+            ratio_lock(Some(CropSpec::Aspect { w: 16, h: 9 })),
+            Some((16, 9))
+        );
+        assert_eq!(
+            ratio_lock(Some(CropSpec::Exact {
+                w: 10,
+                h: 10,
+                x: 0,
+                y: 0
+            })),
+            None,
+            "an exact rect is a starting point, not a constraint"
+        );
+        assert_eq!(ratio_lock(None), None);
     }
 
     #[test]

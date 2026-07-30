@@ -104,3 +104,6 @@ button {
 #readout strong { font-variant-numeric: tabular-nums; }
 #readout span { opacity: 0.7; font-variant-numeric: tabular-nums; }
 body.done #stage { opacity: 0.4; pointer-events: none; }
+#ratios { margin-left: auto; display: flex; gap: 6px; }
+#ratios button { padding: 4px 9px; }
+#ratios button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }

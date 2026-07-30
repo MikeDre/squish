@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const img = $("preview"), stage = $("stage"), box = $("sel"), shade = $("shade");
 
 let sel = { ...CFG.seed };
+let lock = CFG.lock ? CFG.lock[0] / CFG.lock[1] : null; // width / height, or null
 let finished = false;
 
 img.src = "/preview" + location.search;
@@ -42,7 +43,52 @@ function ratioLabel(w, h) {
   return (w / h).toFixed(2) + ":1";
 }
 
+/**
+ * The ratio in force right now: the transient one while shift is held during a
+ * new drag, otherwise the sticky one from the presets or `--crop`. Shift is
+ * deliberately transient — a modifier that silently rewrote the sticky lock
+ * would leave the "Free" preset lit while the box refused to go free.
+ */
+function activeLock() {
+  if (drag && drag.mode === "new" && drag.shift) return drag.baseRatio;
+  return lock;
+}
+
+/**
+ * Force the selection to the active ratio.
+ *
+ * The anchor matters: while a corner is being dragged out, that corner has to
+ * stay put, or the box crawls away from where the drag began. Only outside a
+ * drag is the centre the right thing to hold.
+ */
+function applyLock() {
+  const ratio = activeLock();
+  if (!ratio) return;
+
+  // Drive from whichever axis the user has pulled further, so the box follows
+  // the pointer instead of collapsing when the drag is mostly vertical.
+  let w = sel.w, h = sel.h;
+  if (h <= 0 || w / h > ratio) h = w / ratio;
+  else w = h * ratio;
+  if (h > CFG.source_h) { h = CFG.source_h; w = h * ratio; }
+  if (w > CFG.source_w) { w = CFG.source_w; h = w / ratio; }
+  w = Math.max(1, Math.round(w));
+  h = Math.max(1, Math.round(h));
+
+  if (drag && (drag.mode === "new" || drag.mode === "resize") && drag.anchor) {
+    // Pin the anchor corner and grow away from it, in the drag's direction.
+    sel.x = drag.dx < 0 ? drag.anchor.x - w : drag.anchor.x;
+    sel.y = drag.dy < 0 ? drag.anchor.y - h : drag.anchor.y;
+  } else {
+    sel.x = Math.round(sel.x + sel.w / 2 - w / 2);
+    sel.y = Math.round(sel.y + sel.h / 2 - h / 2);
+  }
+  sel.w = w;
+  sel.h = h;
+}
+
 function render() {
+  applyLock();
   clampSel();
   const f = frame();
   box.style.left = f.left + s2p(sel.x) + "px";
@@ -102,7 +148,17 @@ stage.addEventListener("pointerdown", (ev) => {
     p.x >= sel.x && p.x <= sel.x + sel.w && p.y >= sel.y && p.y <= sel.y + sel.h;
   drag = inside
     ? { mode: "move", ox: p.x - sel.x, oy: p.y - sel.y }
-    : { mode: "new", ax: p.x, ay: p.y };
+    : {
+        mode: "new",
+        ax: p.x,
+        ay: p.y,
+        anchor: { x: p.x, y: p.y },
+        dx: 0,
+        dy: 0,
+        shift: ev.shiftKey,
+        // The ratio a shift-drag constrains to: whatever the box is now.
+        baseRatio: sel.h ? sel.w / sel.h : 1,
+      };
   stage.setPointerCapture(ev.pointerId);
   ev.preventDefault();
 });
@@ -118,6 +174,10 @@ stage.addEventListener("pointermove", (ev) => {
     sel.y = Math.min(drag.ay, p.y);
     sel.w = Math.abs(p.x - drag.ax);
     sel.h = Math.abs(p.y - drag.ay);
+    // Which way the box is being pulled, so a locked drag grows the right way.
+    drag.dx = p.x - drag.ax;
+    drag.dy = p.y - drag.ay;
+    drag.shift = ev.shiftKey;
   }
   render();
 });
@@ -157,6 +217,27 @@ window.addEventListener("pagehide", () => {
   finished = true;
   navigator.sendBeacon("/cancel" + location.search, "{}");
 });
+
+/**
+ * Switch the sticky ratio lock. A spec that matches no button (a `--crop 3:2`
+ * seed, say) leaves every preset unpressed, which is honest: the lock is on,
+ * but it isn't one of the six.
+ */
+function setRatio(spec) {
+  if (spec === "free") lock = null;
+  else if (spec === "orig") lock = CFG.source_w / CFG.source_h;
+  else {
+    const [w, h] = spec.split(":").map(Number);
+    lock = w / h;
+  }
+  for (const b of document.querySelectorAll("#ratios button"))
+    b.setAttribute("aria-pressed", String(b.dataset.r === spec));
+  render();
+  settle();
+}
+for (const b of document.querySelectorAll("#ratios button"))
+  b.addEventListener("click", () => setRatio(b.dataset.r));
+setRatio(CFG.lock ? `${CFG.lock[0]}:${CFG.lock[1]}` : "free");
 
 img.addEventListener("load", render);
 window.addEventListener("resize", render);
