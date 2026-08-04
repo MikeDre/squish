@@ -13,6 +13,8 @@ use std::path::PathBuf;
 mod estimate;
 mod server;
 
+pub(crate) use server::{Phase, Reporter};
+
 /// Longest edge of the preview handed to the browser.
 pub(crate) const PREVIEW_MAX_EDGE: u32 = 4000;
 
@@ -106,10 +108,12 @@ pub(crate) fn ratio_lock(spec: Option<CropSpec>) -> Option<(u32, u32)> {
 
 /// The outcome of an interactive selection: the chosen rect (None = cancelled)
 /// plus the source dimensions it was chosen against, so the caller can tell a
-/// whole-image selection from a real crop.
+/// whole-image selection from a real crop, plus the live channel back to the
+/// still-open page (None when the user cancelled and there is nothing to say).
 pub(crate) struct Selection {
     pub rect: Option<CropRect>,
     pub source: (u32, u32),
+    pub reporter: Option<Reporter>,
 }
 
 /// Run an interactive selection. `rect: None` means the user cancelled.
@@ -137,7 +141,7 @@ pub(crate) fn resolve_crop(
         seed,
     };
 
-    let (outcome, _reporter) = server::run(&session)?;
+    let (outcome, reporter) = server::run(&session)?;
     let rect = match outcome {
         server::Outcome::Cropped(r) => Some(r),
         server::Outcome::Cancelled => None,
@@ -145,13 +149,183 @@ pub(crate) fn resolve_crop(
             anyhow::bail!("crop selector timed out after 10 minutes with no selection")
         }
     };
-    Ok(Selection { rect, source })
+    Ok(Selection {
+        rect,
+        source,
+        reporter,
+    })
+}
+
+/// Translate a finished run into what the page should show.
+///
+/// Called for failures as well as successes: a run that errors must say so in the
+/// browser rather than leave the page on "working" until the server dies.
+pub(crate) fn report_phase(
+    run: &Result<crate::runner::RunReport>,
+    source_name: &str,
+    source_bytes: u64,
+    crop: &str,
+    dry_run: bool,
+) -> Phase {
+    let report = match run {
+        Err(e) => return Phase::Failed(e.to_string()),
+        Ok(r) => r,
+    };
+    if let Some((path, msg)) = report.errors.first() {
+        return Phase::Failed(format!("{}: {msg}", name_of(path)));
+    }
+    // --dry-run returns an empty report (see runner.rs:388): nothing ran, so
+    // there is no output file and no output size to show.
+    if dry_run {
+        return Phase::Done(server::Report {
+            file: source_name.to_string(),
+            input_bytes: source_bytes,
+            output_bytes: None,
+            crop: crop.to_string(),
+            note: Some("nothing written (--dry-run)".into()),
+        });
+    }
+    // --select takes exactly one image, so there is exactly one outcome.
+    let (result, note) = match (
+        report.results.first(),
+        report.already_optimal_images.first(),
+    ) {
+        (Some(r), _) => (r, None),
+        (None, Some(r)) => (r, Some("already optimal — left unchanged".to_string())),
+        (None, None) => {
+            return Phase::Failed("the run produced no result for this image".into());
+        }
+    };
+    Phase::Done(server::Report {
+        file: name_of(&result.output_path),
+        input_bytes: result.input_bytes,
+        output_bytes: Some(result.output_bytes),
+        crop: crop.to_string(),
+        note,
+    })
+}
+
+/// A file name for display. The page gets names, not paths: a full path is noise
+/// in a browser and a small information leak into screenshots.
+fn name_of(p: &std::path::Path) -> String {
+    p.file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| p.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use squish_core::{CropSpec, Gravity};
+    use crate::runner::RunReport;
+    use squish_core::{CropSpec, Format, Gravity, SquishResult};
+    use std::time::Duration;
+
+    fn empty_report() -> RunReport {
+        RunReport {
+            results: vec![],
+            video_results: vec![],
+            audio_results: vec![],
+            code_results: vec![],
+            errors: vec![],
+            skipped_unknown: vec![],
+            already_optimal_images: vec![],
+            already_optimal_video: vec![],
+            already_optimal_audio: vec![],
+            already_optimal_code: vec![],
+            total_wall: Duration::from_millis(1),
+        }
+    }
+
+    fn image_result() -> SquishResult {
+        SquishResult {
+            input_path: PathBuf::from("/tmp/hero.png"),
+            output_path: PathBuf::from("/tmp/hero_squished.png"),
+            input_bytes: 4096,
+            output_bytes: 1024,
+            format_in: Format::Png,
+            format_out: Format::Png,
+            duration: Duration::from_millis(5),
+            warnings: vec![],
+        }
+    }
+
+    #[test]
+    fn a_successful_run_reports_the_output_file_and_bytes() {
+        let mut r = empty_report();
+        r.results.push(image_result());
+        match report_phase(&Ok(r), "hero.png", 4096, "40x30+5+6", false) {
+            Phase::Done(rep) => {
+                assert_eq!(rep.file, "hero_squished.png", "a name, never a full path");
+                assert_eq!(rep.input_bytes, 4096);
+                assert_eq!(rep.output_bytes, Some(1024));
+                assert_eq!(rep.crop, "40x30+5+6");
+                assert_eq!(rep.note, None);
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_already_optimal_run_says_so_instead_of_looking_like_a_no_op() {
+        let mut r = empty_report();
+        let mut res = image_result();
+        res.output_bytes = res.input_bytes;
+        r.already_optimal_images.push(res);
+        match report_phase(&Ok(r), "hero.png", 4096, "", false) {
+            Phase::Done(rep) => {
+                assert_eq!(rep.output_bytes, Some(4096));
+                assert_eq!(
+                    rep.note.as_deref(),
+                    Some("already optimal — left unchanged")
+                );
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_dry_run_reports_the_source_and_writes_no_output_size() {
+        // runner::run returns an empty report for --dry-run (runner.rs:388).
+        match report_phase(&Ok(empty_report()), "hero.png", 4096, "40x30+5+6", true) {
+            Phase::Done(rep) => {
+                assert_eq!(rep.file, "hero.png");
+                assert_eq!(rep.input_bytes, 4096);
+                assert_eq!(rep.output_bytes, None);
+                assert_eq!(rep.note.as_deref(), Some("nothing written (--dry-run)"));
+            }
+            other => panic!("expected Done, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_per_file_error_becomes_a_failed_phase() {
+        let mut r = empty_report();
+        r.errors
+            .push((PathBuf::from("/tmp/hero.png"), "encode failed".into()));
+        match report_phase(&Ok(r), "hero.png", 4096, "", false) {
+            Phase::Failed(msg) => assert!(msg.contains("encode failed"), "got: {msg}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_top_level_error_becomes_a_failed_phase() {
+        let run: Result<RunReport> = Err(anyhow::anyhow!("no such file"));
+        match report_phase(&run, "hero.png", 4096, "", false) {
+            Phase::Failed(msg) => assert!(msg.contains("no such file"), "got: {msg}"),
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_run_that_produced_nothing_is_a_failure_not_a_silent_success() {
+        // --select guarantees exactly one image input, so an empty non-dry-run
+        // report means something swallowed it.
+        match report_phase(&Ok(empty_report()), "hero.png", 4096, "", false) {
+            Phase::Failed(_) => {}
+            other => panic!("expected Failed, got {other:?}"),
+        }
+    }
 
     #[test]
     fn seed_without_crop_is_centred_80_percent() {

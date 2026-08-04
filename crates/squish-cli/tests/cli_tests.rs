@@ -2096,6 +2096,115 @@ fn select_end_to_end_crops_the_posted_rect() {
     assert_eq!((decoded.width(), decoded.height()), (40, 30));
 }
 
+/// The browser's side of the handshake: after POSTing a rect, the page polls
+/// /status until the run reports itself done, and the numbers it gets back must
+/// match the file squish actually wrote.
+#[test]
+fn select_status_reports_the_finished_run_to_the_page() {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let dir = TempDir::new().unwrap();
+    let img = dir.path().join("hero.png");
+    fs::copy(core_fixture("sample.png"), &img).unwrap();
+    let url_file = dir.path().join("url.txt");
+    let input_bytes = fs::metadata(&img).unwrap().len();
+
+    let mut child = std::process::Command::new(env!("CARGO_BIN_EXE_squish"))
+        .env("SQUISH_NO_STATS", "1")
+        .env("SQUISH_GLOBAL_CONFIG", "/nonexistent/squish-config.toml")
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .env("SQUISH_SELECT_URL_FILE", &url_file)
+        .arg(&img)
+        .arg("--select")
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let url = loop {
+        if let Ok(s) = fs::read_to_string(&url_file) {
+            if s.starts_with("http://") {
+                break s;
+            }
+        }
+        if let Some(status) = child.try_wait().unwrap() {
+            panic!("squish --select exited early ({status}) before publishing its URL");
+        }
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            panic!("timed out after 10s waiting for squish --select to publish its URL");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    };
+    let rest = url.trim_start_matches("http://");
+    let (addr, query) = rest.split_once('/').unwrap();
+
+    let get = |target: &str| -> String {
+        let mut s = TcpStream::connect(addr).unwrap();
+        write!(
+            s,
+            "GET {target} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+        )
+        .unwrap();
+        let mut resp = String::new();
+        s.read_to_string(&mut resp).unwrap();
+        resp
+    };
+
+    let body = r#"{"x":5,"y":6,"w":40,"h":30}"#;
+    let mut s = TcpStream::connect(addr).unwrap();
+    write!(
+        s,
+        "POST /crop{query} HTTP/1.1\r\nHost: localhost\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )
+    .unwrap();
+    let mut resp = String::new();
+    s.read_to_string(&mut resp).unwrap();
+    assert!(resp.starts_with("HTTP/1.1 200"), "got: {resp}");
+
+    // Poll like the page does, until a terminal phase or a dead server.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let status = loop {
+        let resp = get(&format!("/status{query}"));
+        if resp.contains(r#""phase":"done""#) || resp.contains(r#""phase":"failed""#) {
+            break resp;
+        }
+        assert!(
+            resp.contains(r#""phase":"working""#),
+            "unexpected /status body: {resp}"
+        );
+        if std::time::Instant::now() >= deadline {
+            let _ = child.kill();
+            panic!("timed out waiting for /status to report a terminal phase");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    };
+
+    assert!(status.contains(r#""phase":"done""#), "got: {status}");
+    assert!(
+        status.contains(r#""file":"hero_squished.png""#),
+        "the page gets a file name, not a path: {status}"
+    );
+    assert!(
+        status.contains(&format!(r#""in":{input_bytes}"#)),
+        "reported input bytes must match the source: {status}"
+    );
+    assert!(status.contains(r#""crop":"40x30+5+6""#), "got: {status}");
+
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success(), "squish failed: {out:?}");
+
+    // The reported output size must be the file actually on disk.
+    let squished = dir.path().join("hero_squished.png");
+    let written = fs::metadata(&squished).unwrap().len();
+    assert!(
+        status.contains(&format!(r#""out":{written}"#)),
+        "reported {status} but wrote {written} bytes"
+    );
+}
+
 #[test]
 fn help_documents_select() {
     bin()

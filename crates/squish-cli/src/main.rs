@@ -20,6 +20,12 @@ use squish_code::CodeOptions;
 use squish_core::{CropSpec, SquishOptions};
 use squish_video::VideoOptions;
 
+/// How long a `--select` run waits for the browser to read its result before
+/// exiting. `--select` requires a TTY and can never be scripted, and the page
+/// polls every 300ms, so this is one poll interval of slack in the common case
+/// and a bounded worst case when the tab has been backgrounded.
+const SELECT_REPORT_LINGER: std::time::Duration = std::time::Duration::from_millis(1500);
+
 fn main() -> std::process::ExitCode {
     match real_main() {
         Ok(exit) => std::process::ExitCode::from(exit),
@@ -224,11 +230,26 @@ fn real_main() -> Result<u8> {
         gravity: args.gravity,
     };
 
+    // Kept alive for the whole run: the page is still open and polling, and this
+    // is how it learns what happened.
+    let mut reporter: Option<select::Reporter> = None;
+    let mut crop_label = String::new();
+    let mut select_source: Option<(String, u64)> = None;
+
     if args.select {
         // `opts` here is the run's settings *before* the crop is chosen, which
         // is exactly what the live estimate must encode with.
         let sel = select::resolve_crop(&worklist, &args, &opts)?;
         let source_dims = sel.source;
+        reporter = sel.reporter;
+        let source = &worklist[0];
+        select_source = Some((
+            source
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            std::fs::metadata(source).map(|m| m.len()).unwrap_or(0),
+        ));
         match sel.rect {
             Some(r) => {
                 let full = r.x == 0 && r.y == 0 && r.w == source_dims.0 && r.h == source_dims.1;
@@ -238,6 +259,7 @@ fn real_main() -> Result<u8> {
                     // Echo the resolved rect so an interactive choice can be
                     // replayed non-interactively: --crop 1440x810+240+120
                     println!("crop: {}x{}+{}+{}", r.w, r.h, r.x, r.y);
+                    crop_label = format!("{}x{}+{}+{}", r.w, r.h, r.x, r.y);
                     opts.crop = Some(CropSpec::Exact {
                         w: r.w,
                         h: r.h,
@@ -310,7 +332,21 @@ fn real_main() -> Result<u8> {
         return Ok(0);
     }
 
-    let report = runner::run(&worklist, &cfg)?;
+    // Captured, not `?`-propagated: an early return here would drop the
+    // selector's reporter with the page still showing "working".
+    let run = runner::run(&worklist, &cfg);
+    if let Some(rep) = &reporter {
+        let (name, bytes) = select_source.unwrap_or_default();
+        rep.finish(select::report_phase(
+            &run,
+            &name,
+            bytes,
+            &crop_label,
+            args.dry_run,
+        ));
+        rep.wait_for_pickup(SELECT_REPORT_LINGER);
+    }
+    let report = run?;
     stats::append_batch(&report, args.dry_run, args.no_stats);
     Ok(report.exit_code())
 }
