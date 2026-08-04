@@ -34,6 +34,59 @@ pub(crate) enum Outcome {
     TimedOut,
 }
 
+/// What the page should be showing. The selector owns this until a rect
+/// arrives; the CLI owns it from then on.
+#[derive(Debug)]
+pub(crate) enum Phase {
+    Working,
+    Done(Report),
+    Failed(String),
+}
+
+/// The outcome of the run, in the shape the page renders.
+///
+/// `file` is a file *name*, not a path: a full path is noise in a browser and a
+/// small information leak into screenshots. `output_bytes` is `None` when
+/// nothing was written (`--dry-run`), so the card can omit the size line rather
+/// than print a no-op transition.
+#[derive(Debug, Clone)]
+pub(crate) struct Report {
+    pub file: String,
+    pub input_bytes: u64,
+    pub output_bytes: Option<u64>,
+    /// "3000x2000+10+20", or "" for a whole-image selection.
+    pub crop: String,
+    pub note: Option<String>,
+}
+
+fn phase_json(p: &Phase) -> String {
+    match p {
+        Phase::Working => serde_json::json!({ "phase": "working" }).to_string(),
+        Phase::Failed(e) => serde_json::json!({ "phase": "failed", "error": e }).to_string(),
+        Phase::Done(r) => serde_json::json!({
+            "phase": "done",
+            "file": r.file,
+            "in": r.input_bytes,
+            "out": r.output_bytes,
+            "pct": r.output_bytes.map(|out| pct(r.input_bytes, out)),
+            "crop": r.crop,
+            "note": r.note,
+        })
+        .to_string(),
+    }
+}
+
+/// Size reduction, positive for a shrink — the same formula as
+/// `SquishResult::reduction_percent`, rounded to one decimal so the card and the
+/// terminal summary can never disagree in the digits they show.
+fn pct(input: u64, output: u64) -> f64 {
+    if input == 0 {
+        return 0.0;
+    }
+    let delta = input as f64 - output as f64;
+    ((delta / input as f64) * 1000.0).round() / 10.0
+}
+
 /// A bound-but-not-yet-serving server.
 pub(crate) struct Bound {
     server: Server,
@@ -519,6 +572,63 @@ mod tests {
         let html = page_html(&s, "tok");
         assert!(!html.contains("</script><img"));
         assert!(html.contains("\\u003c/script\\u003e"), "escaped instead");
+    }
+
+    #[test]
+    fn working_phase_serializes_to_a_bare_phase_field() {
+        assert_eq!(phase_json(&Phase::Working), r#"{"phase":"working"}"#);
+    }
+
+    #[test]
+    fn done_phase_carries_the_numbers_and_a_derived_percentage() {
+        let json = phase_json(&Phase::Done(Report {
+            file: "big-sq.jpg".into(),
+            input_bytes: 1_346_291,
+            output_bytes: Some(78_210),
+            crop: "3000x2000+10+20".into(),
+            note: None,
+        }));
+        assert!(json.contains(r#""phase":"done""#), "got: {json}");
+        assert!(json.contains(r#""file":"big-sq.jpg""#), "got: {json}");
+        assert!(json.contains(r#""in":1346291"#), "got: {json}");
+        assert!(json.contains(r#""out":78210"#), "got: {json}");
+        assert!(json.contains(r#""pct":94.2"#), "got: {json}");
+        assert!(json.contains(r#""crop":"3000x2000+10+20""#), "got: {json}");
+        assert!(json.contains(r#""note":null"#), "got: {json}");
+    }
+
+    #[test]
+    fn a_dry_run_report_has_no_output_size_and_no_percentage() {
+        // Nothing was written, so a "1.3 MB → 1.3 MB (0%)" line would be a lie.
+        let json = phase_json(&Phase::Done(Report {
+            file: "hero.png".into(),
+            input_bytes: 4096,
+            output_bytes: None,
+            crop: "40x30+5+6".into(),
+            note: Some("nothing written (--dry-run)".into()),
+        }));
+        assert!(json.contains(r#""out":null"#), "got: {json}");
+        assert!(json.contains(r#""pct":null"#), "got: {json}");
+        assert!(
+            json.contains(r#""note":"nothing written (--dry-run)""#),
+            "got: {json}"
+        );
+    }
+
+    #[test]
+    fn failed_phase_carries_the_error() {
+        let json = phase_json(&Phase::Failed("permission denied".into()));
+        assert!(json.contains(r#""phase":"failed""#), "got: {json}");
+        assert!(json.contains(r#""error":"permission denied""#), "got: {json}");
+    }
+
+    #[test]
+    fn percentage_matches_reduction_percent_to_one_decimal() {
+        // Same formula as SquishResult::reduction_percent, rounded for display.
+        assert_eq!(pct(1_346_291, 78_210), 94.2);
+        assert_eq!(pct(1000, 1000), 0.0);
+        assert_eq!(pct(0, 0), 0.0, "an empty input must not divide by zero");
+        assert_eq!(pct(100, 150), -50.0, "growth reports negative");
     }
 
     #[test]
