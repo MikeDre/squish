@@ -701,6 +701,30 @@ mod tests {
     }
 
     #[test]
+    fn page_carries_the_overlay_scaffolding() {
+        let html = page_html(&session(), "tok");
+        for id in [
+            "id=\"overlay\"",
+            "id=\"card\"",
+            "id=\"card-icon\"",
+            "id=\"card-title\"",
+            "id=\"card-detail\"",
+            "id=\"card-foot\"",
+            "id=\"progress\"",
+        ] {
+            assert!(html.contains(id), "missing {id}");
+        }
+    }
+
+    #[test]
+    fn page_keeps_the_header_bar_id_distinct_from_the_progress_bar() {
+        // #bar is the header; the indeterminate bar must not collide with it.
+        let html = page_html(&session(), "tok");
+        assert!(html.contains("id=\"bar\""));
+        assert!(html.contains("id=\"progress\""));
+    }
+
+    #[test]
     fn page_does_not_leak_the_token_into_markup() {
         // The browser already has the token in its URL; the page uses
         // location.search, so the token must not be baked into the HTML.

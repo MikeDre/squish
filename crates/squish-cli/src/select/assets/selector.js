@@ -6,6 +6,10 @@ const img = $("preview"), stage = $("stage"), box = $("sel"), shade = $("shade")
 let sel = { ...CFG.seed };
 let lock = CFG.lock ? CFG.lock[0] / CFG.lock[1] : null; // width / height, or null
 let finished = false;
+let state = "loading";
+/** Set once /status has reported done/failed, so the delayed overlay stands down. */
+let terminal = false;
+let pollTimer = null, workingTimer = null, pollFails = 0;
 
 img.src = "/preview" + location.search;
 $("file").textContent = CFG.file_name;
@@ -16,6 +20,108 @@ function fmtBytes(n) {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + " MB";
   if (n >= 1e3) return Math.round(n / 1e3) + " KB";
   return n + " B";
+}
+
+/**
+ * Every non-selecting state renders the same card, so the page always has
+ * something to say. Before this there were four silent states: blank until the
+ * preview loaded, blank forever if it failed, a 40% dim on crop, and nothing at
+ * all once the CLI took over.
+ */
+function setState(next, data) {
+  state = next;
+  const o = $("overlay"), card = $("card");
+  if (next === "selecting") {
+    o.hidden = true;
+    $("crop").disabled = false;
+    $("cancel").disabled = false;
+    return;
+  }
+
+  card.className = "";
+  $("card-icon").textContent = "";
+  $("card-title").textContent = "";
+  $("card-detail").replaceChildren();
+  $("card-foot").textContent = "";
+  $("progress").hidden = true;
+  o.hidden = false;
+
+  if (next === "loading") {
+    $("card-title").textContent = "Loading preview…";
+    $("progress").hidden = false;
+  } else if (next === "preview-error") {
+    card.className = "bad";
+    $("card-icon").textContent = "⚠";
+    $("card-title").textContent = "Could not render a preview";
+    $("card-foot").textContent = "Nothing was written. Check your terminal.";
+  } else if (next === "working") {
+    $("card-title").textContent = "Squishing " + CFG.file_name;
+    $("progress").hidden = false;
+    if (data && data.crop) detailRow("cropped " + data.crop);
+  } else if (next === "done") {
+    card.className = "ok";
+    $("card-icon").textContent = "✓";
+    $("card-title").textContent = "Squished";
+    detailRow(data.file, "big");
+    if (data.out !== null && data.out !== undefined)
+      detailRow(fmtBytes(data.in) + " → " + fmtBytes(data.out) + "  (" + signed(data.pct) + ")");
+    if (data.crop) detailRow("cropped " + data.crop);
+    if (data.note) detailRow(data.note);
+    $("card-foot").textContent = "You can close this tab.";
+  } else if (next === "failed") {
+    card.className = "bad";
+    $("card-icon").textContent = "✕";
+    $("card-title").textContent = "Squish failed";
+    detailRow(data.error || "unknown error");
+    $("card-foot").textContent = "See your terminal for details.";
+  } else if (next === "cancelled") {
+    $("card-title").textContent = "Cancelled — nothing written";
+    $("card-foot").textContent = "You can close this tab.";
+  } else if (next === "gone") {
+    // Deliberately not "Finished": the page cannot tell a completed run from a
+    // Ctrl-C, and claiming a success it never observed is the exact failure this
+    // whole change exists to remove.
+    $("card-title").textContent = "squish is no longer running";
+    $("card-foot").textContent = "See your terminal for the result.";
+  }
+
+  $("crop").disabled = true;
+  $("cancel").disabled = next !== "loading";
+}
+
+/**
+ * One detail line. Always textContent: file names, error strings and notes all
+ * originate outside this page.
+ */
+function detailRow(text, cls) {
+  const d = document.createElement("div");
+  if (cls) d.className = cls;
+  d.textContent = text;
+  $("card-detail").append(d);
+}
+
+/** "-94.2%" for a shrink, "+50.0%" for growth — matching the CLI's summary. */
+function signed(p) {
+  if (p === null || p === undefined) return "";
+  return (p >= 0 ? "-" : "+") + Math.abs(p).toFixed(1) + "%";
+}
+
+/** The estimate readout. `busy` pulses it so a slow encode looks alive. */
+function showEstimate(text, busy) {
+  const e = $("estimate");
+  e.textContent = text;
+  e.classList.toggle("busy", !!busy);
+}
+
+/**
+ * Why no number is coming. The old copy rendered "— (--quality auto)", which
+ * reads as a failure; these are all normal, explicable states.
+ */
+function skipLabel(why) {
+  if (!why) return "estimate unavailable";
+  if (why === "--quality auto") return "size shown after squishing (--quality auto)";
+  if (why === "selection too large") return "estimate off — selection too large";
+  return "estimate unavailable — " + why;
 }
 
 /** Source px -> CSS px, using the preview's rendered size. */
@@ -194,7 +300,9 @@ function resizeDrag(name) {
 }
 
 stage.addEventListener("pointerdown", (ev) => {
-  if (finished || ev.button !== 0) return;
+  // The overlay is a child of #stage, so its events bubble here. Only the
+  // selecting state accepts pointer input.
+  if (state !== "selecting" || ev.button !== 0) return;
   if (spaceHeld) {
     // Panning wins over selecting. Handled here rather than in a capture-phase
     // listener: when the stage is itself the target, capture and bubble
@@ -307,12 +415,74 @@ async function settle() {
 async function send(path) {
   if (finished) return;
   finished = true;
-  document.body.classList.add("done");
-  await fetch(path + location.search, {
-    method: "POST",
-    body: JSON.stringify({ x: sel.x, y: sel.y, w: sel.w, h: sel.h }),
-  });
-  $("hint").firstChild.textContent = " done — back to your terminal ";
+  let r;
+  try {
+    r = await fetch(path + location.search, {
+      method: "POST",
+      body: JSON.stringify({ x: sel.x, y: sel.y, w: sel.w, h: sel.h }),
+    });
+  } catch (e) {
+    // The server went away before it could answer; nothing else to try.
+    setState("gone");
+    return;
+  }
+  if (!r.ok) {
+    // A rect the engine rejects must not leave the page permanently dimmed:
+    // hand control back and say why.
+    finished = false;
+    setState("selecting");
+    showEstimate("could not use that selection — " + (await r.text()), false);
+    return;
+  }
+  if (path === "/cancel") { setState("cancelled"); return; }
+  beginWorking();
+}
+
+/**
+ * Start watching the run. The overlay is delayed: a single-image squish is
+ * typically ~250ms, and a card that appears and vanishes inside that is noise.
+ * Polling starts immediately so the delay never costs a poll interval.
+ */
+function beginWorking() {
+  startPolling();
+  workingTimer = setTimeout(() => {
+    if (!terminal) {
+      setState("working", { crop: sel.w + "x" + sel.h + "+" + sel.x + "+" + sel.y });
+    }
+  }, 150);
+}
+
+function startPolling() {
+  if (pollTimer) return;
+  pollTimer = setInterval(poll, 300);
+}
+
+function stopPolling() {
+  clearInterval(pollTimer);
+  pollTimer = null;
+  clearTimeout(workingTimer);
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/status" + location.search);
+    if (!r.ok) throw new Error("status " + r.status);
+    const j = await r.json();
+    pollFails = 0;
+    if (j.phase === "done" || j.phase === "failed") {
+      terminal = true;
+      stopPolling();
+      setState(j.phase, j);
+    }
+  } catch (e) {
+    // The CLI exits ~1.5s after finishing, so a few failures here are the normal
+    // end of a backgrounded tab, not an error worth shouting about.
+    if (++pollFails >= 3) {
+      terminal = true;
+      stopPolling();
+      setState("gone");
+    }
+  }
 }
 
 $("crop").addEventListener("click", () => send("/crop"));
@@ -320,8 +490,16 @@ $("cancel").addEventListener("click", () => send("/cancel"));
 
 let nudgeTimer = null;
 document.addEventListener("keydown", (ev) => {
+  // Esc still works while the preview is loading or failed — there is a run to
+  // cancel either way.
+  if (ev.key === "Escape" &&
+      (state === "selecting" || state === "loading" || state === "preview-error")) {
+    send("/cancel");
+    ev.preventDefault();
+    return;
+  }
+  if (state !== "selecting") return;
   if (ev.key === "Enter") { send("/crop"); ev.preventDefault(); return; }
-  if (ev.key === "Escape") { send("/cancel"); ev.preventDefault(); return; }
 
   const step = ev.shiftKey ? 10 : 1;
   const resize = ev.altKey;              // alt+arrows resize instead of move
@@ -340,11 +518,16 @@ document.addEventListener("keydown", (ev) => {
   ev.preventDefault();
 });
 
-// Closing the tab must not leave the CLI waiting for the 10-minute timeout.
+// Closing the tab must not leave the CLI waiting. Before a selection that means
+// cancelling; after one it means releasing the report wait, so the CLI exits at
+// once instead of timing out against a tab that has gone.
 window.addEventListener("pagehide", () => {
-  if (finished) return;
-  finished = true;
-  navigator.sendBeacon("/cancel" + location.search, "{}");
+  if (!finished) {
+    finished = true;
+    navigator.sendBeacon("/cancel" + location.search, "{}");
+  } else {
+    navigator.sendBeacon("/bye" + location.search, "{}");
+  }
 });
 
 /**
@@ -434,5 +617,11 @@ document.addEventListener("keyup", (ev) => {
   }
 });
 
-img.addEventListener("load", () => { render(); settle(); });
+img.addEventListener("load", () => {
+  setState("selecting");
+  render();
+  settle();
+});
+img.addEventListener("error", () => setState("preview-error"));
+setState("loading");
 window.addEventListener("resize", render);
