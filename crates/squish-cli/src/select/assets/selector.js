@@ -393,22 +393,29 @@ let estimateAbort = null;
 /** Called whenever the selection stops changing: fetch an exact size. */
 async function settle() {
   render();
-  if (finished) return;
+  if (state !== "selecting") return;
   if (estimateAbort) estimateAbort.abort();
   estimateAbort = new AbortController();
-  $("estimate").textContent = "estimating…";
+  showEstimate("estimating…", true);
   try {
     const r = await fetch("/estimate" + location.search, {
       method: "POST",
       body: JSON.stringify({ x: sel.x, y: sel.y, w: sel.w, h: sel.h }),
       signal: estimateAbort.signal,
     });
+    if (!r.ok) {
+      // A rect the engine rejects: say why instead of leaving a bare dash.
+      showEstimate(skipLabel(await r.text()), false);
+      return;
+    }
     const j = await r.json();
-    $("estimate").textContent = j.bytes
-      ? `~${fmtBytes(j.bytes)} · ${CFG.settings}`
-      : `— (${j.skipped || "unavailable"})`;
+    showEstimate(
+      j.bytes ? "~" + fmtBytes(j.bytes) + " · " + CFG.settings : skipLabel(j.skipped),
+      false,
+    );
   } catch (e) {
-    if (e.name !== "AbortError") $("estimate").textContent = "—";
+    // An abort means a newer estimate is already in flight; leave its text be.
+    if (e.name !== "AbortError") showEstimate("estimate unavailable", false);
   }
 }
 
