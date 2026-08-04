@@ -137,7 +137,8 @@ pub(crate) fn resolve_crop(
         seed,
     };
 
-    let rect = match server::run(&session)? {
+    let (outcome, _reporter) = server::run(&session)?;
+    let rect = match outcome {
         server::Outcome::Cropped(r) => Some(r),
         server::Outcome::Cancelled => None,
         server::Outcome::TimedOut => {

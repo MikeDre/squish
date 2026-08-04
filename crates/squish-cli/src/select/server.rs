@@ -1,13 +1,19 @@
-//! One-shot loopback HTTP server backing `--select`.
+//! Loopback HTTP server backing `--select`.
 //!
-//! Lifetime: bind, hand the URL to a browser, serve exactly one selection,
-//! shut down. Nothing is ever exposed off-host: the listener binds to
+//! Two phases. **Select**: bind, hand the URL to a browser, serve the page, the
+//! preview and live estimates until a rect arrives. **Report**: once a rect is
+//! chosen the listener moves to a background thread serving only `/status` and
+//! `/bye`, so the still-open page can be told how the run went.
+//!
+//! Nothing is ever exposed off-host in either phase: the listener binds to
 //! 127.0.0.1 and every request must carry a 128-bit token minted per session.
 
 use anyhow::{Context, Result};
 use squish_core::{CropRect, CropSpec, Gravity};
 use std::io::Read;
 use std::process::Stdio;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tiny_http::{Header, Method, Response, Server};
 
@@ -125,14 +131,15 @@ fn mint_token() -> Result<String> {
     Ok(buf.iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// Serve one selection to completion.
-pub(crate) fn serve(bound: Bound, session: &Session, idle: Duration) -> Result<Outcome> {
-    let Bound {
-        server,
-        addr: _,
-        token,
-    } = bound;
-
+/// Serve one selection to completion. Borrows the listener rather than
+/// consuming it: on `/crop` the caller hands the same listener to a `Reporter`
+/// so the page can be told how the run went.
+fn serve_selection(
+    server: &Server,
+    session: &Session,
+    token: &str,
+    idle: Duration,
+) -> Result<Outcome> {
     loop {
         let Some(mut req) = server.recv_timeout(idle)? else {
             return Ok(Outcome::TimedOut);
@@ -141,14 +148,14 @@ pub(crate) fn serve(bound: Bound, session: &Session, idle: Duration) -> Result<O
         let url = req.url().to_string();
         let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
 
-        if !token_ok(query, &token) {
+        if !token_ok(query, token) {
             let _ = req.respond(Response::from_string("forbidden").with_status_code(403));
             continue;
         }
 
         match (req.method(), path) {
             (Method::Get, "/") => {
-                let page = page_html(session, &token);
+                let page = page_html(session, token);
                 let _ = req.respond(Response::from_string(page).with_header(html_header()));
             }
             (Method::Get, "/preview") => {
@@ -217,12 +224,127 @@ pub(crate) fn serve(bound: Bound, session: &Session, idle: Duration) -> Result<O
     }
 }
 
+/// How long the phase-B loop blocks before re-checking its stop flag.
+const REPORT_TICK: Duration = Duration::from_millis(100);
+
+/// The live half of a finished selection: the page is still open and polling, so
+/// the CLI can tell it how the run went.
+///
+/// Phase B deliberately serves only `/status` and `/bye`. `/preview` and
+/// `/estimate` are gone, so no decode or re-encode is reachable once a rect has
+/// been chosen. The listener is still loopback-only and still token-gated, and it
+/// dies with the process — at most ~1.5s after the run finishes.
+pub(crate) struct Reporter {
+    phase: Arc<Mutex<Phase>>,
+    /// Set once the page has read a terminal phase, or announced it is leaving.
+    seen: Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Reporter {
+    /// Take over `server` and start answering `/status` on a background thread.
+    fn spawn(server: Server, token: String) -> Self {
+        let phase = Arc::new(Mutex::new(Phase::Working));
+        let seen = Arc::new(AtomicBool::new(false));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (p, s, st) = (phase.clone(), seen.clone(), stop.clone());
+        let handle = std::thread::spawn(move || report_loop(server, token, p, s, st));
+        Self {
+            phase,
+            seen,
+            stop,
+            handle: Some(handle),
+        }
+    }
+
+    /// Publish the run's outcome. The next `/status` poll picks it up.
+    pub(crate) fn finish(&self, phase: Phase) {
+        *self.phase.lock().expect("phase mutex") = phase;
+    }
+
+    /// Block until the page has read a terminal phase, or `max` elapses.
+    ///
+    /// The point is not to make the CLI wait — it is to stop the CLI exiting out
+    /// from under a page that is 200ms away from showing the result.
+    pub(crate) fn wait_for_pickup(&self, max: Duration) {
+        let deadline = std::time::Instant::now() + max;
+        while !self.seen.load(Ordering::Acquire) {
+            if std::time::Instant::now() >= deadline {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+impl Drop for Reporter {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+fn report_loop(
+    server: Server,
+    token: String,
+    phase: Arc<Mutex<Phase>>,
+    seen: Arc<AtomicBool>,
+    stop: Arc<AtomicBool>,
+) {
+    while !stop.load(Ordering::Acquire) {
+        let req = match server.recv_timeout(REPORT_TICK) {
+            Ok(Some(r)) => r,
+            Ok(None) => continue,
+            // A dead listener cannot recover; break rather than spin.
+            Err(_) => break,
+        };
+
+        let url = req.url().to_string();
+        let (path, query) = url.split_once('?').unwrap_or((url.as_str(), ""));
+        if !token_ok(query, &token) {
+            let _ = req.respond(Response::from_string("forbidden").with_status_code(403));
+            continue;
+        }
+
+        match (req.method(), path) {
+            (Method::Get, "/status") => {
+                // One lock for both the body and the terminal check, so a
+                // finish() landing mid-request cannot flip the flag for a
+                // "working" body the page never saw as terminal.
+                let (body, terminal) = {
+                    let p = phase.lock().expect("phase mutex");
+                    (phase_json(&p), !matches!(*p, Phase::Working))
+                };
+                if terminal {
+                    seen.store(true, Ordering::Release);
+                }
+                let _ = req.respond(Response::from_string(body).with_header(json_header()));
+            }
+            (Method::Post, "/bye") => {
+                seen.store(true, Ordering::Release);
+                let _ = req.respond(Response::from_string("ok"));
+            }
+            _ => {
+                let _ = req.respond(Response::from_string("not found").with_status_code(404));
+            }
+        }
+    }
+}
+
 /// Bind, announce, and serve with the production idle timeout.
-pub(crate) fn run(session: &Session) -> Result<Outcome> {
+pub(crate) fn run(session: &Session) -> Result<(Outcome, Option<Reporter>)> {
     run_with_timeout(session, IDLE_TIMEOUT)
 }
 
-pub(crate) fn run_with_timeout(session: &Session, idle: Duration) -> Result<Outcome> {
+/// Serve one selection, then — if a rect was chosen — keep the listener alive so
+/// the CLI can report the run's outcome back to the still-open page.
+pub(crate) fn run_with_timeout(
+    session: &Session,
+    idle: Duration,
+) -> Result<(Outcome, Option<Reporter>)> {
     let bound = bind()?;
     let url = format!("http://{}/?t={}", bound.addr, bound.token);
 
@@ -242,7 +364,15 @@ pub(crate) fn run_with_timeout(session: &Session, idle: Duration) -> Result<Outc
         eprintln!("Open this URL to pick the crop region (Ctrl-C to cancel):\n  {url}");
     }
 
-    serve(bound, session, idle)
+    let Bound { server, token, .. } = bound;
+    let outcome = serve_selection(&server, session, &token, idle)?;
+    // Only a chosen rect leads to work worth reporting; cancel and timeout drop
+    // the listener here, exactly as the one-shot server always did.
+    let reporter = match outcome {
+        Outcome::Cropped(_) => Some(Reporter::spawn(server, token)),
+        Outcome::Cancelled | Outcome::TimedOut => None,
+    };
+    Ok((outcome, reporter))
 }
 
 /// Re-validate a rect from the browser through the existing crop engine. The
@@ -417,8 +547,8 @@ mod tests {
         String::from_utf8_lossy(&buf).into_owned()
     }
 
-    /// Start a server on a background thread, returning its address, token and
-    /// a handle that yields the Outcome.
+    /// Start a phase-A server on a background thread, returning its address,
+    /// token and a handle that yields the Outcome.
     fn start(
         session: Session,
         idle: Duration,
@@ -426,8 +556,33 @@ mod tests {
         let bound = bind().unwrap();
         let addr = bound.addr.clone();
         let token = bound.token.clone();
-        let handle = std::thread::spawn(move || serve(bound, &session, idle).unwrap());
+        let Bound { server, .. } = bound;
+        let tok = token.clone();
+        let handle =
+            std::thread::spawn(move || serve_selection(&server, &session, &tok, idle).unwrap());
         (addr, token, handle)
+    }
+
+    /// Start a phase-B server directly: bind, hand the listener to a Reporter,
+    /// and return its address, token and the Reporter.
+    fn start_reporting() -> (String, String, Reporter) {
+        let bound = bind().unwrap();
+        let addr = bound.addr.clone();
+        let token = bound.token.clone();
+        let Bound {
+            server, token: tok, ..
+        } = bound;
+        (addr, token, Reporter::spawn(server, tok))
+    }
+
+    fn done_report() -> Report {
+        Report {
+            file: "hero_squished.png".into(),
+            input_bytes: 4096,
+            output_bytes: Some(1024),
+            crop: "40x30+5+6".into(),
+            note: None,
+        }
     }
 
     #[test]
@@ -572,6 +727,117 @@ mod tests {
         let html = page_html(&s, "tok");
         assert!(!html.contains("</script><img"));
         assert!(html.contains("\\u003c/script\\u003e"), "escaped instead");
+    }
+
+    #[test]
+    fn status_reports_working_until_the_run_finishes() {
+        let (addr, token, reporter) = start_reporting();
+
+        let resp = request(&addr, "GET", &format!("/status?t={token}"), None);
+        assert!(resp.starts_with("HTTP/1.1 200"), "got: {resp}");
+        assert!(resp.contains(r#""phase":"working""#), "got: {resp}");
+
+        reporter.finish(Phase::Done(done_report()));
+
+        let resp = request(&addr, "GET", &format!("/status?t={token}"), None);
+        assert!(resp.contains(r#""phase":"done""#), "got: {resp}");
+        assert!(resp.contains(r#""file":"hero_squished.png""#), "got: {resp}");
+        assert!(resp.contains(r#""out":1024"#), "got: {resp}");
+    }
+
+    #[test]
+    fn status_requires_the_token() {
+        let (addr, _token, _reporter) = start_reporting();
+        let resp = request(&addr, "GET", "/status", None);
+        assert!(resp.starts_with("HTTP/1.1 403"), "got: {resp}");
+    }
+
+    #[test]
+    fn phase_b_does_not_serve_the_selection_routes() {
+        // Once a rect is chosen, no re-encoding must be reachable.
+        let (addr, token, _reporter) = start_reporting();
+        for target in ["/", "/preview", "/estimate"] {
+            let resp = request(&addr, "GET", &format!("{target}?t={token}"), None);
+            assert!(
+                resp.starts_with("HTTP/1.1 404"),
+                "{target} should be gone in phase B, got: {resp}"
+            );
+        }
+    }
+
+    #[test]
+    fn reading_a_terminal_status_releases_the_cli() {
+        let (addr, token, reporter) = start_reporting();
+        reporter.finish(Phase::Done(done_report()));
+
+        // Not picked up yet: the wait burns its whole (short) timeout.
+        let t0 = std::time::Instant::now();
+        reporter.wait_for_pickup(Duration::from_millis(200));
+        assert!(
+            t0.elapsed() >= Duration::from_millis(150),
+            "should have waited"
+        );
+
+        request(&addr, "GET", &format!("/status?t={token}"), None);
+
+        let t1 = std::time::Instant::now();
+        reporter.wait_for_pickup(Duration::from_secs(5));
+        assert!(
+            t1.elapsed() < Duration::from_millis(500),
+            "a picked-up status must release the wait immediately, took {:?}",
+            t1.elapsed()
+        );
+    }
+
+    #[test]
+    fn reading_a_working_status_does_not_release_the_cli() {
+        let (addr, token, reporter) = start_reporting();
+        request(&addr, "GET", &format!("/status?t={token}"), None);
+
+        let t0 = std::time::Instant::now();
+        reporter.wait_for_pickup(Duration::from_millis(200));
+        assert!(
+            t0.elapsed() >= Duration::from_millis(150),
+            "a 'working' read is not a pickup"
+        );
+    }
+
+    #[test]
+    fn bye_releases_the_cli() {
+        let (addr, token, reporter) = start_reporting();
+        let resp = request(&addr, "POST", &format!("/bye?t={token}"), None);
+        assert!(resp.starts_with("HTTP/1.1 200"), "got: {resp}");
+
+        let t0 = std::time::Instant::now();
+        reporter.wait_for_pickup(Duration::from_secs(5));
+        assert!(
+            t0.elapsed() < Duration::from_millis(500),
+            "a closed tab must let the CLI exit at once, took {:?}",
+            t0.elapsed()
+        );
+    }
+
+    #[test]
+    fn a_cancelled_session_never_enters_phase_b() {
+        let session = session();
+        let bound = bind().unwrap();
+        let addr = bound.addr.clone();
+        let token = bound.token.clone();
+        let handle = std::thread::spawn(move || {
+            let Bound {
+                server, token: tok, ..
+            } = bound;
+            let outcome = serve_selection(&server, &session, &tok, Duration::from_secs(5)).unwrap();
+            match outcome {
+                Outcome::Cropped(_) => Some(Reporter::spawn(server, tok)),
+                _ => None,
+            }
+        });
+        request(&addr, "POST", &format!("/cancel?t={token}"), None);
+        assert!(
+            handle.join().unwrap().is_none(),
+            "cancel must not leave a server running"
+        );
     }
 
     #[test]
