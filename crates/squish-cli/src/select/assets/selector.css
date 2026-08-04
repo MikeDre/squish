@@ -220,3 +220,39 @@ button:disabled { opacity: 0.45; cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   #estimate.busy { animation: none; opacity: 0.7; }
 }
+
+#help {
+  margin-left: 10px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  line-height: 1.4;
+  opacity: 0.7;
+}
+#help[aria-expanded="true"] { border-color: var(--accent); color: var(--accent); opacity: 1; }
+#keys {
+  position: fixed;
+  right: 14px;
+  bottom: 52px;
+  z-index: 6;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.18);
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 5px 14px;
+  font-size: 12px;
+}
+#keys[hidden] { display: none; }
+#keys kbd {
+  font: inherit;
+  font-weight: 600;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  white-space: nowrap;
+  justify-self: end;
+}
+#keys span { opacity: 0.72; }

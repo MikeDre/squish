@@ -717,6 +717,18 @@ mod tests {
     }
 
     #[test]
+    fn page_documents_the_shortcuts_that_have_no_other_home() {
+        // Zoom, pan, shift-lock and alt-resize are real features the footer hint
+        // never mentioned.
+        let html = page_html(&session(), "tok");
+        assert!(html.contains("id=\"keys\""));
+        assert!(html.contains("id=\"help\""));
+        for hint in ["pan", "zoom", "resize", "ratio"] {
+            assert!(html.contains(hint), "shortcuts panel should mention {hint}");
+        }
+    }
+
+    #[test]
     fn page_keeps_the_header_bar_id_distinct_from_the_progress_bar() {
         // #bar is the header; the indeterminate bar must not collide with it.
         let html = page_html(&session(), "tok");

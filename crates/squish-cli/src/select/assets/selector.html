@@ -36,6 +36,7 @@
 </main>
 <footer id="hint">
   drag to select · ⏎ crop · esc cancel
+  <button id="help" type="button" aria-expanded="false" aria-controls="keys" title="Keyboard shortcuts">?</button>
   <span id="estimate">—</span>
   <span id="zoom">
     <button type="button" data-z="fit">Fit</button>
@@ -47,5 +48,16 @@
     <button id="crop" type="button">Crop</button>
   </span>
 </footer>
+<div id="keys" hidden>
+  <kbd>drag</kbd><span>select a region</span>
+  <kbd>drag inside</kbd><span>move the selection</span>
+  <kbd>⇧ + drag</kbd><span>lock the ratio</span>
+  <kbd>arrows</kbd><span>nudge (⇧ for 10px)</span>
+  <kbd>⌥ + arrows</kbd><span>resize</span>
+  <kbd>⌘/ctrl + wheel</kbd><span>zoom</span>
+  <kbd>space + drag</kbd><span>pan</span>
+  <kbd>⏎</kbd><span>crop</span>
+  <kbd>esc</kbd><span>cancel</span>
+</div>
 <script>window.__SQUISH__ = __SQUISH_CONFIG__;</script>
 <script>__SQUISH_JS__</script>

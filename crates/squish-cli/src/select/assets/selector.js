@@ -497,6 +497,13 @@ $("cancel").addEventListener("click", () => send("/cancel"));
 
 let nudgeTimer = null;
 document.addEventListener("keydown", (ev) => {
+  // Esc closes the shortcuts panel before it reaches the run.
+  if (ev.key === "Escape" && !$("keys").hidden) {
+    $("keys").hidden = true;
+    $("help").setAttribute("aria-expanded", "false");
+    ev.preventDefault();
+    return;
+  }
   // Esc still works while the preview is loading or failed — there is a run to
   // cancel either way.
   if (ev.key === "Escape" &&
@@ -622,6 +629,15 @@ document.addEventListener("keyup", (ev) => {
     panning = null;
     stage.classList.remove("panning", "grabbing");
   }
+});
+
+// The shortcuts panel. Space is a pan modifier here, so the toggle must never be
+// left focused — a space press would re-trigger the button instead of panning.
+$("help").addEventListener("click", () => {
+  const panel = $("keys"), open = panel.hidden;
+  panel.hidden = !open;
+  $("help").setAttribute("aria-expanded", String(open));
+  $("help").blur();
 });
 
 img.addEventListener("load", () => {
