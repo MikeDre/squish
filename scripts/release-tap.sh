@@ -7,6 +7,10 @@
 #
 # Usage: scripts/release-tap.sh vX.Y.Z [path-to-tap-checkout]
 # Requires: gh (authenticated), a clone of MikeDre/homebrew-tap.
+#
+# Run automatically by the `tap` job in .github/workflows/release.yml after every
+# tagged build. Safe to run by hand as well — it is idempotent, so re-running it
+# to recover from a failed CI run costs nothing.
 set -euo pipefail
 
 tag="${1:?usage: release-tap.sh vX.Y.Z [tap-dir]}"
@@ -19,16 +23,33 @@ if [ ! -d "$tap_dir/Formula" ]; then
   exit 1
 fi
 
+# A tag that isn't vX.Y.Z would produce a formula whose `version` no longer
+# matches what `squish --version` prints, and the formula's own `test do` block
+# would fail for every user installing it.
+#
+# Fully anchored, and restricted to characters that are inert in Ruby: the tag is
+# interpolated into the formula through a heredoc below, so a tag containing a
+# quote or a `#{}` could otherwise rewrite the formula it is meant to describe.
+if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$'; then
+  echo "error: '$tag' is not a vX.Y.Z release tag" >&2
+  exit 1
+fi
+
 echo "Fetching checksums for $tag..."
 arm_sha=$(gh release download "$tag" --repo "$repo" \
   --pattern "*aarch64-apple-darwin.tar.gz.sha256" --output - | awk '{print $1}')
 x64_sha=$(gh release download "$tag" --repo "$repo" \
   --pattern "*x86_64-apple-darwin.tar.gz.sha256" --output - | awk '{print $1}')
 
-if [ -z "$arm_sha" ] || [ -z "$x64_sha" ]; then
-  echo "error: could not fetch both macOS checksums from the $tag release" >&2
-  exit 1
-fi
+# A malformed checksum here is worse than no release at all: Homebrew would
+# reject the download for every user, and the formula would look correct.
+for pair in "arm64:$arm_sha" "x86_64:$x64_sha"; do
+  arch="${pair%%:*}" sha="${pair#*:}"
+  if ! printf '%s' "$sha" | grep -Eq '^[0-9a-f]{64}$'; then
+    echo "error: $arch checksum from the $tag release is not a sha256: '$sha'" >&2
+    exit 1
+  fi
+done
 
 cat > "$tap_dir/Formula/squish.rb" << EOF
 class Squish < Formula
@@ -77,6 +98,14 @@ cd "$tap_dir"
 if git diff --quiet Formula/squish.rb; then
   echo "Formula already up to date for $tag — nothing to do."
   exit 0
+fi
+
+# CI checkouts carry no identity. Fall back to the account that owns the tap so
+# its history stays consistently authored whether this runs locally or in Actions;
+# a configured identity always wins.
+if ! git config user.email >/dev/null; then
+  git config user.name "MikeAndré"
+  git config user.email "info@mikedre.com"
 fi
 
 git add Formula/squish.rb

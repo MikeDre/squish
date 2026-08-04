@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Create draft release
+      - name: Create release if absent
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -83,3 +83,55 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$GITHUB_REF_NAME" squish-v*.tar.gz squish-v*.tar.gz.sha256 --clobber
+
+  # Point the Homebrew tap at the release that was just published.
+  #
+  # This used to be a manual `scripts/release-tap.sh` run, which meant a release
+  # could ship binaries with the tap left on the previous version — `brew install
+  # squish` would then quietly serve an old build. `needs: build` covers the whole
+  # matrix, so the formula is only ever rewritten once all four archives exist.
+  tap:
+    name: Update Homebrew tap
+    needs: build
+    runs-on: ubuntu-latest
+    # Forks have neither the tap nor the secret; failing their releases would be
+    # noise, not a signal.
+    if: github.repository == 'MikeDre/squish'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the tap token
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::HOMEBREW_TAP_TOKEN is not set, so the tap cannot be updated." \
+                 "Create a fine-grained PAT with Contents:write on MikeDre/homebrew-tap" \
+                 "and add it as a repository secret, then re-run this job." \
+                 "Until then, run scripts/release-tap.sh $GITHUB_REF_NAME by hand."
+            exit 1
+          fi
+
+      # A separate checkout, not the default token: github.token is scoped to this
+      # repository and cannot push to the tap.
+      - name: Check out the tap
+        uses: actions/checkout@v4
+        with:
+          repository: MikeDre/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update the formula
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release-tap.sh "$GITHUB_REF_NAME" homebrew-tap
+
+      - name: Verify the formula matches the tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! grep -q "^  version \"$version\"\$" homebrew-tap/Formula/squish.rb; then
+            echo "::error::the tap formula does not declare version $version after the update"
+            grep -n 'version' homebrew-tap/Formula/squish.rb
+            exit 1
+          fi
+          echo "Homebrew tap now serves squish $version."
