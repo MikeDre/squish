@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`--select` now reports back to the browser.** The page used to go silent the
+  moment you clicked Crop — a 40% dim and one low-contrast footer line — so a run
+  that was working perfectly read as a hang. It now shows a progress indicator
+  while squish encodes and finishes on a result card with the output file name,
+  the real before/after sizes, and the crop that was applied. `--dry-run` says
+  "nothing written"; an image that was already optimal says so; a failed run
+  shows the error instead of waiting forever.
+- Loading, preview-failure and cancellation states in the crop selector, which
+  previously rendered as a blank stage or nothing at all.
+- A `?` shortcuts panel in the crop selector covering zoom, pan, ratio lock and
+  arrow-key resize — features that had no discoverable home.
+
+### Changed
+- The live output estimate pulses while it encodes, so slow paths
+  (`--target-size`, PNG, HEIC) look busy rather than stuck, and it explains
+  itself when no number is available (`--quality auto`, oversized selections)
+  instead of showing a bare dash that read as a failure.
+- A crop the engine rejects now hands control back to the selector with the
+  reason, rather than leaving the page permanently inert.
+
 ## [0.9.0] - 2026-07-30
 
 ### Added

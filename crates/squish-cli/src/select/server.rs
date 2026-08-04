@@ -777,7 +777,10 @@ mod tests {
 
         let resp = request(&addr, "GET", &format!("/status?t={token}"), None);
         assert!(resp.contains(r#""phase":"done""#), "got: {resp}");
-        assert!(resp.contains(r#""file":"hero_squished.png""#), "got: {resp}");
+        assert!(
+            resp.contains(r#""file":"hero_squished.png""#),
+            "got: {resp}"
+        );
         assert!(resp.contains(r#""out":1024"#), "got: {resp}");
     }
 
@@ -921,7 +924,10 @@ mod tests {
     fn failed_phase_carries_the_error() {
         let json = phase_json(&Phase::Failed("permission denied".into()));
         assert!(json.contains(r#""phase":"failed""#), "got: {json}");
-        assert!(json.contains(r#""error":"permission denied""#), "got: {json}");
+        assert!(
+            json.contains(r#""error":"permission denied""#),
+            "got: {json}"
+        );
     }
 
     #[test]
