@@ -145,6 +145,27 @@ pub fn compress(input: &[u8], opts: &SquishOptions, path: &Path) -> Result<Vec<u
     )
 }
 
+/// Composite alpha onto white before dropping it.
+///
+/// `to_rgb8()` alone *discards* the alpha channel, so a transparent pixel
+/// keeps whatever RGB sat under it — black for a freshly rendered SVG canvas,
+/// which turns a logo export into a logo on a black card. JPEG has no alpha,
+/// so the only question is which background the artwork lands on, and white is
+/// the one people mean.
+fn flatten_onto_white(img: &DynamicImage) -> image::RgbImage {
+    if !img.color().has_alpha() {
+        return img.to_rgb8();
+    }
+    let rgba = img.to_rgba8();
+    let mut out = image::RgbImage::new(rgba.width(), rgba.height());
+    for (dst, src) in out.pixels_mut().zip(rgba.pixels()) {
+        let a = src[3] as u32;
+        let over = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
+        *dst = image::Rgb([over(src[0]), over(src[1]), over(src[2])]);
+    }
+    out
+}
+
 /// Encode an already-decoded raster as JPEG. Used for cross-format conversions,
 /// which have no JPEG-shaped EXIF/ICC of their own to carry over.
 pub fn encode_raster(
@@ -153,7 +174,7 @@ pub fn encode_raster(
     path: &Path,
 ) -> Result<Vec<u8>, SquishError> {
     let (w, h) = img.dimensions();
-    let rgb = img.to_rgb8().into_raw();
+    let rgb = flatten_onto_white(img).into_raw();
     let quality = opts.effective_quality(crate::format::Format::Jpeg);
     encode_rgb_pixels(&rgb, w as usize, h as usize, quality, path)
 }
@@ -240,4 +261,84 @@ fn encode_rgb_pixels_with_metadata(
         source: Box::new(e),
     })?;
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn transparent_pixels_land_on_white_not_black() {
+        // JPEG has no alpha, so the only question is which background the
+        // artwork lands on. `to_rgb8()` alone keeps the RGB under a
+        // transparent pixel — black for a freshly rendered canvas.
+        let mut rgba = image::RgbaImage::new(8, 8);
+        for px in rgba.pixels_mut() {
+            *px = image::Rgba([0, 0, 0, 0]); // fully transparent
+        }
+        let img = image::DynamicImage::ImageRgba8(rgba);
+        let bytes = encode_raster(
+            &img,
+            &SquishOptions::default(),
+            &std::path::PathBuf::from("t.jpg"),
+        )
+        .expect("encode should succeed");
+
+        let decoded = image::load_from_memory(&bytes)
+            .expect("output decodes")
+            .to_rgb8();
+        let px = decoded.get_pixel(4, 4).0;
+        assert!(
+            px.iter().all(|c| *c > 240),
+            "transparent should flatten to white, got {px:?}"
+        );
+    }
+
+    #[test]
+    fn half_transparent_red_blends_towards_white() {
+        let img = image::DynamicImage::ImageRgba8(image::RgbaImage::from_pixel(
+            8,
+            8,
+            image::Rgba([255, 0, 0, 128]),
+        ));
+        let bytes = encode_raster(
+            &img,
+            &SquishOptions::default(),
+            &std::path::PathBuf::from("t.jpg"),
+        )
+        .expect("encode should succeed");
+
+        let px = image::load_from_memory(&bytes)
+            .expect("output decodes")
+            .to_rgb8()
+            .get_pixel(4, 4)
+            .0;
+        assert!(px[0] > 200, "red channel stays high: {px:?}");
+        assert!(
+            px[1] > 100 && px[1] < 160,
+            "green lifts towards white: {px:?}"
+        );
+    }
+
+    #[test]
+    fn opaque_images_are_untouched() {
+        let img = image::DynamicImage::ImageRgb8(image::RgbImage::from_pixel(
+            8,
+            8,
+            image::Rgb([10, 120, 200]),
+        ));
+        let bytes = encode_raster(
+            &img,
+            &SquishOptions::default(),
+            &std::path::PathBuf::from("t.jpg"),
+        )
+        .expect("encode should succeed");
+
+        let px = image::load_from_memory(&bytes)
+            .expect("output decodes")
+            .to_rgb8()
+            .get_pixel(4, 4)
+            .0;
+        assert!(px[2] > px[0], "blue-dominant image survives: {px:?}");
+    }
 }
