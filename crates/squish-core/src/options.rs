@@ -26,6 +26,15 @@ pub struct SquishOptions {
     /// proportionally. `None` means no height constraint. Never upscales.
     pub max_height: Option<u32>,
 
+    /// Exact pixel width to render *vector* input at. Unlike `max_width` this
+    /// may upscale — a vector has no native resolution, so rendering a 24×24
+    /// icon at 512×512 loses nothing. Raster inputs ignore it (with a
+    /// warning); use `max_width` for those.
+    pub width: Option<u32>,
+
+    /// Exact pixel height to render *vector* input at. See `width`.
+    pub height: Option<u32>,
+
     /// Custom output suffix. `None` means "squished" (e.g., `dog_squished.png`).
     /// Set to e.g. "min" to produce `dog_min.png`.
     pub suffix: Option<String>,
@@ -116,6 +125,48 @@ impl SquishOptions {
         let new_w = (width as f64 * scale).round() as u32;
         let new_h = (height as f64 * scale).round() as u32;
         Some((new_w.max(1), new_h.max(1)))
+    }
+
+    /// The pixel canvas vector input should render onto, or `None` when the
+    /// caller asked for no size (or the source has no usable dimensions).
+    ///
+    /// Deliberately unlike `resize_dimensions`: this **upscales**. With both
+    /// `width` and `height` set it returns the largest size preserving the
+    /// source ratio that fits inside that box, so artwork is never stretched.
+    /// The axis the user named is pinned to exactly the value they gave.
+    pub fn render_size(&self, intrinsic_w: f32, intrinsic_h: f32) -> Option<(u32, u32)> {
+        // Deliberately `!(x > 0.0)` rather than `x <= 0.0`: it also rejects
+        // NaN, which `tree.size()` cannot produce today but which would
+        // otherwise slip through as a valid size.
+        #[allow(clippy::neg_cmp_op_on_partial_ord)]
+        if !(intrinsic_w > 0.0) || !(intrinsic_h > 0.0) {
+            return None;
+        }
+        let iw = intrinsic_w as f64;
+        let ih = intrinsic_h as f64;
+
+        Some(match (self.width, self.height) {
+            (None, None) => return None,
+            (Some(w), None) => (w, scale_other(w, iw, ih)),
+            (None, Some(h)) => (scale_other(h, ih, iw), h),
+            (Some(w), Some(h)) => {
+                if w as f64 / iw <= h as f64 / ih {
+                    (w, scale_other(w, iw, ih))
+                } else {
+                    (scale_other(h, ih, iw), h)
+                }
+            }
+        })
+    }
+}
+
+/// Scale the unpinned axis to match a pinned one, never below one pixel.
+fn scale_other(pinned: u32, pinned_intrinsic: f64, other_intrinsic: f64) -> u32 {
+    let scaled = (pinned as f64 / pinned_intrinsic * other_intrinsic).round();
+    if scaled < 1.0 {
+        1
+    } else {
+        scaled as u32
     }
 }
 
@@ -249,5 +300,80 @@ mod tests {
             ..Default::default()
         };
         assert!(o.needs_resize());
+    }
+
+    #[test]
+    fn render_size_none_without_flags() {
+        let o = SquishOptions::default();
+        assert_eq!(o.render_size(200.0, 200.0), None);
+    }
+
+    #[test]
+    fn render_size_width_only_derives_height() {
+        let o = SquishOptions {
+            width: Some(800),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(200.0, 100.0), Some((800, 400)));
+    }
+
+    #[test]
+    fn render_size_height_only_derives_width() {
+        let o = SquishOptions {
+            height: Some(400),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(200.0, 100.0), Some((800, 400)));
+    }
+
+    #[test]
+    fn render_size_both_fits_inside_the_box() {
+        // 2:1 source in a square box: width is the limiting axis.
+        let o = SquishOptions {
+            width: Some(512),
+            height: Some(512),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(1024.0, 512.0), Some((512, 256)));
+    }
+
+    #[test]
+    fn render_size_upscales_unlike_resize() {
+        // The point of the flag: a vector has no native resolution.
+        let o = SquishOptions {
+            width: Some(512),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(24.0, 24.0), Some((512, 512)));
+    }
+
+    #[test]
+    fn render_size_pins_the_requested_axis_exactly() {
+        // An awkward ratio must still yield exactly the number the user asked
+        // for on the axis they named — no float drift to 999 or 1001.
+        let o = SquishOptions {
+            width: Some(1000),
+            ..Default::default()
+        };
+        let (w, _h) = o.render_size(333.0, 177.0).unwrap();
+        assert_eq!(w, 1000);
+    }
+
+    #[test]
+    fn render_size_floors_at_one_pixel() {
+        let o = SquishOptions {
+            width: Some(3),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(1000.0, 10.0), Some((3, 1)));
+    }
+
+    #[test]
+    fn render_size_rejects_a_degenerate_source() {
+        let o = SquishOptions {
+            width: Some(512),
+            ..Default::default()
+        };
+        assert_eq!(o.render_size(0.0, 100.0), None);
     }
 }

@@ -221,6 +221,8 @@ fn real_main() -> Result<u8> {
         force_overwrite: args.force,
         max_width: args.max_width,
         max_height: args.max_height,
+        width: None,
+        height: None,
         suffix: args.suffix.clone(),
         overwrite: args.overwrite,
         target_size,
