@@ -385,15 +385,50 @@ mod tests {
     }
 
     #[test]
-    fn generic_families_never_warn() {
-        // Generic families always resolve to a database default, so warning
-        // about them would be pure noise — and this must hold on a CI box with
-        // almost no fonts installed.
+    fn sans_serif_keyword_never_warns() {
+        // The bare CSS keyword `sans-serif` parses to `FontFamily::SansSerif`
+        // (svgtypes 0.16.1's font.rs, verified empirically below), never to
+        // `FontFamily::Named("sans-serif")` — so this never reaches
+        // `is_generic` at all; it's filtered one level up, by variant
+        // matching in `collect_missing_fonts`. This guards that user-facing
+        // behaviour (no warning for the generic keyword), and this must hold
+        // on a CI box with almost no fonts installed.
+        //
+        // Coverage of `is_generic` itself lives in
+        // `quoted_generic_family_name_never_warns` below, which forces the
+        // `Named` arm via CSS quoting.
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="sans-serif" font-size="16">squish</text></svg>"#;
         let (_img, warnings) = rasterize(
             svg.as_bytes(),
             &opts(Some(200), None),
             &PathBuf::from("g.svg"),
+        )
+        .expect("render should succeed");
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn quoted_generic_family_name_never_warns() {
+        // A *quoted* CSS family name is parsed as a literal name, not a
+        // keyword: `font-family="'Monospace'"` arrives as
+        // `FontFamily::Named("Monospace")`, confirmed empirically (printing
+        // `span.font().families()` showed `Named("Monospace")`, never
+        // `FontFamily::Monospace`). That takes the `Named` arm in
+        // `collect_missing_fonts` and puts `is_generic`'s case-insensitive
+        // check on the spot — unlike the bare keyword in
+        // `sans_serif_keyword_never_warns`, which never reaches it. Without
+        // `is_generic`, this family is a literal name absent from almost any
+        // CI box's font set, and the test would fail (verified by
+        // temporarily deleting the `is_generic` check: this test failed with
+        // a "Monospace" warning while `is_generic` was gone).
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="'Monospace'" font-size="16">squish</text></svg>"#;
+        let (_img, warnings) = rasterize(
+            svg.as_bytes(),
+            &opts(Some(200), None),
+            &PathBuf::from("q.svg"),
         )
         .expect("render should succeed");
         assert!(
