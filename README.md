@@ -18,7 +18,7 @@ Measured on representative samples with default settings (your mileage varies wi
 | High-quality JPEG photo (4.4 MB) | −69% |
 | PNG screenshot/graphic | −77% |
 | WebP | −44% |
-| SVG | −54% |
+| SVG (minified) | −54% |
 | TIFF (auto-converts to JPEG) | −97% |
 | MP4 with `--target-size 1M` (3.1 MB source) | −68%, under budget |
 | 320 kbps MP3 | −84% |
@@ -184,6 +184,41 @@ squish ./big-folder/ -r --dry-run
 squish ./assets/ -r --watch
 ```
 
+### Converting SVG to a raster format
+
+```bash
+# Render at a pixel width — height follows the SVG's own aspect ratio
+squish logo.svg --format png --width 512
+
+# Render at a pixel height instead
+squish icon.svg --format webp --height 64
+
+# A whole folder of vector assets, rasterised in one pass
+squish assets/ --format png --width 256
+```
+
+A vector has no pixel size of its own, so converting an SVG to PNG, JPEG,
+WebP, AVIF, GIF, HEIC, or TIFF needs `--width` or `--height` to say how big to
+render it — leaving both off is an error (other files in the same run still
+process). Give both and squish fits the render inside that box at the SVG's
+own aspect ratio, without stretching it; unlike `--max-width`/`--max-height`,
+these flags *upscale*, since there's no native resolution to scale down from.
+An SVG with no `viewBox` and no absolute `width`/`height` has nothing to scale
+from either way, so it's also an error. Text renders with whatever fonts are
+installed on the machine, and squish warns you by name if one the file asks
+for isn't there.
+
+`--crop` and `--select` operate on the rendered pixels, so `--width` sizes the
+artboard first — cropping a 512-wide render still yields something smaller
+than 512. `--quality auto` and `--target-size` work the same way they do for
+any other raster output.
+
+Note that **the never-grow guarantee doesn't apply to this conversion**:
+rasterising is a change of representation, not a re-encode, so a compact
+vector routinely comes out larger once it's pixels — a 2 KB icon rendered at
+512×512 is expected to grow, not a bug. Going the other way, raster to SVG,
+remains unsupported.
+
 ### Picking a crop by eye
 
 `--select` opens a local page in your browser — nothing is uploaded, and the
@@ -325,10 +360,12 @@ Supported as **input** and **output**: PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TI
 | JPEG | `mozjpeg` (progressive, optimised Huffman) | EXIF orientation always applied to pixels before re-encoding; EXIF stripped by default, ICC always kept; `--keep-metadata` preserves EXIF too (with the now-redundant orientation tag reset) |
 | WebP | `libwebp` (static); animated WebP copies through unchanged | Always stripped (not yet supported) |
 | AVIF | `ravif` (encode) + `dav1d` (decode) | Always stripped (not yet supported) |
-| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) | N/A (vector format) |
+| SVG | `oxvg_optimiser` (SVGO-equivalent: comments, default attrs, relative path coords) as input/output; `resvg` to render to any raster format below (`--format png` etc, needs `--width`/`--height`) | N/A (vector format); raster output follows that format's own metadata rules |
 | GIF (static + animated) | `gifsicle -O3` | Whatever `gifsicle` does by default |
 | HEIC | `libheif-rs` | Always stripped (not yet supported) |
 | TIFF | input only — defaults to re-encoding as JPEG; use `--format tiff` to keep TIFF output | Always stripped (not yet supported) |
+
+JPEG has no alpha channel, so converting a transparent image to it — `png → jpg`, or any SVG rendered to JPEG — composites the transparency onto a white background rather than discarding it (which used to leave black where the transparent pixels were). There's deliberately no `--background` flag to change the colour.
 
 ### Video
 
@@ -418,6 +455,10 @@ SVG continues to be handled as an image (structural compaction via `oxvg_optimis
   -f, --format <FORMAT>      Output format (image/video/audio); applied per input kind
       --max-width <PIXELS>   Scale down images wider than this (preserves aspect ratio)
       --max-height <PIXELS>  Scale down images taller than this (preserves aspect ratio)
+      --width <PIXELS>       Render vector (SVG) input at this pixel width. Unlike
+                              --max-width this upscales — a vector has no native
+                              resolution. Ignored for raster input
+      --height <PIXELS>      Render vector (SVG) input at this pixel height. See --width
       --crop <SPEC>          Crop images before compressing (applied before
                              max-width/height). Aspect ratio like 16:9 or 1:1
                              (largest fit, anchored by --gravity), or an exact
@@ -567,6 +608,8 @@ If `dog_squished.png` already exists, squish writes `dog_squished_2.png`, then `
 ## Never-grow guarantee
 
 squish never writes an output larger than its input — if encoding wouldn't help (the file is already optimal) and no `--format` conversion, resize, or codec change was requested, the encode is discarded and the output is left byte-identical to the input, reported as "skipped (already optimal)" rather than a (non-)saving. This applies with `--overwrite` too: the original is safely preserved even though the encoder writes in place. When a conversion *is* requested, growth is allowed (a tiny PNG icon converted to AVIF can legitimately grow) — `--verbose` prints a note when that happens.
+
+The guarantee does not apply to SVG → raster conversion at all: rasterising a vector is a change of representation, not a re-encode, so the output is routinely — and expectedly — larger than the source.
 
 ## Development
 

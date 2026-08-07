@@ -4,7 +4,11 @@ Image compression library for [squish](https://github.com/MikeDre/squish) — th
 
 Compresses PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, and TIFF with pure-Rust encoders where possible (`oxipng` + `imagequant`, `mozjpeg`, `libwebp`, `ravif`, `oxvg_optimiser`), including cross-format conversion, proportional resizing, cropping (an aspect ratio anchored by a gravity, or an exact pixel rect — applied before any resize, and preserving animation for GIF), and `target_size` budgets (binary-searches the quality dial for the highest quality that fits).
 
-`preview_bytes` renders any supported image — including HEIC, AVIF, and TIFF, which browsers can't display — as a downscaled JPEG or PNG, reporting both the preview and source dimensions. It backs the CLI's interactive crop selector.
+SVG input can also be rasterised to any of the other formats via `resvg`, linked in-process — no new system dependency. A vector has no pixel size of its own, so rasterising needs `SquishOptions::width` and/or `height`; give both and the render fits inside that box at the source's own aspect ratio. Unlike the resize path, these upscale, and the never-grow guarantee doesn't apply — a rendered raster is routinely larger than its vector source. Cropping, `target_size`, and quality search all run on the rendered pixels. Converting the other way, raster to SVG, is not supported.
+
+Encoding a transparent image to JPEG (including any SVG render) composites onto a white background rather than discarding the alpha, since JPEG has no alpha channel of its own.
+
+`preview_bytes` renders any supported image — including HEIC, AVIF, and TIFF, which browsers can't display, and SVG, which has no pixels until rendered — as a downscaled JPEG or PNG, reporting both the preview and source dimensions. It takes a `&SquishOptions` so it knows what size to render vector input at. It backs the CLI's interactive crop selector.
 
 ```rust
 use squish_core::{squish_file, SquishOptions};

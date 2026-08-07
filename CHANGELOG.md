@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **SVG → raster conversion.** `squish logo.svg --format png --width 512`
+  renders an SVG to PNG, JPEG, WebP, AVIF, GIF, HEIC, or TIFF at a size you
+  choose, via `resvg` linked in-process — no new system dependencies. New
+  `--width`/`--height` flags size the render canvas and, unlike
+  `--max-width`/`--max-height`, may upscale (a vector has no native
+  resolution); give both and the render fits inside that box at the source's
+  own aspect ratio without stretching it. Converting to a raster format needs
+  one of them, and an SVG with no `viewBox` and no absolute `width`/`height`
+  has nothing to render at any size — both are per-file errors. `--crop`,
+  `--select`, `--quality auto`, and `--target-size` all work on the rendered
+  pixels. Text renders with installed system fonts, and a warning names any
+  family the machine cannot supply. The never-grow guarantee does not apply to
+  this conversion. Raster → SVG remains unsupported.
 - **`--select` now reports back to the browser.** The page used to go silent the
   moment you clicked Crop — a 40% dim and one low-contrast footer line — so a run
   that was working perfectly read as a hang. It now shows a progress indicator
@@ -19,7 +32,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A `?` shortcuts panel in the crop selector covering zoom, pan, ratio lock and
   arrow-key resize — features that had no discoverable home.
 
+### Fixed
+- **Transparent pixels no longer turn black when encoding JPEG.** Alpha is
+  composited onto white instead of being discarded, so `png → jpg` of a
+  transparent image — and any SVG rendered to JPEG — lands on white.
+
 ### Changed
+- **`squish_core::preview_bytes` takes a `&SquishOptions` third argument**
+  (library API). Vector input has no pixels of its own, so the preview needs
+  the render size.
 - The live output estimate pulses while it encodes, so slow paths
   (`--target-size`, PNG, HEIC) look busy rather than stuck, and it explains
   itself when no number is available (`--quality auto`, oversized selections)

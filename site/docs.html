@@ -217,6 +217,35 @@ squish ./big-folder/ -r --dry-run
 
 <span class="c-comment"># Keep watching a folder, squishing files as they land</span>
 squish ./assets/ -r --watch</code></pre>
+
+          <h3 class="docs-h3">Converting SVG to a raster format</h3>
+          <pre class="code-block"><code><span class="c-comment"># Render at a pixel width — height follows the SVG's own aspect ratio</span>
+squish logo.svg --format png --width 512
+
+<span class="c-comment"># Render at a pixel height instead</span>
+squish icon.svg --format webp --height 64
+
+<span class="c-comment"># A whole folder of vector assets, rasterised in one pass</span>
+squish assets/ --format png --width 256</code></pre>
+          <p>A vector has no pixel size of its own, so converting an SVG to PNG, JPEG, WebP,
+            AVIF, GIF, HEIC, or TIFF needs <code>--width</code> or <code>--height</code> to say
+            how big to render it — leaving both off is a per-file error, and the rest of a
+            directory run still proceeds. Give both and squish fits the render inside that box
+            at the SVG's own aspect ratio, without stretching it; unlike
+            <code>--max-width</code>/<code>--max-height</code>, these flags <strong>upscale</strong>,
+            since there's no native resolution to scale down from. An SVG with no
+            <code>viewBox</code> and no absolute <code>width</code>/<code>height</code> has
+            nothing to scale from either way, so that's also an error. Text renders with
+            whatever fonts are installed on the machine, and squish warns you by name if one the
+            file asks for isn't there.</p>
+          <p><code>--crop</code> and <code>--select</code> operate on the rendered pixels, so
+            <code>--width</code> sizes the artboard first — cropping a 512-wide render still
+            yields something smaller than 512. <code>--quality auto</code> and
+            <code>--target-size</code> work the same way they do for any other raster output.</p>
+          <p class="docs-note">squish's never-grow guarantee — never writing an output larger
+            than the input — does not apply to this conversion: rasterising is a change of
+            representation, not a re-encode, so a compact vector routinely comes out larger once
+            it's pixels. Raster to SVG remains unsupported.</p>
         </section>
 
         <section class="docs-section" id="select">
@@ -326,13 +355,17 @@ squish photos/ -r --no-stats</code></pre>
                 <tr><td>JPEG</td><td><code>mozjpeg</code> (progressive, optimised Huffman)</td></tr>
                 <tr><td>WebP</td><td><code>libwebp</code> (static); animated WebP copies through unchanged</td></tr>
                 <tr><td>AVIF</td><td><code>ravif</code> (encode) + <code>dav1d</code> (decode)</td></tr>
-                <tr><td>SVG</td><td><code>oxvg_optimiser</code> (SVGO-equivalent: comments, default attrs, relative path coords)</td></tr>
+                <tr><td>SVG</td><td><code>oxvg_optimiser</code> (SVGO-equivalent: comments, default attrs, relative path coords) as input/output; <code>resvg</code> renders it to any raster format below given <code>--width</code>/<code>--height</code></td></tr>
                 <tr><td>GIF (static + animated)</td><td><code>gifsicle -O3</code></td></tr>
                 <tr><td>HEIC</td><td><code>libheif-rs</code></td></tr>
                 <tr><td>TIFF</td><td>input only — defaults to re-encoding as JPEG; use <code>--format tiff</code> to keep TIFF output</td></tr>
               </tbody>
             </table>
           </div>
+          <p class="docs-note">JPEG has no alpha channel, so converting a transparent image to
+            it — <code>png → jpg</code>, or any SVG rendered to JPEG — composites the
+            transparency onto a white background rather than discarding it. There's deliberately
+            no <code>--background</code> flag to change the colour.</p>
 
           <h3 class="docs-h3">Video</h3>
           <p>Supported containers: MP4, WebM, MOV, AVI, MKV, FLV, DV (→ mp4). Requires
@@ -412,6 +445,12 @@ squish photos/ -r --no-stats</code></pre>
                   <td>Scale down images wider than this (preserves aspect ratio)</td></tr>
                 <tr><td><code>--max-height &lt;PIXELS&gt;</code></td>
                   <td>Scale down images taller than this (preserves aspect ratio)</td></tr>
+                <tr><td><code>--width &lt;PIXELS&gt;</code></td>
+                  <td>Render vector (SVG) input at this pixel width. Unlike
+                    <code>--max-width</code> this upscales — a vector has no native resolution.
+                    Ignored for raster input</td></tr>
+                <tr><td><code>--height &lt;PIXELS&gt;</code></td>
+                  <td>Render vector (SVG) input at this pixel height. See <code>--width</code></td></tr>
                 <tr><td><code>--crop &lt;SPEC&gt;</code></td>
                   <td>Crop images before compressing (applied before
                     <code>--max-width</code>/<code>--max-height</code>). An aspect ratio like

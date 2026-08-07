@@ -8,6 +8,9 @@ squish dog.png
 squish ./assets/ -r --format webp --quality 75
 squish hero.jpg --target-size 500k
 
+# SVG → raster, at a chosen pixel size (upscales; a vector has no native resolution)
+squish logo.svg --format png --width 512
+
 # Crop while compressing — a preset ratio, an exact rect, or by eye in the browser
 squish hero.jpg --crop 16:9
 squish scan.png --crop 800x600+120+40
@@ -44,7 +47,7 @@ Full format support needs `ffmpeg` (video/audio), `gifsicle` (GIF), `libheif` + 
 
 ## Formats
 
-- **Images:** PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TIFF — pure-Rust encoders (`mozjpeg`, `oxipng` + `imagequant`, `ravif`, `oxvg_optimiser`)
+- **Images:** PNG, JPEG, WebP, AVIF, SVG, GIF, HEIC, TIFF — pure-Rust encoders (`mozjpeg`, `oxipng` + `imagequant`, `ravif`, `oxvg_optimiser`). SVG also renders to any raster format via `resvg` given `--width`/`--height`
 - **Video:** MP4, WebM, MOV, AVI, MKV, FLV, DV — H.265/H.264/AV1/VP9 via ffmpeg
 - **Audio:** MP3, AAC, WAV, FLAC, OGG, Opus, AIFF — tags and album art preserved
 - **Code:** JS/TS/JSX, CSS, HTML, JSON — `oxc_minifier`, `lightningcss`, `minify-html`
