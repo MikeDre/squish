@@ -11,8 +11,9 @@ use crate::error::SquishError;
 use crate::options::SquishOptions;
 use image::{DynamicImage, RgbaImage};
 use resvg::tiny_skia::{Pixmap, Transform};
-use resvg::usvg::{fontdb, Options, Tree};
+use resvg::usvg::{fontdb, FontFamily, Group, Node, Options, Tree};
 use roxmltree::ParsingOptions;
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
 
@@ -27,6 +28,11 @@ const MAX_RENDER_PIXELS: u64 = 268_435_456;
 /// (usvg's own default is "Times New Roman") would make `font_warnings` report
 /// a missing font on any machine that happens not to have it.
 const FALLBACK_FONT_FAMILY: &str = "sans-serif";
+
+/// Families that always resolve to a database default. Warning about these
+/// would be noise — and `FALLBACK_FONT_FAMILY` is one of them, which is how
+/// usvg's injected fallback stays silent.
+const GENERIC_FAMILIES: [&str; 5] = ["serif", "sans-serif", "monospace", "cursive", "fantasy"];
 
 /// Render `input` at the size implied by `opts`, returning straight-alpha
 /// RGBA8 pixels plus any font-substitution warnings.
@@ -48,8 +54,9 @@ pub fn rasterize(
         });
     }
 
+    let db = font_db();
     let options = Options {
-        fontdb: font_db(),
+        fontdb: db.clone(),
         font_family: FALLBACK_FONT_FAMILY.to_string(),
         resources_dir: path.parent().map(|d| d.to_path_buf()),
         ..Options::default()
@@ -76,7 +83,8 @@ pub fn rasterize(
             source: "rendered pixel buffer did not match the requested canvas".into(),
         }
     })?;
-    Ok((DynamicImage::ImageRgba8(img), Vec::new()))
+    let warnings = font_warnings(&tree, &db, path);
+    Ok((DynamicImage::ImageRgba8(img), warnings))
 }
 
 /// The system font database, loaded once per process. A 200-file directory run
@@ -142,6 +150,67 @@ fn resolve_size(
         });
     }
     Ok((w, h))
+}
+
+/// One warning naming every font family the SVG asked for that this machine
+/// cannot supply. usvg substitutes silently, so without this the output just
+/// looks wrong.
+///
+/// Only the visible tree is walked: text inside a pattern or marker is not
+/// reported. Those are rare enough that a missed warning beats a false one.
+fn font_warnings(tree: &Tree, db: &fontdb::Database, path: &Path) -> Vec<String> {
+    let mut missing = BTreeSet::new();
+    collect_missing_fonts(tree.root(), db, &mut missing);
+    if missing.is_empty() {
+        return Vec::new();
+    }
+    let names = missing
+        .iter()
+        .map(|n| format!("\"{n}\""))
+        .collect::<Vec<_>>()
+        .join(", ");
+    vec![format!(
+        "{}: font {names} not found; substituted the default font",
+        path.display()
+    )]
+}
+
+fn collect_missing_fonts(group: &Group, db: &fontdb::Database, out: &mut BTreeSet<String>) {
+    for node in group.children() {
+        match node {
+            Node::Group(g) => collect_missing_fonts(g, db, out),
+            Node::Text(text) => {
+                for chunk in text.chunks() {
+                    for span in chunk.spans() {
+                        for family in span.font().families() {
+                            if let FontFamily::Named(name) = family {
+                                if !is_generic(name) && !is_installed(name, db) {
+                                    out.insert(name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+fn is_generic(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    GENERIC_FAMILIES.contains(&lower.as_str())
+}
+
+/// Whether the family exists at all. Deliberately ignores weight, style and
+/// stretch: a family installed without the exact weight still renders in the
+/// right typeface, so warning about it would be misleading.
+fn is_installed(name: &str, db: &fontdb::Database) -> bool {
+    db.query(&fontdb::Query {
+        families: &[fontdb::Family::Name(name)],
+        ..fontdb::Query::default()
+    })
+    .is_some()
 }
 
 /// tiny-skia pixmaps are **premultiplied**; `image::RgbaImage` expects straight
@@ -296,6 +365,72 @@ mod tests {
             "red must survive demultiplication, got {px:?} (premultiplied leak?)"
         );
         assert_eq!((px[1], px[2]), (0, 0), "no green/blue: {px:?}");
+    }
+
+    #[test]
+    fn warns_about_a_font_this_machine_cannot_supply() {
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="Definitely Not An Installed Face" font-size="16">squish</text></svg>"#;
+        let (_img, warnings) = rasterize(
+            svg.as_bytes(),
+            &opts(Some(200), None),
+            &PathBuf::from("t.svg"),
+        )
+        .expect("render should still succeed");
+        assert_eq!(warnings.len(), 1, "one warning per file: {warnings:?}");
+        assert!(
+            warnings[0].contains("Definitely Not An Installed Face"),
+            "the warning must name the family: {warnings:?}"
+        );
+        assert!(warnings[0].contains("t.svg"), "and the file: {warnings:?}");
+    }
+
+    #[test]
+    fn generic_families_never_warn() {
+        // Generic families always resolve to a database default, so warning
+        // about them would be pure noise — and this must hold on a CI box with
+        // almost no fonts installed.
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="sans-serif" font-size="16">squish</text></svg>"#;
+        let (_img, warnings) = rasterize(
+            svg.as_bytes(),
+            &opts(Some(200), None),
+            &PathBuf::from("g.svg"),
+        )
+        .expect("render should succeed");
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn text_naming_no_family_never_warns() {
+        // usvg injects `Options::font_family` into every span, so a concrete
+        // fallback name would warn on any machine lacking that face.
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-size="16">squish</text></svg>"#;
+        let (_img, warnings) = rasterize(
+            svg.as_bytes(),
+            &opts(Some(200), None),
+            &PathBuf::from("n.svg"),
+        )
+        .expect("render should succeed");
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
+    }
+
+    #[test]
+    fn an_svg_without_text_never_warns() {
+        let (_img, warnings) = rasterize(
+            wide_svg().as_bytes(),
+            &opts(Some(200), None),
+            &PathBuf::from("p.svg"),
+        )
+        .expect("render should succeed");
+        assert!(
+            warnings.is_empty(),
+            "expected no warnings, got {warnings:?}"
+        );
     }
 
     #[test]
