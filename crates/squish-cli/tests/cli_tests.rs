@@ -1946,15 +1946,27 @@ fn select_with_two_images_errors_before_any_ui() {
 }
 
 #[test]
-fn select_rejects_svg() {
+fn select_on_an_svg_needs_a_raster_format() {
     bin()
         .env("SQUISH_SELECT_NO_OPEN", "1")
         .arg(core_fixture("sample.svg"))
-        .arg("--select")
+        .args(["--select", "--width", "512"])
         .assert()
         .failure()
         .code(2)
-        .stderr(predicate::str::contains("vector format"));
+        .stderr(predicate::str::contains("raster --format"));
+}
+
+#[test]
+fn select_on_an_svg_needs_an_explicit_size() {
+    bin()
+        .env("SQUISH_SELECT_NO_OPEN", "1")
+        .arg(core_fixture("sample.svg"))
+        .args(["--select", "--format", "png"])
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("--width"));
 }
 
 #[test]

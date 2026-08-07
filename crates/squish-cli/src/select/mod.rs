@@ -30,7 +30,7 @@ fn no_open() -> bool {
 /// Every check here runs *before* a server starts or a browser opens: throwing
 /// away a selection the user already made is the worst possible outcome, so a
 /// run that cannot succeed must fail while nothing has been invested.
-pub(crate) fn preflight(worklist: &[PathBuf]) -> Result<PathBuf> {
+pub(crate) fn preflight(worklist: &[PathBuf], args: &Args) -> Result<PathBuf> {
     if !std::io::stderr().is_terminal() && !no_open() {
         bail!(
             "--select needs an interactive terminal; \
@@ -51,11 +51,24 @@ pub(crate) fn preflight(worklist: &[PathBuf]) -> Result<PathBuf> {
     let Some(format) = squish_core::detect_format(&path, &bytes) else {
         bail!("--select needs an image; {} is not one", path.display());
     };
+    // An SVG has no pixels to crop until it is rasterised, and rasterising
+    // needs both a raster target and an explicit size. Checking here means the
+    // user learns this before a browser opens, not after they have chosen a
+    // rectangle.
     if format == Format::Svg {
-        bail!(
-            "--select cannot crop {}: SVG is a vector format",
-            path.display()
-        );
+        let target = args.format.as_deref().and_then(Format::parse);
+        if !matches!(target, Some(f) if f != Format::Svg) {
+            bail!(
+                "--select cannot crop {}: an SVG needs a raster --format (e.g. --format png)",
+                path.display()
+            );
+        }
+        if args.width.is_none() && args.height.is_none() {
+            bail!(
+                "--select cannot crop {}: an SVG needs an explicit --width or --height",
+                path.display()
+            );
+        }
     }
     if format == Format::Webp && squish_core::formats::webp::is_animated_webp(&bytes) {
         bail!(
@@ -122,7 +135,7 @@ pub(crate) fn resolve_crop(
     args: &Args,
     opts: &SquishOptions,
 ) -> Result<Selection> {
-    let path = preflight(worklist)?;
+    let path = preflight(worklist, args)?;
     // Fails fast on an image that cannot be decoded, before any UI exists.
     let preview = squish_core::preview_bytes(&path, PREVIEW_MAX_EDGE, opts)?;
     let seed = seed_rect(args.crop, args.gravity, preview.source_w, preview.source_h)?;
