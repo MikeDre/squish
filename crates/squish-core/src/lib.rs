@@ -147,10 +147,12 @@ fn apply_crop(
 /// One full encode pass at the quality carried in `opts`.
 ///
 /// If crop or resize is requested and format supports it, decode → crop →
-/// resize → encode. SVG is skipped (vector). Animated WebP is also skipped —
-/// the webp codec cannot resize animations; webp::compress emits a warning
-/// and passes through. For same-format paths that normally skip decode,
-/// resize forces the decode → resize → encode path.
+/// resize → encode. SVG input is rendered to pixels first, unless the output
+/// is also SVG (minification), in which case crop and resize are skipped.
+/// Animated WebP is also skipped — the webp codec cannot resize animations;
+/// webp::compress emits a warning and passes through. For same-format paths
+/// that normally skip decode, resize forces the decode → resize → encode
+/// path.
 fn encode_once(
     format_in: Format,
     format_out: Format,
@@ -159,13 +161,15 @@ fn encode_once(
     path: &Path,
     is_animated_webp: bool,
 ) -> Result<(Vec<u8>, Vec<String>), SquishError> {
-    // Crop is raster-only: SVG (vector) and animated WebP compress unchanged
-    // with a warning. GIF→GIF crops natively via gifsicle inside formats::gif
-    // so animation frames survive (unless a resize forces the decode path,
-    // which flattens animation exactly as resize alone does today).
+    // Crop is raster-only. A vector *output* has no pixels to cut, and the
+    // webp codec cannot crop animations; both compress unchanged with a
+    // warning. GIF→GIF crops natively via gifsicle inside formats::gif so
+    // animation frames survive (unless a resize forces the decode path, which
+    // flattens animation exactly as resize alone does today).
     let mut crop = opts.crop;
     let mut warnings = Vec::new();
-    if crop.is_some() && (format_in == Format::Svg || is_animated_webp) {
+    let svg_passthrough = format_in == Format::Svg && format_out == Format::Svg;
+    if crop.is_some() && (svg_passthrough || is_animated_webp) {
         let what = if is_animated_webp {
             "animated WebP"
         } else {
@@ -177,14 +181,34 @@ fn encode_once(
         ));
         crop = None;
     }
+
+    // --width/--height size a *render*, so they only mean something when a
+    // vector is being turned into pixels.
+    if opts.width.is_some() || opts.height.is_some() {
+        if svg_passthrough {
+            warnings.push(format!(
+                "{}: --width/--height needs a raster --format; the output stays vector",
+                path.display()
+            ));
+        } else if format_in != Format::Svg {
+            warnings.push(format!(
+                "{}: --width/--height applies to vector input only; \
+                 use --max-width/--max-height to resize rasters",
+                path.display()
+            ));
+        }
+    }
+
     let gif_native_crop =
         format_in == Format::Gif && format_out == Format::Gif && !opts.needs_resize();
 
     if (opts.needs_resize() || (crop.is_some() && !gif_native_crop))
-        && format_in != Format::Svg
+        && !svg_passthrough
         && !is_animated_webp
     {
-        let mut img = decode_to_dynamic_image(format_in, input_bytes, path)?;
+        let (mut img, decode_warnings) =
+            decode_to_dynamic_image(format_in, input_bytes, opts, path)?;
+        warnings.extend(decode_warnings);
         img = apply_crop(img, opts, path)?;
         if let Some((new_w, new_h)) = opts.resize_dimensions(img.width(), img.height()) {
             img = img.resize_exact(new_w, new_h, image::imageops::FilterType::Lanczos3);
@@ -228,8 +252,8 @@ fn compress_to_visually_lossless(
     path: &Path,
     is_animated_webp: bool,
 ) -> Result<(Vec<u8>, Vec<String>), SquishError> {
-    let src_rgb = match decode_to_dynamic_image(format_in, input_bytes, path) {
-        Ok(img) => apply_crop(img, opts, path)?.to_rgb8(),
+    let src_rgb = match decode_to_dynamic_image(format_in, input_bytes, opts, path) {
+        Ok((img, _warnings)) => apply_crop(img, opts, path)?.to_rgb8(),
         Err(_) => {
             return encode_once(
                 format_in,
@@ -447,24 +471,23 @@ fn dispatch_compress_with_conversion(
         return formats::tiff::compress_as_jpeg(input, opts, path).map(|b| (b, Vec::new()));
     }
 
-    // SVG cannot be rasterized here (no renderer linked), and no raster source
-    // can be vectorized. Reject cross-format conversions involving SVG early
-    // with a clear message instead of letting the underlying decoder crash.
-    if format_in == Format::Svg || format_out == Format::Svg {
+    // No raster source can be vectorised. (SVG → SVG never reaches here — the
+    // same-format fast path returns above.)
+    if format_out == Format::Svg {
         return Err(SquishError::UnsupportedFormat {
             path: path.to_path_buf(),
             reason: format!(
-                "cannot convert {} to {}: SVG cross-format conversion is not supported",
-                format_in.extension(),
-                format_out.extension()
+                "cannot convert {} to svg: vectorising a raster image is not supported",
+                format_in.extension()
             ),
         });
     }
 
     // Generic cross-format path: decode source to a DynamicImage, then hand
-    // off to the target encoder's raster entry point.
-    let img = decode_to_dynamic_image(format_in, input, path)?;
-    dispatch_encode_raster(format_out, &img, opts, path).map(|b| (b, Vec::new()))
+    // off to the target encoder's raster entry point. For SVG input the
+    // "decode" is a render, and its font warnings ride along.
+    let (img, warnings) = decode_to_dynamic_image(format_in, input, opts, path)?;
+    dispatch_encode_raster(format_out, &img, opts, path).map(|b| (b, warnings))
 }
 
 fn dispatch_same_format(
@@ -509,22 +532,22 @@ fn dispatch_encode_raster(
 pub(crate) fn decode_to_dynamic_image(
     format_in: Format,
     input: &[u8],
+    opts: &SquishOptions,
     path: &Path,
-) -> Result<DynamicImage, SquishError> {
+) -> Result<(DynamicImage, Vec<String>), SquishError> {
     match format_in {
         // HEIC isn't handled by the `image` crate — use libheif and hand back
         // an RGBA8 DynamicImage.
-        Format::Heic => decode_heic_to_dynamic_image(input, path),
-        // SVG never reaches here (rejected earlier), but guard in case.
-        Format::Svg => Err(SquishError::UnsupportedFormat {
-            path: path.to_path_buf(),
-            reason: "cannot rasterize SVG for cross-format conversion".into(),
-        }),
+        Format::Heic => decode_heic_to_dynamic_image(input, path).map(|img| (img, Vec::new())),
+        // SVG has no pixels of its own: render it at the size `opts` asks for.
+        Format::Svg => formats::svg::rasterize(input, opts, path),
         // Everything else is a raster format supported by `image`.
-        _ => image::load_from_memory(input).map_err(|e| SquishError::DecodeFailed {
-            path: path.to_path_buf(),
-            source: Box::new(e),
-        }),
+        _ => image::load_from_memory(input)
+            .map(|img| (img, Vec::new()))
+            .map_err(|e| SquishError::DecodeFailed {
+                path: path.to_path_buf(),
+                source: Box::new(e),
+            }),
     }
 }
 
@@ -671,9 +694,14 @@ mod auto_quality_search_tests {
         )
         .unwrap();
 
-        let src = decode_to_dynamic_image(Format::Jpeg, &bytes, &fixture("sample.jpg"))
-            .unwrap()
-            .to_rgb8();
+        let (src, _warnings) = decode_to_dynamic_image(
+            Format::Jpeg,
+            &bytes,
+            &SquishOptions::default(),
+            &fixture("sample.jpg"),
+        )
+        .unwrap();
+        let src = src.to_rgb8();
         let cand = image::load_from_memory(&auto_bytes).unwrap().to_rgb8();
         assert_eq!(src.dimensions(), cand.dimensions());
         let score = crate::auto_quality::ssimulacra2_score(

@@ -277,25 +277,6 @@ fn png_to_heic_conversion() {
 }
 
 #[test]
-fn svg_cross_format_is_rejected_cleanly() {
-    let (_tmp, input) = copy_fixture("sample.svg");
-    let opts = SquishOptions {
-        output_format: Some(squish_core::Format::Png),
-        ..Default::default()
-    };
-    let err = squish_file(&input, &opts).unwrap_err();
-    match err {
-        squish_core::SquishError::UnsupportedFormat { reason, .. } => {
-            assert!(
-                reason.to_lowercase().contains("svg"),
-                "reason did not mention SVG: {reason}"
-            );
-        }
-        other => panic!("expected UnsupportedFormat, got: {other:?}"),
-    }
-}
-
-#[test]
 fn animated_webp_roundtrips_unchanged() {
     let (_tmp, input) = copy_fixture("anim.webp");
     let original = fs::read(&input).unwrap();
@@ -448,4 +429,199 @@ fn target_size_applies_to_cross_format_conversion() {
         squish_core::detect_format(&r.output_path, &bytes),
         Some(squish_core::Format::Webp)
     );
+}
+
+#[test]
+fn svg_to_png_at_a_requested_width() {
+    // sample.svg is 200×200 with a viewBox.
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        width: Some(512),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Png);
+    assert_eq!(
+        r.output_path.extension().and_then(|s| s.to_str()),
+        Some("png")
+    );
+    let img = image::open(&r.output_path).unwrap();
+    assert_eq!((img.width(), img.height()), (512, 512));
+}
+
+#[test]
+fn svg_to_png_without_a_size_is_an_error() {
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        ..Default::default()
+    };
+    let err = squish_file(&input, &opts).unwrap_err();
+    assert!(matches!(
+        err,
+        squish_core::SquishError::MissingRenderSize { .. }
+    ));
+}
+
+#[test]
+fn svg_to_jpeg_lands_on_white() {
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Jpeg),
+        width: Some(256),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    let px = image::open(&r.output_path)
+        .unwrap()
+        .to_rgb8()
+        .get_pixel(2, 2)
+        .0;
+    assert!(
+        px.iter().all(|c| *c > 235),
+        "the transparent corner must be white, got {px:?}"
+    );
+}
+
+#[test]
+fn svg_to_webp_and_avif_convert() {
+    for (fmt, ext) in [
+        (squish_core::Format::Webp, "webp"),
+        (squish_core::Format::Avif, "avif"),
+    ] {
+        let (_tmp, input) = copy_fixture("sample.svg");
+        let opts = SquishOptions {
+            output_format: Some(fmt),
+            width: Some(128),
+            ..Default::default()
+        };
+        let r = squish_file(&input, &opts).unwrap();
+        assert_eq!(r.format_out, fmt);
+        assert_eq!(
+            r.output_path.extension().and_then(|s| s.to_str()),
+            Some(ext)
+        );
+    }
+}
+
+#[test]
+fn svg_to_svg_ignores_width_and_stays_vector() {
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        width: Some(512),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Svg);
+    assert!(
+        r.warnings.iter().any(|w| w.contains("--width")),
+        "expected a warning that --width was ignored: {:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn width_on_a_raster_warns_and_still_compresses() {
+    let (_tmp, input) = copy_fixture("sample.png");
+    let opts = SquishOptions {
+        width: Some(512),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Png);
+    assert!(
+        r.warnings.iter().any(|w| w.contains("--max-width")),
+        "the warning should point at --max-width: {:?}",
+        r.warnings
+    );
+}
+
+#[test]
+fn svg_to_jpeg_respects_target_size() {
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Jpeg),
+        width: Some(512),
+        target_size: Some(8_000),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes <= 8_000,
+        "target-size should now drive the quality search: {} bytes",
+        r.output_bytes
+    );
+}
+
+#[test]
+fn max_width_still_clamps_a_render() {
+    // --width sizes the render canvas; --max-* clamps afterwards, exactly as
+    // it would for a raster of that size.
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        width: Some(512),
+        max_width: Some(256),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    let img = image::open(&r.output_path).unwrap();
+    assert_eq!((img.width(), img.height()), (256, 256));
+}
+
+#[test]
+fn svg_to_jpeg_respects_quality_auto() {
+    // The perceptual search needs a decodable source, which a vector only has
+    // once it can be rendered.
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Jpeg),
+        width: Some(256),
+        auto: true,
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert_eq!(r.format_out, squish_core::Format::Jpeg);
+    let img = image::open(&r.output_path).unwrap();
+    assert_eq!((img.width(), img.height()), (256, 256));
+}
+
+#[test]
+fn a_render_may_be_larger_than_its_source() {
+    // Rasterising is a representation change, so growth is expected here.
+    // (The never-grow guard itself lives in the CLI runner — Task 8 covers it.)
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        width: Some(1024),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    assert!(
+        r.output_bytes > r.input_bytes,
+        "a 1024px render should exceed the 1 KB source: {} vs {}",
+        r.output_bytes,
+        r.input_bytes
+    );
+    let bytes = fs::read(&r.output_path).unwrap();
+    assert_eq!(
+        squish_core::detect_format(&r.output_path, &bytes),
+        Some(squish_core::Format::Png),
+        "the output must still be a PNG, not a copy of the SVG"
+    );
+}
+
+#[test]
+fn raster_to_svg_is_still_refused() {
+    let (_tmp, input) = copy_fixture("sample.png");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Svg),
+        ..Default::default()
+    };
+    let err = squish_file(&input, &opts).unwrap_err();
+    assert!(matches!(
+        err,
+        squish_core::SquishError::UnsupportedFormat { .. }
+    ));
 }

@@ -38,7 +38,8 @@ pub fn preview_bytes(path: &Path, max_edge: u32) -> Result<Preview, SquishError>
         });
     }
 
-    let img = crate::decode_to_dynamic_image(format_in, &input, path)?;
+    let (img, _warnings) =
+        crate::decode_to_dynamic_image(format_in, &input, &crate::SquishOptions::default(), path)?;
     let (source_w, source_h) = (img.width(), img.height());
 
     let scaled = if source_w > max_edge || source_h > max_edge {

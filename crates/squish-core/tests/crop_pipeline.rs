@@ -146,6 +146,31 @@ fn svg_crop_warns_and_passes_through() {
 }
 
 #[test]
+fn svg_crops_the_rendered_canvas() {
+    // --width sizes the artboard; the crop then cuts pixels out of it.
+    let (_tmp, input) = copy_fixture("sample.svg");
+    let opts = SquishOptions {
+        output_format: Some(squish_core::Format::Png),
+        width: Some(512),
+        crop: Some(CropSpec::Exact {
+            w: 100,
+            h: 50,
+            x: 0,
+            y: 0,
+        }),
+        ..Default::default()
+    };
+    let r = squish_file(&input, &opts).unwrap();
+    let img = image::open(&r.output_path).unwrap();
+    assert_eq!((img.width(), img.height()), (100, 50));
+    assert!(
+        r.warnings.is_empty(),
+        "cropping a rasterised SVG is supported now: {:?}",
+        r.warnings
+    );
+}
+
+#[test]
 fn animated_webp_crop_warns_and_passes_through() {
     let (_tmp, input) = copy_fixture("anim.webp");
     let r = squish_file(&input, &crop_opts(CropSpec::Aspect { w: 1, h: 1 })).unwrap();
