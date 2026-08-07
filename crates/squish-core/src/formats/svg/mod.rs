@@ -6,5 +6,7 @@
 //! `formats::svg::compress`.
 
 mod minify;
+mod render;
 
 pub use minify::compress;
+pub use render::rasterize;

@@ -35,6 +35,9 @@ pub enum SquishError {
 
     #[error("invalid crop for {path}: {reason}")]
     InvalidCrop { path: PathBuf, reason: String },
+
+    #[error("cannot render {path}: {reason}")]
+    MissingRenderSize { path: PathBuf, reason: String },
 }
 
 #[cfg(test)]
@@ -73,5 +76,16 @@ mod tests {
         assert!(s.contains("/photo.png"));
         assert!(s.contains("png"));
         assert!(s.contains("webp"));
+    }
+
+    #[test]
+    fn display_missing_render_size() {
+        let e = SquishError::MissingRenderSize {
+            path: PathBuf::from("/logo.svg"),
+            reason: "needs --width or --height".into(),
+        };
+        let s = format!("{e}");
+        assert!(s.contains("/logo.svg"));
+        assert!(s.contains("needs --width or --height"));
     }
 }
