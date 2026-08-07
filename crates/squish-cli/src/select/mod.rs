@@ -124,7 +124,7 @@ pub(crate) fn resolve_crop(
 ) -> Result<Selection> {
     let path = preflight(worklist)?;
     // Fails fast on an image that cannot be decoded, before any UI exists.
-    let preview = squish_core::preview_bytes(&path, PREVIEW_MAX_EDGE)?;
+    let preview = squish_core::preview_bytes(&path, PREVIEW_MAX_EDGE, opts)?;
     let seed = seed_rect(args.crop, args.gravity, preview.source_w, preview.source_h)?;
     let source = (preview.source_w, preview.source_h);
     let session = server::Session {

@@ -6,7 +6,7 @@
 //! scan would otherwise ship 400 MB of decoded pixels into a browser tab.
 
 use crate::error::SquishError;
-use crate::format::{detect_format, Format};
+use crate::format::detect_format;
 use std::io::Cursor;
 use std::path::Path;
 
@@ -25,21 +25,25 @@ pub struct Preview {
 
 /// Decode `path`, downscale to fit `max_edge` (never upscaling), and encode a
 /// browser-renderable image: JPEG q85, or PNG when the source has alpha.
-pub fn preview_bytes(path: &Path, max_edge: u32) -> Result<Preview, SquishError> {
+///
+/// `opts` is needed because vector input has no pixels of its own — an SVG is
+/// rendered at the size `opts.width`/`opts.height` implies, and that render
+/// size is what `source_w`/`source_h` report, because the selector's maths
+/// runs in source pixels.
+pub fn preview_bytes(
+    path: &Path,
+    max_edge: u32,
+    opts: &crate::options::SquishOptions,
+) -> Result<Preview, SquishError> {
     let input = std::fs::read(path)?;
     let format_in = detect_format(path, &input).ok_or_else(|| SquishError::UnsupportedFormat {
         path: path.to_path_buf(),
         reason: "could not identify format from extension or magic bytes".into(),
     })?;
-    if format_in == Format::Svg {
-        return Err(SquishError::UnsupportedFormat {
-            path: path.to_path_buf(),
-            reason: "SVG is a vector format and cannot be cropped".into(),
-        });
-    }
 
-    let (img, _warnings) =
-        crate::decode_to_dynamic_image(format_in, &input, &crate::SquishOptions::default(), path)?;
+    // Font warnings are the run's business, not the preview's — the conversion
+    // itself reports them.
+    let (img, _warnings) = crate::decode_to_dynamic_image(format_in, &input, opts, path)?;
     let (source_w, source_h) = (img.width(), img.height());
 
     let scaled = if source_w > max_edge || source_h > max_edge {
