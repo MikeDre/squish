@@ -2279,3 +2279,141 @@ fn select_with_dry_run_echoes_the_spec_and_writes_nothing() {
         "--dry-run must not write"
     );
 }
+
+#[test]
+fn svg_to_png_needs_an_explicit_size() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.svg");
+    fs::copy(core_fixture("sample.svg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--format", "png"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("--width"));
+}
+
+#[test]
+fn svg_to_png_at_a_width_writes_the_requested_size() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.svg");
+    fs::copy(core_fixture("sample.svg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--format", "png", "--width", "512"])
+        .assert()
+        .success();
+
+    let out = tmp.path().join("sample_squished.png");
+    assert!(out.exists(), "expected {out:?} to exist");
+    let img = image::open(&out).unwrap();
+    assert_eq!((img.width(), img.height()), (512, 512));
+}
+
+#[test]
+fn width_on_a_raster_warns_but_still_compresses() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.png");
+    fs::copy(core_fixture("sample.png"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--width", "512"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("--max-width"));
+
+    assert!(tmp.path().join("sample_squished.png").exists());
+}
+
+#[test]
+fn a_sizeless_svg_does_not_abort_the_rest_of_the_directory() {
+    let tmp = TempDir::new().unwrap();
+    fs::copy(core_fixture("sample.svg"), tmp.path().join("a.svg")).unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("b.png")).unwrap();
+
+    // No --width: the SVG cannot convert, but the PNG must still be written.
+    // A per-file error means exit code 1 (`RunReport::exit_code`), not an abort.
+    bin()
+        .arg(tmp.path())
+        .args(["--format", "png"])
+        .assert()
+        .failure()
+        .code(1);
+
+    assert!(
+        tmp.path().join("b_squished.png").exists(),
+        "the PNG should have been compressed despite the SVG's error"
+    );
+}
+
+#[test]
+fn width_is_rejected_as_a_config_key() {
+    let tmp = TempDir::new().unwrap();
+    fs::write(tmp.path().join("squish.toml"), "width = 512\n").unwrap();
+    fs::copy(core_fixture("sample.png"), tmp.path().join("a.png")).unwrap();
+
+    bin()
+        .current_dir(tmp.path())
+        .arg("a.png")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("width"));
+}
+
+#[test]
+fn zero_width_is_rejected() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.svg");
+    fs::copy(core_fixture("sample.svg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--format", "png", "--width", "0"])
+        .assert()
+        .failure();
+}
+
+#[test]
+fn a_render_bigger_than_its_svg_is_not_discarded() {
+    // The never-grow guard replaces a non-improving output with a copy of the
+    // input. A format conversion is a legitimate transform, so a 1024px render
+    // of a 1 KB vector must survive — `runner.rs` already allows this via
+    // `format_in != format_out`, and this test keeps it that way.
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.svg");
+    fs::copy(core_fixture("sample.svg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--format", "png", "--width", "1024"])
+        .assert()
+        .success();
+
+    let out = tmp.path().join("sample_squished.png");
+    let bytes = fs::read(&out).unwrap();
+    assert!(
+        bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47]),
+        "output should be a real PNG, not a copy of the SVG"
+    );
+    assert!(
+        bytes.len() > fs::metadata(&input).unwrap().len() as usize,
+        "the render is legitimately larger than the vector"
+    );
+}
+
+#[test]
+fn overwrite_in_place_still_refuses_a_format_change() {
+    let tmp = TempDir::new().unwrap();
+    let input = tmp.path().join("sample.svg");
+    fs::copy(core_fixture("sample.svg"), &input).unwrap();
+
+    bin()
+        .arg(&input)
+        .args(["--format", "png", "--width", "512", "-o"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("in place"));
+}

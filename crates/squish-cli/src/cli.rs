@@ -97,6 +97,15 @@ pub struct Args {
     #[arg(long)]
     pub max_height: Option<u32>,
 
+    /// Render vector (SVG) input at this pixel width. Unlike --max-width this
+    /// upscales — a vector has no native resolution. Ignored for raster input.
+    #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+    pub width: Option<u32>,
+
+    /// Render vector (SVG) input at this pixel height. See --width.
+    #[arg(long, value_parser = clap::value_parser!(u32).range(1..))]
+    pub height: Option<u32>,
+
     /// Crop images before compressing (applied before --max-width/height).
     /// Aspect ratio, anchored by --gravity: 1:1, 16:9, 4:3, ...
     /// Or an exact pixel rect: WxH+X+Y, e.g. 800x600+120+40. Images only;
