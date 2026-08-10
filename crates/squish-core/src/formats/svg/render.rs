@@ -405,43 +405,6 @@ mod tests {
     }
 
     #[test]
-    fn diagnose_font_environment() {
-        let db = font_db();
-        let face_count = db.faces().count();
-        let mut names: Vec<String> = db
-            .faces()
-            .flat_map(|f| f.families.iter().map(|(n, _)| n.clone()))
-            .collect();
-        names.sort();
-        names.dedup();
-        let serif_id = db.query(&fontdb::Query {
-            families: &[fontdb::Family::Serif],
-            ..fontdb::Query::default()
-        });
-
-        let conf_path = std::path::Path::new("/etc/fonts/fonts.conf");
-        let conf_exists = conf_path.exists();
-        let conf_head = std::fs::read_to_string(conf_path)
-            .map(|s| s.chars().take(600).collect::<String>())
-            .unwrap_or_else(|e| format!("<read error: {e}>"));
-        let conf_d_entries = std::fs::read_dir("/etc/fonts/conf.d")
-            .map(|rd| rd.filter_map(|e| e.ok()).count())
-            .unwrap_or(usize::MAX);
-
-        panic!(
-            "face_count={face_count} serif_id={serif_id:?} \
-             conf_exists={conf_exists} conf_d_entries={conf_d_entries} \
-             HOME={:?} XDG_CONFIG_HOME={:?} FONTCONFIG_FILE={:?} \
-             sample_names={:?} \
-             conf_head={conf_head:?}",
-            std::env::var("HOME"),
-            std::env::var("XDG_CONFIG_HOME"),
-            std::env::var("FONTCONFIG_FILE"),
-            &names[..names.len().min(15)],
-        );
-    }
-
-    #[test]
     fn warns_about_a_font_this_machine_cannot_supply() {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="Definitely Not An Installed Face" font-size="16">squish</text></svg>"#;
         let (_img, warnings) = rasterize(
