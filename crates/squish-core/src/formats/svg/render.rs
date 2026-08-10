@@ -94,9 +94,52 @@ fn font_db() -> Arc<fontdb::Database> {
     DB.get_or_init(|| {
         let mut db = fontdb::Database::new();
         db.load_system_fonts();
+        ensure_generic_fallbacks_resolve(&mut db);
         Arc::new(db)
     })
     .clone()
+}
+
+/// The CSS generic families a `fontdb::Family` query can name.
+const GENERIC_QUERY_FAMILIES: [fontdb::Family<'static>; 5] = [
+    fontdb::Family::Serif,
+    fontdb::Family::SansSerif,
+    fontdb::Family::Monospace,
+    fontdb::Family::Cursive,
+    fontdb::Family::Fantasy,
+];
+
+/// Repoints any generic family (serif, sans-serif, ...) that resolves to
+/// nothing at a font this machine actually has.
+///
+/// `fontdb` only learns a generic's real font from fontconfig's `<alias>`
+/// tag; it never reads the `<match>`-based substitution rules Debian and
+/// Ubuntu's default `/etc/fonts/conf.d` actually use. On those systems every
+/// generic query returns `None`, `fontdb`'s own hardcoded defaults ("Times
+/// New Roman", "Arial") match nothing either, and usvg — which always
+/// retries with `Family::Serif` when it can't shape a font — silently drops
+/// the `<text>` node from the tree instead of rendering it, with no warning.
+fn ensure_generic_fallbacks_resolve(db: &mut fontdb::Database) {
+    let Some(fallback) = db.faces().next().map(|f| f.families[0].0.clone()) else {
+        return;
+    };
+    for family in GENERIC_QUERY_FAMILIES {
+        let query = fontdb::Query {
+            families: &[family],
+            ..fontdb::Query::default()
+        };
+        if db.query(&query).is_some() {
+            continue;
+        }
+        match family {
+            fontdb::Family::Serif => db.set_serif_family(&fallback),
+            fontdb::Family::SansSerif => db.set_sans_serif_family(&fallback),
+            fontdb::Family::Monospace => db.set_monospace_family(&fallback),
+            fontdb::Family::Cursive => db.set_cursive_family(&fallback),
+            fontdb::Family::Fantasy => db.set_fantasy_family(&fallback),
+            fontdb::Family::Name(_) => unreachable!("GENERIC_QUERY_FAMILIES has no Name variant"),
+        }
+    }
 }
 
 /// Whether the root `<svg>` carries enough geometry to have an intrinsic size
@@ -419,6 +462,37 @@ mod tests {
             "the warning must name the family: {warnings:?}"
         );
         assert!(warnings[0].contains("t.svg"), "and the file: {warnings:?}");
+    }
+
+    #[test]
+    fn repairs_an_unresolvable_generic_family() {
+        // fontdb only learns fontconfig's <alias> rules, not the <match>-based
+        // substitution Debian/Ubuntu's default config actually uses, so on a
+        // stock Linux box `Family::Serif` can resolve to nothing even with
+        // real fonts installed. Simulate that by deliberately pointing the
+        // serif generic at a name nothing provides.
+        let mut db = fontdb::Database::new();
+        db.load_system_fonts();
+        assert!(
+            db.faces().next().is_some(),
+            "test requires at least one font on this machine"
+        );
+        db.set_serif_family("Not Any Real Font, Ever");
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Serif],
+            ..fontdb::Query::default()
+        };
+        assert!(
+            db.query(&query).is_none(),
+            "precondition: serif must be unresolvable before the repair"
+        );
+
+        ensure_generic_fallbacks_resolve(&mut db);
+
+        assert!(
+            db.query(&query).is_some(),
+            "serif should resolve to a real font after the repair"
+        );
     }
 
     #[test]
