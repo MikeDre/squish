@@ -27,12 +27,15 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          # fonts-dejavu-core gives fontdb/usvg a real font to fall back to. Without
-          # any font at all, usvg can't shape *any* text — not even the generic
-          # Serif fallback — and silently drops the <text> node from the tree
-          # instead of rendering it with a substituted font, which broke
-          # warns_about_a_font_this_machine_cannot_supply on this runner.
-          sudo apt-get install -y libdav1d-dev ffmpeg gifsicle nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev fonts-dejavu-core
+          # fontconfig (the /etc/fonts/*.conf files, not just the library) is what
+          # lets fontdb resolve the generic "serif"/"sans-serif" families to an
+          # installed font. This runner has real font files (fonts-dejavu-core) but
+          # no fontconfig config, so fontdb falls back to its hardcoded "Times New
+          # Roman"/"Arial" defaults, which don't match any installed family. usvg's
+          # own text-layout fallback also asks for generic Serif, so it fails too
+          # and silently drops the <text> node instead of rendering it — which is
+          # why warns_about_a_font_this_machine_cannot_supply saw zero warnings.
+          sudo apt-get install -y libdav1d-dev ffmpeg gifsicle nasm pkg-config cmake libde265-dev libx265-dev libjpeg-dev zlib1g-dev fonts-dejavu-core fontconfig
 
       - name: Cache source-built libheif (Linux)
         if: runner.os == 'Linux'
