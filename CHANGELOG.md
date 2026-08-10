@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-08-10
 
 ### Added
 - **SVG → raster conversion.** `squish logo.svg --format png --width 512`
@@ -36,6 +36,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Transparent pixels no longer turn black when encoding JPEG.** Alpha is
   composited onto white instead of being discarded, so `png → jpg` of a
   transparent image — and any SVG rendered to JPEG — lands on white.
+- The `viewBox` geometry probe for SVG input accepted a `viewBox` by presence
+  alone. A malformed `viewBox="0 0 0 100"` passed the probe, then usvg
+  discarded it and substituted its own 100×100 default — the exact size
+  mismatch the probe exists to prevent. It now validates the box's width and
+  height parse as finite, positive numbers.
 
 ### Changed
 - **`squish_core::preview_bytes` takes a `&SquishOptions` third argument**
@@ -47,6 +52,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   instead of showing a bare dash that read as a failure.
 - A crop the engine rejects now hands control back to the selector with the
   reason, rather than leaving the page permanently inert.
+
+[0.10.0]: https://github.com/MikeDre/squish/compare/v0.9.0...v0.10.0
 
 ## [0.9.0] - 2026-07-30
 
