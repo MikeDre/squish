@@ -405,6 +405,53 @@ mod tests {
     }
 
     #[test]
+    fn diagnose_font_environment() {
+        let db = font_db();
+        let face_count = db.faces().count();
+        let serif_id = db.query(&fontdb::Query {
+            families: &[fontdb::Family::Serif],
+            ..fontdb::Query::default()
+        });
+        let sans_id = db.query(&fontdb::Query {
+            families: &[fontdb::Family::SansSerif],
+            ..fontdb::Query::default()
+        });
+
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="Definitely Not An Installed Face" font-size="16">squish</text></svg>"#;
+        let options = Options {
+            fontdb: db.clone(),
+            font_family: FALLBACK_FONT_FAMILY.to_string(),
+            ..Options::default()
+        };
+        let tree = Tree::from_data(svg.as_bytes(), &options).expect("tree should parse");
+        let mut text_families: Vec<String> = Vec::new();
+        fn walk(group: &Group, out: &mut Vec<String>) {
+            for node in group.children() {
+                match node {
+                    Node::Group(g) => walk(g, out),
+                    Node::Text(text) => {
+                        for chunk in text.chunks() {
+                            for span in chunk.spans() {
+                                for family in span.font().families() {
+                                    out.push(format!("{family:?}"));
+                                }
+                            }
+                        }
+                    }
+                    other => out.push(format!("non-text node: {other:?}")),
+                }
+            }
+        }
+        walk(tree.root(), &mut text_families);
+
+        panic!(
+            "face_count={face_count} serif_id={serif_id:?} sans_id={sans_id:?} \
+             root_children={} text_families={text_families:?}",
+            tree.root().children().len()
+        );
+    }
+
+    #[test]
     fn warns_about_a_font_this_machine_cannot_supply() {
         let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 50"><text x="0" y="20" font-family="Definitely Not An Installed Face" font-size="16">squish</text></svg>"#;
         let (_img, warnings) = rasterize(
