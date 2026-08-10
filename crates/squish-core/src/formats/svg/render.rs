@@ -113,13 +113,34 @@ fn has_declared_geometry(source: &str) -> bool {
         return false;
     };
     let root = doc.root_element();
-    if root.attribute("viewBox").is_some() {
-        return true;
+    if let Some(view_box) = root.attribute("viewBox") {
+        if has_positive_extent(view_box) {
+            return true;
+        }
     }
     matches!(
         (root.attribute("width"), root.attribute("height")),
         (Some(w), Some(h)) if is_absolute_length(w) && is_absolute_length(h)
     )
+}
+
+/// Whether a `viewBox` attribute's width and height parse as finite,
+/// positive numbers. usvg discards a `viewBox` that fails this and
+/// substitutes its own 100×100 default, so a probe that only checks for the
+/// attribute's presence would wave through a file with none of its own
+/// geometry.
+fn has_positive_extent(view_box: &str) -> bool {
+    let mut numbers = view_box.split_whitespace().map(str::parse::<f64>);
+    let (Some(Ok(_)), Some(Ok(_)), Some(Ok(w)), Some(Ok(h)), None) = (
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+        numbers.next(),
+    ) else {
+        return false;
+    };
+    w > 0.0 && h > 0.0
 }
 
 /// A length usvg can turn into pixels without a viewport — anything but a
@@ -297,6 +318,22 @@ mod tests {
             bare.as_bytes(),
             &opts(Some(512), None),
             &PathBuf::from("b.svg"),
+        )
+        .unwrap_err();
+        assert!(matches!(err, SquishError::MissingRenderSize { .. }));
+        assert!(format!("{err}").contains("viewBox"));
+    }
+
+    #[test]
+    fn a_zero_width_viewbox_is_an_error() {
+        // A malformed viewBox is present but carries no real geometry; usvg
+        // discards it and substitutes its own 100×100 default, which the
+        // probe must not mistake for the file's own size.
+        let degenerate = r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 0 100"><rect width="10" height="10"/></svg>"#;
+        let err = rasterize(
+            degenerate.as_bytes(),
+            &opts(Some(512), None),
+            &PathBuf::from("e.svg"),
         )
         .unwrap_err();
         assert!(matches!(err, SquishError::MissingRenderSize { .. }));
