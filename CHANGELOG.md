@@ -4,6 +4,22 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-08-11
+
+### Fixed
+- **SVG text silently dropped on stock Debian/Ubuntu.** `fontdb` only learns a
+  CSS generic family's real font (serif, sans-serif, ...) from fontconfig's
+  `<alias>` tag, but Debian and Ubuntu's default fontconfig expresses that
+  mapping via `<match>` blocks instead, which `fontdb` never reads. Every
+  generic query returned nothing, `fontdb`'s own hardcoded defaults ("Times
+  New Roman", "Arial") matched nothing either, and usvg silently dropped the
+  `<text>` node from the render instead of drawing it or warning about it. A
+  generic that fails to resolve is now repointed at a font the machine
+  actually has, so SVG → raster text renders correctly out of the box on a
+  stock Linux install.
+
+[0.10.1]: https://github.com/MikeDre/squish/compare/v0.10.0...v0.10.1
+
 ## [0.10.0] - 2026-08-10
 
 ### Added
