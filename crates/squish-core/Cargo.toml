@@ -17,7 +17,7 @@ image = { version = "0.25", default-features = false, features = ["png", "jpeg",
 imagequant = "4"
 libheif-rs = "1.0"
 mozjpeg = "0.10"
-oxipng = { version = "9", default-features = false, features = ["parallel"] }
+oxipng = { version = "10", default-features = false, features = ["parallel"] }
 oxvg = "0.0.7"
 oxvg_ast = "0.0.7"
 oxvg_optimiser = "0.0.7"
