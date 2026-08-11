@@ -15,9 +15,9 @@ description = "Code minification library for squish (JS/TS/CSS/HTML/JSON)"
 squish-core = { workspace = true }
 thiserror = { workspace = true }
 serde_json = "1"
-lightningcss = "=1.0.0-alpha.65"
+lightningcss = "1.0.0-alpha.72"
 parcel_sourcemap = "2"
-minify-html = "=0.16.0"
+minify-html = "0.18.1"
 oxc_allocator = "0.130"
 oxc_ast = "0.130"
 oxc_codegen = "0.130"

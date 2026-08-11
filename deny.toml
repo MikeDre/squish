@@ -4,18 +4,23 @@ targets = []
 [advisories]
 version = 2
 ignore = [
-    # No safe upgrade available (crate archived/unmaintained); transitive only.
-    "RUSTSEC-2025-0057", # fxhash, via oxvg's selectors dep
+    # No safe upgrade available (crate archived/unmaintained, or upstream hasn't
+    # moved yet); transitive only.
     "RUSTSEC-2025-0119", # number_prefix, via indicatif's progress-bar formatting
-    "RUSTSEC-2024-0436", # paste, via lightningcss/oxvg — tied to the `=`-pinned
-                         # lightningcss/minify-html versions in squish-code;
-                         # revisit alongside Brief 16 (IMPLEMENTATION-BRIEFS.md)
+    "RUSTSEC-2024-0436", # paste, via oxvg_ast (Brief 16's `=` pins are gone as of
+                         # oxvg 0.0.7, but oxvg_ast itself still depends on paste)
+    "RUSTSEC-2026-0235", # rkyv 0.7, via parcel_sourcemap <- lightningcss's
+                         # "bundler"/"sourcemap" feature, forced on by minify-html
+                         # hardcoding `default-features = true` on its own
+                         # lightningcss dependency. parcel_sourcemap 2.1.1 (latest)
+                         # still requires rkyv ^0.7.38; no fix until it moves to 0.8.
 ]
 
 [licenses]
 version = 2
 allow = [
     "MIT",
+    "MIT-0",    # borrow-or-share, via oxvg's tower-lsp-server dep — permissive, no attribution required
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
     "BSD-2-Clause",

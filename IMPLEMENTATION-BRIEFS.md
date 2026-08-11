@@ -33,9 +33,10 @@ These apply to every brief below.
   `tests/round_trip.rs` with fixtures in `tests/fixtures/`.
 - **MSRV is Rust 1.95** (`rust-version` in the workspace `Cargo.toml`). Don't use
   newer-stable APIs.
-- **Dependency pins**: `lightningcss` and `minify-html` are `=`-pinned in
-  `squish-code` (forced by `oxvg_optimiser 0.0.5`). Do not unpin them as a side
-  effect of other work — see Brief 16.
+- **Dependency pins**: `lightningcss`/`minify-html` (`squish-code`) and
+  `oxvg`/`oxvg_ast`/`oxvg_optimiser` (`squish-core`) were `=`-pinned until
+  `oxvg_optimiser 0.0.6` dropped the unconditional `lightningcss` `grid`
+  feature — see Brief 16 (DONE). No longer pinned; ordinary semver bumps apply.
 - **Docs**: every user-visible change updates `README.md` (including the Flags
   block, which mirrors `--help`) and gets a `CHANGELOG.md` entry under an
   `Unreleased`/next-version heading. Keep-a-Changelog format, SemVer.
@@ -475,14 +476,21 @@ on outcome only: under budget within 5%).
 Windows-style NUL vs `/dev/null` for pass-1 output via `-f null -` which is
 portable.
 
-### Brief 16: Unwind the `=` dependency pins — size XS (BLOCKED)
+### Brief 16: Unwind the `=` dependency pins — size XS (DONE)
 
-Blocked until `oxvg_optimiser` publishes a release past 0.0.5 that drops the
-unconditional `lightningcss` `grid` feature. When Dependabot (Brief 1) surfaces
-a new oxvg version: remove the `=` from `lightningcss` and `minify-html` in
-`crates/squish-code/Cargo.toml`, `cargo update`, run the full test suite plus
-the ratio guard (Brief 4), and check the SVG fixture output size hasn't
-regressed (that was the original v0.3.3 failure mode).
+Unblocked by `oxvg_optimiser` 0.0.6, which dropped the unconditional
+`lightningcss` `grid` feature requirement. Bumped `oxvg`/`oxvg_ast`/
+`oxvg_optimiser` to 0.0.7 in `crates/squish-core/Cargo.toml`, removed the `=`
+from `lightningcss` (now `1.0.0-alpha.72`) and `minify-html` (now `0.18.1`) in
+`crates/squish-code/Cargo.toml`, and bumped `roxmltree` to `0.21` in
+`squish-core` to match the type `oxvg_ast` 0.0.7 now expects. Full test suite,
+ratio guard, clippy, and rustfmt all pass; SVG fixture output size did not
+regress. Also fixed `cargo-deny`: RUSTSEC-2025-0057 (fxhash) dropped out
+entirely, and the new `borrow-or-share` transitive dep needed `MIT-0` added to
+the license allow-list. RUSTSEC-2026-0235 (rkyv 0.7 via `parcel_sourcemap`,
+pulled in by `minify-html` hardcoding `default-features = true` on
+`lightningcss`) has no upstream fix yet — added to `deny.toml`'s ignore list
+alongside the pre-existing RUSTSEC-2024-0436/RUSTSEC-2025-0119 entries.
 
 ### Brief 17 (stretch): `--quality auto` for video — size L
 
