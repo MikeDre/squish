@@ -40,7 +40,7 @@ jobs:
       - name: Cache source-built libheif (Linux)
         if: runner.os == 'Linux'
         id: libheif-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/libheif-install
           key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
@@ -82,7 +82,7 @@ jobs:
 
       - name: Cache source-built libheif
         id: libheif-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/libheif-install
           key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
@@ -136,7 +136,7 @@ jobs:
 
       - name: Cache source-built libheif
         id: libheif-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/libheif-install
           key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
@@ -180,7 +180,7 @@ jobs:
 
       - name: Cache source-built libheif
         id: libheif-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: /tmp/libheif-install
           key: libheif-v1.23.0-${{ runner.os }}-${{ runner.arch }}
