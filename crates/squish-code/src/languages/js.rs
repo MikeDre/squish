@@ -29,8 +29,8 @@ pub fn minify(
         .with_module(true);
 
     let parser_ret = Parser::new(&allocator, input, source_type).parse();
-    if !parser_ret.errors.is_empty() {
-        let first_err = &parser_ret.errors[0];
+    if !parser_ret.diagnostics.is_empty() {
+        let first_err = &parser_ret.diagnostics[0];
         return Err(CodeError::ParseFailed {
             path: path.to_path_buf(),
             // OxcDiagnostic carries span info but not a bare line number;
@@ -68,8 +68,8 @@ pub fn minify(
             .into_scoping();
         let transformer_ret = Transformer::new(&allocator, path, &transform_opts)
             .build_with_scoping(scoping, &mut program);
-        if !transformer_ret.errors.is_empty() {
-            let first_err = &transformer_ret.errors[0];
+        if !transformer_ret.diagnostics.is_empty() {
+            let first_err = &transformer_ret.diagnostics[0];
             return Err(CodeError::ParseFailed {
                 path: path.to_path_buf(),
                 line: None,
@@ -210,9 +210,9 @@ mod tests {
         let st = oxc_span::SourceType::default().with_module(true);
         let ret = oxc_parser::Parser::new(&alloc, code, st).parse();
         assert!(
-            ret.errors.is_empty(),
+            ret.diagnostics.is_empty(),
             "output is not valid JS: {:?}\noutput was:\n{}",
-            ret.errors,
+            ret.diagnostics,
             code
         );
     }
@@ -299,9 +299,9 @@ mod tests {
             .with_module(true);
         let ret = oxc_parser::Parser::new(&alloc, &out.code, st).parse();
         assert!(
-            ret.errors.is_empty(),
+            ret.diagnostics.is_empty(),
             "output didn't re-parse: {:?}\noutput:\n{}",
-            ret.errors,
+            ret.diagnostics,
             out.code
         );
     }

@@ -182,9 +182,9 @@ fn ts_with_enum_roundtrips_to_valid_js() {
     let st = oxc_span::SourceType::default().with_module(true);
     let ret = oxc_parser::Parser::new(&alloc, &output_text, st).parse();
     assert!(
-        ret.errors.is_empty(),
+        ret.diagnostics.is_empty(),
         "output is not valid JS: {:?}",
-        ret.errors
+        ret.diagnostics
     );
     assert!(
         !output_text.contains("enum "),

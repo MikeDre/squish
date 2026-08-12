@@ -6,7 +6,6 @@ version = 2
 ignore = [
     # No safe upgrade available (crate archived/unmaintained, or upstream hasn't
     # moved yet); transitive only.
-    "RUSTSEC-2025-0119", # number_prefix, via indicatif's progress-bar formatting
     "RUSTSEC-2024-0436", # paste, via oxvg_ast (Brief 16's `=` pins are gone as of
                          # oxvg 0.0.7, but oxvg_ast itself still depends on paste)
     "RUSTSEC-2026-0235", # rkyv 0.7, via parcel_sourcemap <- lightningcss's
