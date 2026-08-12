@@ -21,3 +21,9 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # dtolnay/rust-toolchain@1.95 in the MSRV job isn't an action release
+      # tag — it's the pinned Rust version under test. Dependabot reads it as
+      # an action version and "bumps" it, which silently breaks the MSRV
+      # check (see the 1.95 -> 1.100 incident). Bump this by hand instead.
+      - dependency-name: "dtolnay/rust-toolchain"
