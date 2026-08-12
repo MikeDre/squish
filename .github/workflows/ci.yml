@@ -199,7 +199,7 @@ jobs:
           sudo cp -r /tmp/libheif-install/* /usr/local/
           sudo ldconfig
 
-      - uses: dtolnay/rust-toolchain@1.95
+      - uses: dtolnay/rust-toolchain@1.100
 
       - uses: Swatinem/rust-cache@v2
 
