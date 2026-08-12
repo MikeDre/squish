@@ -47,7 +47,7 @@ cargo install squish-media-cli --locked
 
 This compiles squish from crates.io and places the `squish` binary in `~/.cargo/bin`. You still need the system dependencies for full format support (see below).
 
-> **Why `--locked`?** It installs the exact dependency versions squish was tested and released with (from the published `Cargo.lock`). Without it, cargo re-resolves transitive dependencies and may pick newer versions that fail to compile — notably the pinned `lightningcss` CSS engine against a newer `cssparser`. Always prefer `--locked` when installing squish from crates.io.
+> **Why `--locked`?** It installs the exact dependency versions squish was tested and released with (from the published `Cargo.lock`). Without it, cargo re-resolves transitive dependencies, which can pick up a newer version before it's been tested against squish. Always prefer `--locked` when installing squish from crates.io.
 
 With [`cargo binstall`](https://github.com/cargo-bins/cargo-binstall) installed, `cargo binstall squish-media-cli` fetches the prebuilt release binary instead of compiling (macOS and Linux only — Windows isn't published yet, see Roadmap).
 

@@ -40,11 +40,11 @@ scoped features) live in [IMPLEMENTATION-BRIEFS.md](IMPLEMENTATION-BRIEFS.md).
   each fixture shrinks by at least a known threshold (e.g. `sample.png ≥ 70%`).
   Catches a dependency bump that quietly *worsens* output — the failure mode
   behind the v0.3.3 usvg→oxvg SVG regression.
-- [ ] **Unwind the `=` dependency pins** — `lightningcss` and `minify-html` are
-  hard-pinned in `squish-code` because `oxvg_optimiser 0.0.5` unconditionally
-  enables lightningcss's removed `grid` feature. Revisit when `oxvg` publishes
-  a release past 0.0.5 (still the latest as of 2026-06). The Dependabot/audit
-  work above should surface this automatically.
+- [x] **Unwind the `=` dependency pins** — `lightningcss`/`minify-html`
+  (`squish-code`) and `oxvg`/`oxvg_ast`/`oxvg_optimiser` (`squish-core`) were
+  hard-pinned because `oxvg_optimiser 0.0.5` unconditionally enabled
+  lightningcss's `grid` feature. Unblocked by `oxvg_optimiser 0.0.6+`, which
+  dropped that requirement; done 2026-08-11.
 
 ## Encoding quality
 

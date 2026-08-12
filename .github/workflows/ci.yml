@@ -112,11 +112,11 @@ jobs:
 
       # Non-blocking. Mirrors a bare `cargo install squish-media-cli` by
       # re-resolving every transitive dependency to its newest compatible
-      # version. Expected to fail while the pinned lightningcss alpha conflicts
-      # with a newer cssparser under fresh resolution (the reason --locked is
-      # the documented path). Kept as a signal for when the pins drift back
-      # into alignment — at which point the pin can be relaxed and this promoted
-      # to a required check.
+      # version. The lightningcss/minify-html/oxvg `=` pins that used to make
+      # this fail unconditionally are gone (Brief 16), so it currently passes —
+      # kept non-blocking still, since any transitive crate's release could
+      # break a fresh resolve for reasons `--locked` (the documented install
+      # path) is immune to.
       - name: Fresh-resolve drift check (informational, non-blocking)
         continue-on-error: true
         run: |
