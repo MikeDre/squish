@@ -24,7 +24,7 @@ oxc_codegen = "0.130"
 oxc_minifier = "0.130"
 oxc_parser = "0.130"
 oxc_semantic = "0.130"
-oxc_span = "0.130"
+oxc_span = "0.138"
 oxc_transformer = "0.130"
 
 [dev-dependencies]
