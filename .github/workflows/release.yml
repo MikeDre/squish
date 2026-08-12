@@ -20,7 +20,7 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Create release if absent
         env:
           GH_TOKEN: ${{ github.token }}
@@ -45,7 +45,7 @@ jobs:
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
@@ -98,7 +98,7 @@ jobs:
     # noise, not a signal.
     if: github.repository == 'MikeDre/squish'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check for the tap token
         env:
@@ -115,7 +115,7 @@ jobs:
       # A separate checkout, not the default token: github.token is scoped to this
       # repository and cannot push to the tap.
       - name: Check out the tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: MikeDre/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
