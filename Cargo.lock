@@ -4833,7 +4833,7 @@ dependencies = [
  "serde_json",
  "squish-core",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
@@ -4853,7 +4853,7 @@ dependencies = [
  "roxmltree 0.21.1",
  "ssimulacra2",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
  "webp",
 ]
 
@@ -4862,7 +4862,7 @@ name = "squish-media"
 version = "0.10.1"
 dependencies = [
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.20",
 ]
 
 [[package]]
