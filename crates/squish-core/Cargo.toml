@@ -15,7 +15,7 @@ exclude = ["tests/**"]
 [dependencies]
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "avif", "avif-native", "tiff", "gif"] }
 imagequant = "4"
-libheif-rs = "1.0"
+libheif-rs = "2.7"
 mozjpeg = "0.10"
 oxipng = { version = "10", default-features = false, features = ["parallel"] }
 oxvg = "0.0.7"
